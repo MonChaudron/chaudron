@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["server"]
+
+[workspace.package]
+edition = "2024"
+license = "AGPL-3.0-only"
+repository = "https://github.com/MonChaudron/chaudron"
+
+# Binaire petit et sobre en RAM : la cible est un NAS.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

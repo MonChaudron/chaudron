@@ -1,0 +1,42 @@
+name: server
+
+on:
+  pull_request:
+    paths: ["server/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".github/workflows/server.yml"]
+  push:
+    branches: [main]
+    paths: ["server/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".github/workflows/server.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: chaudron
+          POSTGRES_PASSWORD: chaudron
+          POSTGRES_DB: chaudron
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U chaudron" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CARGO_TERM_COLOR: always
+      DATABASE_URL: postgres://chaudron:chaudron@localhost:5432/chaudron
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rustup installe la version et les composants de rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked

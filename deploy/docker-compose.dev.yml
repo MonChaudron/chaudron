@@ -1,0 +1,32 @@
+# Surcouche de dev : image construite depuis les sources, base accessible en local, conteneur Rust jetable.
+# S'utilise via scripts/dev.sh et scripts/cargo.sh.
+
+services:
+  chaudron:
+    image: chaudron:dev
+    build: ..
+    pull_policy: build
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+  db:
+    ports: ["127.0.0.1:5432:5432"]
+
+  toolbox:
+    profiles: [tools]
+    build: { context: .., target: toolchain }
+    image: chaudron-toolbox:dev
+    working_dir: /src
+    env_file: .env
+    environment:
+      CARGO_TARGET_DIR: /target
+    volumes:
+      - ..:/src
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-target:/target
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  cargo-registry:
+  cargo-target:
