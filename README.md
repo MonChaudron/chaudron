@@ -7,15 +7,29 @@ la liste de courses qui suit, et la recette lue étape par étape sur ton Echo S
 
 ## Héberger Chaudron
 
-Docker et Docker Compose suffisent. Dans un dossier, récupérer `deploy/docker-compose.yml` et `deploy/.env.example`,
-copier `.env.example` en `.env` en changeant le mot de passe, puis :
+Il faut Docker et Docker Compose. L'image (`ghcr.io/monchaudron/chaudron`) pèse environ 3 Mo, le serveur tourne avec
+quelques Mo de RAM et PostgreSQL avec une trentaine.
 
 ```sh
+mkdir -p chaudron/data/pg && cd chaudron
+curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/MonChaudron/chaudron/main/deploy/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/MonChaudron/chaudron/main/deploy/.env.example
+vi .env                    # changer le mot de passe : POSTGRES_PASSWORD et dans DATABASE_URL
 docker compose up -d
+curl http://localhost:28471/health   # {"status":"ok","database":"ok"}
 ```
 
-Chaudron répond sur le port 28471, modifiable avec `CHAUDRON_PORT` dans `.env` (`/health` pour vérifier). L'image (`ghcr.io/monchaudron/chaudron`) pèse environ
-3 Mo et le serveur tourne avec quelques Mo de RAM ; PostgreSQL en prend une trentaine.
+- **Mot de passe** : le même dans `POSTGRES_PASSWORD` et dans `DATABASE_URL`
+  (`postgres://chaudron:MOT_DE_PASSE@db:5432/chaudron`), en lettres et chiffres (`@ : / ? # %` cassent l'URL).
+  Il est pris en compte **au premier démarrage seulement** : pour le changer ensuite, il faut repartir d'un
+  `data/pg` vide (et donc perdre les données) ou le modifier dans PostgreSQL.
+- **`data/pg`** : à créer avant le premier démarrage ; certains Docker (sur NAS notamment) ne créent pas le dossier
+  d'un montage et échouent avec « Bind mount failed ».
+- **Port** : 28471 par défaut, modifiable avec `CHAUDRON_PORT` dans `.env`.
+- **Télécharger les fichiers sur la machine qui les exécute** (comme ci-dessus) plutôt que les copier depuis un autre
+  poste : un éditeur peut changer leur encodage. Ils sont en ASCII pour limiter ce risque.
+- **Mise à jour** : `docker compose pull && docker compose up -d`.
+- Avec l'ancien `docker-compose` (avec un tiret), remplacer `docker compose` par `docker-compose`.
 
 ## Développer
 
