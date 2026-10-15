@@ -1,0 +1,26 @@
+# Chaudron auto-hébergé. Copier .env.example en .env et le remplir, puis : docker compose up -d
+name: chaudron
+
+services:
+  chaudron:
+    image: ghcr.io/monchaudron/chaudron:latest
+    restart: unless-stopped
+    ports: ["8090:8080"]
+    env_file: .env            # DATABASE_URL
+    depends_on:
+      db: { condition: service_healthy }
+    mem_limit: 32m
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: .env            # POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+    command: >
+      postgres -c shared_buffers=16MB -c max_connections=10
+               -c work_mem=2MB -c maintenance_work_mem=16MB
+               -c effective_cache_size=64MB -c max_wal_size=64MB
+    volumes: ["./data/pg:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+    mem_limit: 128m
