@@ -14,7 +14,7 @@ copier `.env.example` en `.env` en changeant le mot de passe, puis :
 docker compose up -d
 ```
 
-Chaudron répond sur le port 8090 (`/health` pour vérifier). L'image (`ghcr.io/monchaudron/chaudron`) pèse environ
+Chaudron répond sur le port 28471, modifiable avec `CHAUDRON_PORT` dans `.env` (`/health` pour vérifier). L'image (`ghcr.io/monchaudron/chaudron`) pèse environ
 3 Mo et le serveur tourne avec quelques Mo de RAM ; PostgreSQL en prend une trentaine.
 
 ## Développer
@@ -22,7 +22,7 @@ Chaudron répond sur le port 8090 (`/health` pour vérifier). L'image (`ghcr.io/
 Rien à installer à part Docker : Rust tourne dans un conteneur jetable.
 
 ```sh
-scripts/dev.sh up --build      # l'appli construite depuis les sources + PostgreSQL, sur http://localhost:8090
+scripts/dev.sh up --build      # l'appli construite depuis les sources + PostgreSQL, sur http://localhost:28471
 scripts/cargo.sh test          # cargo dans le conteneur, avec la base de dev (fmt, clippy, run… aussi)
 scripts/dev.sh down            # arrêter ; down -v pour repartir de zéro
 ```
