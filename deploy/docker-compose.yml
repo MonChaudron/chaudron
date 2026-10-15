@@ -1,5 +1,9 @@
-# Chaudron auto-hébergé. Copier .env.example en .env et le remplir, puis : docker compose up -d
-name: chaudron
+# Chaudron auto-heberge. Installation : voir "Heberger Chaudron" dans le README.
+#   mkdir -p data/pg              (certains Docker, sur NAS notamment, ne creent pas ce dossier)
+#   cp .env.example .env          puis changer le mot de passe (aux deux endroits)
+#   docker compose up -d          puis http://localhost:28471/health
+# Fichier volontairement en ASCII : il survit a toutes les copies (Windows, NAS, editeurs).
+name: mon-chaudron
 
 services:
   chaudron:
