@@ -16,25 +16,34 @@ use std::{path::Path, sync::Arc};
 use axum::{
     Json, Router,
     extract::State,
-    http::StatusCode,
+    http::{HeaderValue, Method, StatusCode, header::CONTENT_TYPE},
     middleware,
     routing::{any, get},
 };
 use serde::Serialize;
 use sqlx::PgPool;
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::{
+    cors::CorsLayer,
+    services::{ServeDir, ServeFile},
+};
 use utoipa::{
     Modify, OpenApi, ToSchema,
     openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
 };
 
-use crate::{auth::fake::FakeOAuth, config::Config, error::ApiError, http::HttpClient};
+use crate::{
+    auth::{fake::FakeOAuth, one_tap::GoogleKeys},
+    config::Config,
+    error::ApiError,
+    http::HttpClient,
+};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
     pub config: Arc<Config>,
     pub http: HttpClient,
+    pub google_keys: Arc<GoogleKeys>,
 }
 
 impl AppState {
@@ -43,6 +52,7 @@ impl AppState {
             db,
             config: Arc::new(config),
             http: http::client(),
+            google_keys: Arc::default(),
         }
     }
 }
@@ -61,6 +71,7 @@ impl AppState {
         auth::list_providers,
         auth::login,
         auth::callback,
+        auth::one_tap_login,
         auth::logout,
         auth::me,
         auth::update_me,
@@ -177,6 +188,23 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
             state.clone(),
             auth::origin_guard,
         ));
+    // Dev seulement : l'appli servie par Expo sur une autre origine appelle l'API avec ses cookies.
+    let api = match state.config.dev_web_origin.as_deref() {
+        Some(origin) => api.layer(
+            CorsLayer::new()
+                .allow_origin(HeaderValue::from_str(origin).expect("DEV_WEB_ORIGIN valide"))
+                .allow_credentials(true)
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::PATCH,
+                    Method::DELETE,
+                ])
+                .allow_headers([CONTENT_TYPE]),
+        ),
+        None => api,
+    };
     let mut router = Router::new()
         .route("/health", get(health))
         .nest("/api/v1", api)

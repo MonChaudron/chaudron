@@ -52,6 +52,9 @@ pub struct Config {
     pub signup: SignupPolicy,
     /// Monte le fournisseur OAuth factice sur `/dev/oauth` (dev seulement, jamais en production).
     pub fake_oauth: bool,
+    /// Origine du serveur de dev de l'appli (`http://localhost:8081`) : CORS avec cookies, écritures acceptées,
+    /// retour après connexion. Dev seulement.
+    pub dev_web_origin: Option<String>,
 }
 
 impl Config {
@@ -93,16 +96,39 @@ impl Config {
             ));
         }
 
+        let dev_web_origin = var("DEV_WEB_ORIGIN").map(|o| o.trim_end_matches('/').to_owned());
+        if let Some(origin) = &dev_web_origin
+            && !origin.starts_with("http://")
+            && !origin.starts_with("https://")
+        {
+            return Err("DEV_WEB_ORIGIN doit commencer par http:// ou https://".into());
+        }
+
         Ok(Self {
             public_url,
             providers,
             signup: SignupPolicy::parse(&env::var("SIGNUP_ALLOWED_EMAILS").unwrap_or_default()),
             fake_oauth,
+            dev_web_origin,
         })
     }
 
     pub fn secure_cookies(&self) -> bool {
         self.public_url.starts_with("https://")
+    }
+
+    /// Origine acceptée pour les écritures : l'URL publique, et l'appli de dev si elle est déclarée.
+    pub fn allows_origin(&self, origin: &[u8]) -> bool {
+        origin == self.public_url.as_bytes()
+            || self
+                .dev_web_origin
+                .as_deref()
+                .is_some_and(|o| origin == o.as_bytes())
+    }
+
+    /// Adresse d'une page de l'appli : relative, ou sur le serveur de dev de l'appli s'il est déclaré.
+    pub fn web_url(&self, path: &str) -> String {
+        format!("{}{path}", self.dev_web_origin.as_deref().unwrap_or(""))
     }
 
     pub fn provider(&self, id: &str) -> Option<&Provider> {

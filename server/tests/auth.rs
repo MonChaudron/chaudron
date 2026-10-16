@@ -20,7 +20,7 @@ async fn sans_session_l_api_repond_401(db: PgPool) {
 async fn fournisseurs_disponibles(db: PgPool) {
     let app = TestApp::new(db, SignupPolicy::Closed).await;
     let response = app.browser().get("/api/v1/auth/providers").await;
-    assert_eq!(response.json, json!(["fake"]));
+    assert_eq!(response.json, json!([{"id": "fake", "client_id": null}]));
     let response = app.browser().get("/api/v1/auth/google/login").await;
     assert_eq!(response.status, StatusCode::NOT_FOUND);
 }
@@ -306,4 +306,32 @@ async fn changer_son_nom(db: PgPool) {
         .patch("/api/v1/me", json!({"display_name": " "}))
         .await;
     assert_eq!(response.status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[sqlx::test]
+async fn appli_de_dev_sur_une_autre_origine(db: PgPool) {
+    const DEV: &str = "http://localhost:8081";
+    let app = TestApp::with(db, |fake_base| {
+        let mut config = common::config(fake_base, SignupPolicy::Closed);
+        config.dev_web_origin = Some(DEV.into());
+        config
+    })
+    .await;
+    let mut browser = app.browser();
+    // Après la connexion, retour sur le serveur de dev de l'appli.
+    assert_eq!(browser.login("alice@example.org").await, format!("{DEV}/"));
+
+    // Écritures acceptées depuis l'appli de dev, avec CORS et cookies.
+    browser.origin = Some(DEV.into());
+    let response = browser
+        .post("/api/v1/households", json!({"name": "Maison"}))
+        .await;
+    assert_eq!(response.status, StatusCode::CREATED);
+    assert_eq!(response.headers["access-control-allow-origin"], DEV);
+    assert_eq!(response.headers["access-control-allow-credentials"], "true");
+    browser.origin = Some("http://localhost:9999".into());
+    let response = browser
+        .post("/api/v1/households", json!({"name": "Autre"}))
+        .await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
 }

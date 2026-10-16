@@ -1,14 +1,18 @@
 mod common;
 
+use std::{fs, path::Path};
+
 use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode},
 };
+use chaudron_server::ApiDoc;
 use common::{offline_app, unreachable_db};
 use http_body_util::BodyExt;
 use sqlx::PgPool;
 use tower::ServiceExt;
+use utoipa::OpenApi;
 
 async fn get(app: Router, uri: &str) -> (StatusCode, String) {
     let response = app
@@ -86,4 +90,23 @@ async fn route_inconnue_de_l_api_renvoie_404() {
     assert!(body.contains(r#""error":"not_found""#));
     let (status, _) = get(offline_app(unreachable_db()), "/api/v2/inconnue").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Le client TypeScript est généré depuis `packages/api/openapi.json` : il doit suivre le serveur.
+/// Pour le réécrire : `UPDATE_OPENAPI=1 scripts/cargo.sh test --test api`.
+#[test]
+fn openapi_json_a_jour() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../packages/api/openapi.json");
+    let current = serde_json::to_string_pretty(&ApiDoc::openapi()).unwrap()
+        + "
+";
+    if std::env::var("UPDATE_OPENAPI").as_deref() == Ok("1") {
+        fs::write(&path, &current).unwrap();
+        return;
+    }
+    let committed = fs::read_to_string(&path).unwrap_or_default();
+    assert!(
+        committed == current,
+        "packages/api/openapi.json n'est plus à jour : UPDATE_OPENAPI=1 scripts/cargo.sh test --test api"
+    );
 }

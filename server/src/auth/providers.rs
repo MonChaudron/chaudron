@@ -43,6 +43,8 @@ pub struct Provider {
     pub token_url: String,
     pub userinfo_url: String,
     pub scope: &'static str,
+    /// Clés publiques des jetons d'identité (Google One Tap).
+    pub jwks_url: Option<String>,
     /// Paramètres ajoutés à l'URL d'autorisation.
     pub extra_params: &'static [(&'static str, &'static str)],
 }
@@ -75,6 +77,7 @@ impl Provider {
                 token_url: "https://oauth2.googleapis.com/token".into(),
                 userinfo_url: "https://openidconnect.googleapis.com/v1/userinfo".into(),
                 scope: "openid email profile",
+                jwks_url: Some("https://www.googleapis.com/oauth2/v3/certs".into()),
                 extra_params: &[("prompt", "select_account")],
             },
             // Login with Amazon : OAuth 2 (pas OpenID Connect), profil sur api.amazon.com.
@@ -86,6 +89,7 @@ impl Provider {
                 token_url: "https://api.amazon.com/auth/o2/token".into(),
                 userinfo_url: "https://api.amazon.com/user/profile".into(),
                 scope: "profile",
+                jwks_url: None,
                 extra_params: &[],
             },
             ProviderId::Fake => panic!("Provider::fake pour le fournisseur factice"),
@@ -102,6 +106,7 @@ impl Provider {
             token_url: format!("{internal_base}/token"),
             userinfo_url: format!("{internal_base}/userinfo"),
             scope: "openid email profile",
+            jwks_url: None,
             extra_params: &[],
         }
     }
@@ -143,7 +148,7 @@ impl Provider {
         let access_token = token["access_token"]
             .as_str()
             .ok_or("réponse sans access_token")?;
-        let info = http::get_json(client, &self.userinfo_url, access_token).await?;
+        let info = http::get_json(client, &self.userinfo_url, Some(access_token)).await?;
         self.profile(&info).ok_or_else(|| "profil incomplet".into())
     }
 

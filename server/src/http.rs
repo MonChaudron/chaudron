@@ -43,11 +43,17 @@ pub async fn post_form(client: &HttpClient, url: &str, form: String) -> Result<V
     send(client, request).await
 }
 
-/// GET avec un jeton `Bearer`, réponse JSON attendue.
-pub async fn get_json(client: &HttpClient, url: &str, bearer: &str) -> Result<Value, String> {
-    let request = Request::get(url)
-        .header(AUTHORIZATION, format!("Bearer {bearer}"))
-        .header(ACCEPT, "application/json")
+/// GET, avec un jeton `Bearer` si donné, réponse JSON attendue.
+pub async fn get_json(
+    client: &HttpClient,
+    url: &str,
+    bearer: Option<&str>,
+) -> Result<Value, String> {
+    let mut request = Request::get(url).header(ACCEPT, "application/json");
+    if let Some(token) = bearer {
+        request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+    }
+    let request = request
         .body(Full::default())
         .map_err(|err| err.to_string())?;
     send(client, request).await
