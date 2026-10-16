@@ -10,16 +10,27 @@ name = "chaudron"
 path = "src/main.rs"
 
 [dependencies]
-axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "0.8", default-features = false, features = ["form", "http1", "json", "query", "tokio"] }
+base64 = "0.22"
+http-body-util = "0.1"
+# Client HTTPS des fournisseurs OAuth : hyper (déjà là via axum) + rustls/ring, racines Mozilla embarquées
+# (l'image FROM scratch n'a pas de magasin de certificats).
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "ring", "tls12", "webpki-tokio"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+# SHA-256, aléa, vérification RS256 : déjà tiré par rustls.
+ring = "0.17"
 serde = { version = "1", features = ["derive"] }
-sqlx = { version = "0.9", default-features = false, features = ["postgres", "runtime-tokio", "migrate", "macros"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+sqlx = { version = "0.9", default-features = false, features = ["json", "macros", "migrate", "postgres", "runtime-tokio", "time", "uuid"] }
+time = { version = "0.3", features = ["serde-well-known"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 tower-http = { version = "0.7", features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
-utoipa = "6"
+utoipa = { version = "6", features = ["time", "uuid"] }
+uuid = { version = "1", features = ["serde", "v7"] }
 
 [dev-dependencies]
-http-body-util = "0.1"
-serde_json = "1"
 tower = { version = "0.5", features = ["util"] }

@@ -1,26 +1,14 @@
-use std::{path::PathBuf, time::Duration};
+mod common;
 
 use axum::{
     Router,
     body::Body,
     http::{Request, StatusCode},
 };
-use chaudron_server::{AppState, app};
+use common::{offline_app, unreachable_db};
 use http_body_util::BodyExt;
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::PgPool;
 use tower::ServiceExt;
-
-fn web_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web")
-}
-
-/// Une base qui ne répond jamais : pour les routes qui n'en ont pas besoin, et pour le cas dégradé.
-fn unreachable_db() -> PgPool {
-    PgPoolOptions::new()
-        .acquire_timeout(Duration::from_millis(200))
-        .connect_lazy("postgres://chaudron@127.0.0.1:1/chaudron")
-        .unwrap()
-}
 
 async fn get(app: Router, uri: &str) -> (StatusCode, String) {
     let response = app
@@ -34,89 +22,68 @@ async fn get(app: Router, uri: &str) -> (StatusCode, String) {
 
 #[sqlx::test]
 async fn health_ok_quand_la_base_repond(db: PgPool) {
-    let (status, body) = get(app(AppState { db }, &web_dir()), "/health").await;
+    let (status, body) = get(offline_app(db), "/health").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, r#"{"status":"ok","database":"ok"}"#);
 }
 
 #[tokio::test]
 async fn health_503_quand_la_base_est_injoignable() {
-    let (status, body) = get(
-        app(
-            AppState {
-                db: unreachable_db(),
-            },
-            &web_dir(),
-        ),
-        "/health",
-    )
-    .await;
+    let (status, body) = get(offline_app(unreachable_db()), "/health").await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body, r#"{"status":"degraded","database":"unreachable"}"#);
 }
 
 #[tokio::test]
 async fn openapi_decrit_les_routes() {
-    let (status, body) = get(
-        app(
-            AppState {
-                db: unreachable_db(),
-            },
-            &web_dir(),
-        ),
-        "/api/v1/openapi.json",
-    )
-    .await;
+    let (status, body) = get(offline_app(unreachable_db()), "/api/v1/openapi.json").await;
     assert_eq!(status, StatusCode::OK);
     let doc: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert!(doc["openapi"].as_str().unwrap().starts_with("3."));
     assert!(doc["paths"]["/health"]["get"].is_object());
-    assert!(doc["components"]["schemas"]["Health"].is_object());
+    assert!(doc["paths"]["/api/v1/me"]["get"].is_object());
+    assert!(doc["paths"]["/api/v1/households/{id}/members/{member_id}"]["put"].is_object());
+    for schema in [
+        "Health",
+        "Me",
+        "Household",
+        "Member",
+        "Portions",
+        "Equipment",
+        "ErrorBody",
+    ] {
+        assert!(doc["components"]["schemas"][schema].is_object(), "{schema}");
+    }
+    assert_eq!(
+        doc["components"]["securitySchemes"]["session"]["in"],
+        "cookie"
+    );
+    // Les routes publiques n'exigent pas de session.
+    assert_eq!(
+        doc["paths"]["/api/v1/auth/providers"]["get"]["security"],
+        serde_json::json!([{}])
+    );
 }
 
 #[tokio::test]
 async fn page_d_accueil_servie() {
-    let (status, body) = get(
-        app(
-            AppState {
-                db: unreachable_db(),
-            },
-            &web_dir(),
-        ),
-        "/",
-    )
-    .await;
+    let (status, body) = get(offline_app(unreachable_db()), "/").await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("<title>Chaudron</title>"));
 }
 
 #[tokio::test]
 async fn route_inconnue_de_l_appli_renvoie_index() {
-    let (status, body) = get(
-        app(
-            AppState {
-                db: unreachable_db(),
-            },
-            &web_dir(),
-        ),
-        "/cette-semaine",
-    )
-    .await;
+    let (status, body) = get(offline_app(unreachable_db()), "/cette-semaine").await;
     assert_eq!(status, StatusCode::OK);
     assert!(body.contains("<title>Chaudron</title>"));
 }
 
 #[tokio::test]
 async fn route_inconnue_de_l_api_renvoie_404() {
-    let (status, _) = get(
-        app(
-            AppState {
-                db: unreachable_db(),
-            },
-            &web_dir(),
-        ),
-        "/api/v1/inconnue",
-    )
-    .await;
+    let (status, body) = get(offline_app(unreachable_db()), "/api/v1/inconnue").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body.contains(r#""error":"not_found""#));
+    let (status, _) = get(offline_app(unreachable_db()), "/api/v2/inconnue").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
