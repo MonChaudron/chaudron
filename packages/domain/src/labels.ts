@@ -74,3 +74,25 @@ export const scopes = {
   'recipes:write': 'Publier des recettes',
   'menus:write': 'Publier des menus',
 } as const;
+
+/** Unités, pour la saisie. */
+export const units = {
+  g: 'g',
+  ml: 'ml',
+  piece: 'pièce',
+  tbsp: 'c. à s.',
+  tsp: 'c. à c.',
+  pinch: 'pincée',
+} as const;
+
+export const aisles = {
+  produce: 'Fruits et légumes',
+  butcher: 'Boucherie',
+  fish: 'Poissonnerie',
+  dairy: 'Crèmerie',
+  fresh: 'Frais',
+  frozen: 'Surgelés',
+  grocery: 'Épicerie',
+  bakery: 'Boulangerie',
+  other: 'Autre',
+} as const;
