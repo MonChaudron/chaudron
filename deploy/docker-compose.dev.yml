@@ -8,6 +8,9 @@ services:
     pull_policy: build
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-debug}
+      PUBLIC_URL: http://localhost:${CHAUDRON_PORT:-28471}
+      # Connexion factice (sans mot de passe) en plus des vrais fournisseurs s'ils sont dans .env.
+      AUTH_FAKE: ${AUTH_FAKE:-1}
 
   db:
     ports: ["127.0.0.1:5432:5432"]

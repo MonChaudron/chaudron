@@ -28,6 +28,16 @@ curl http://localhost:28471/health   # {"status":"ok","database":"ok"}
 - **Port** : 28471 par défaut, modifiable avec `CHAUDRON_PORT` dans `.env`.
 - **Télécharger les fichiers sur la machine qui les exécute** (comme ci-dessus) plutôt que les copier depuis un autre
   poste : un éditeur peut changer leur encodage. Ils sont en ASCII pour limiter ce risque.
+- **Connexion** : avec Google et/ou Amazon, à déclarer dans `.env` (voir `.env.example`) :
+  - `PUBLIC_URL` : l'adresse publique de Chaudron (`https://chaudron.example.org`) ;
+  - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` : identifiant OAuth « Application Web » de la console Google Cloud,
+    URL de retour `PUBLIC_URL/api/v1/auth/google/callback` ;
+  - `AMAZON_CLIENT_ID` / `AMAZON_CLIENT_SECRET` : *Security Profile* Login with Amazon, *Allowed Return URL*
+    `PUBLIC_URL/api/v1/auth/amazon/callback`.
+- **Comptes** : la première personne qui se connecte crée son compte ; ensuite, les inscriptions sont fermées et on
+  entre par un lien d'invitation (créé par un propriétaire du foyer). `SIGNUP_ALLOWED_EMAILS` les ouvre à une liste
+  d'adresses, ou à tout le monde avec `*`. Une liste s'applique aussi au premier compte : sur une instance exposée
+  à internet, y mettre son adresse Google évite qu'un inconnu se connecte avant soi.
 - **Mise à jour** : `docker compose pull && docker compose up -d`.
 - Avec l'ancien `docker-compose` (avec un tiret), remplacer `docker compose` par `docker-compose`.
 
@@ -41,7 +51,9 @@ scripts/cargo.sh test          # cargo dans le conteneur, avec la base de dev (f
 scripts/dev.sh down            # arrêter ; down -v pour repartir de zéro
 ```
 
-`scripts/dev.sh` crée `deploy/.env` à partir de `deploy/.env.example` s'il n'existe pas. La base de dev est joignable
+`scripts/dev.sh` crée `deploy/.env` à partir de `deploy/.env.example` s'il n'existe pas. En dev, la connexion passe
+par un fournisseur factice (`AUTH_FAKE=1`) : on choisit un nom et une adresse, sans mot de passe ; les tests
+l'utilisent aussi, sur un vrai port, pour dérouler la connexion OAuth de bout en bout. La base de dev est joignable
 sur `localhost:5432`. Le contrat d'API est publié sur `/api/v1/openapi.json`.
 
 | Dossier | Contenu |
@@ -52,4 +64,5 @@ sur `localhost:5432`. Le contrat d'API est publié sur `/api/v1/openapi.json`.
 
 ## Licence
 
-[AGPL-3.0](LICENSE).
+[AGPL-3.0](LICENSE). Polices Unbounded et Atkinson Hyperlegible Next sous SIL Open Font License 1.1
+(`server/web/fonts/OFL-*.txt`).

@@ -10,7 +10,7 @@ services:
     image: ghcr.io/monchaudron/chaudron:latest
     restart: unless-stopped
     ports: ["${CHAUDRON_PORT:-28471}:8080"]
-    env_file: .env            # DATABASE_URL
+    env_file: .env            # DATABASE_URL, PUBLIC_URL, OAuth, SIGNUP_ALLOWED_EMAILS
     depends_on:
       db: { condition: service_healthy }
     mem_limit: 32m
