@@ -384,6 +384,7 @@ async fn list(
 /// Ajoute un membre, avec le barème par défaut de son type et présent à tous les repas.
 #[utoipa::path(
     post,
+    operation_id = "create_member",
     path = "/api/v1/households/{id}/members",
     tag = "membres",
     params(("id" = Uuid, Path)),
@@ -424,6 +425,7 @@ async fn create(
 
 #[utoipa::path(
     get,
+    operation_id = "read_member",
     path = "/api/v1/households/{id}/members/{member_id}",
     tag = "membres",
     params(("id" = Uuid, Path), ("member_id" = Uuid, Path)),
@@ -481,6 +483,7 @@ async fn replace(
 
 #[utoipa::path(
     delete,
+    operation_id = "remove_member",
     path = "/api/v1/households/{id}/members/{member_id}",
     tag = "membres",
     params(("id" = Uuid, Path), ("member_id" = Uuid, Path)),

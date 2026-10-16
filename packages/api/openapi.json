@@ -261,7 +261,7 @@
           "foyer"
         ],
         "summary": "Crée un foyer ; le créateur en est propriétaire.",
-        "operationId": "create",
+        "operationId": "create_household",
         "requestBody": {
           "content": {
             "application/json": {
@@ -299,7 +299,7 @@
         "tags": [
           "foyer"
         ],
-        "operationId": "read",
+        "operationId": "read_household",
         "parameters": [
           {
             "name": "id",
@@ -337,7 +337,7 @@
           "foyer"
         ],
         "summary": "Supprime le foyer et tout ce qu'il contient (propriétaires seulement).",
-        "operationId": "remove",
+        "operationId": "remove_household",
         "parameters": [
           {
             "name": "id",
@@ -724,7 +724,7 @@
           "membres"
         ],
         "summary": "Ajoute un membre, avec le barème par défaut de son type et présent à tous les repas.",
-        "operationId": "create",
+        "operationId": "create_member",
         "parameters": [
           {
             "name": "id",
@@ -791,7 +791,7 @@
         "tags": [
           "membres"
         ],
-        "operationId": "read",
+        "operationId": "read_member",
         "parameters": [
           {
             "name": "id",
@@ -912,7 +912,7 @@
         "tags": [
           "membres"
         ],
-        "operationId": "remove",
+        "operationId": "remove_member",
         "parameters": [
           {
             "name": "id",
@@ -1353,10 +1353,10 @@
         "type": "string",
         "description": "Régime alimentaire.",
         "enum": [
-          "Omnivore",
-          "Pescatarian",
-          "Vegetarian",
-          "Vegan"
+          "omnivore",
+          "pescatarian",
+          "vegetarian",
+          "vegan"
         ]
       },
       "Equipment": {
@@ -1421,8 +1421,8 @@
         "type": "string",
         "description": "`allergy` : filtre dur ; `dislike` : à éviter.",
         "enum": [
-          "Allergy",
-          "Dislike"
+          "allergy",
+          "dislike"
         ]
       },
       "Health": {
@@ -1840,9 +1840,9 @@
         "type": "string",
         "description": "Type de mangeur : fixe le barème par défaut.",
         "enum": [
-          "Adult",
-          "Teen",
-          "Child"
+          "adult",
+          "teen",
+          "child"
         ]
       },
       "NewHousehold": {
@@ -2038,8 +2038,8 @@
         "type": "string",
         "description": "Rôle d'un compte dans un foyer.",
         "enum": [
-          "Owner",
-          "Member"
+          "owner",
+          "member"
         ]
       },
       "RoleUpdate": {
