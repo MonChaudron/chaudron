@@ -151,6 +151,7 @@ pub struct NewHousehold {
 /// Crée un foyer ; le créateur en est propriétaire.
 #[utoipa::path(
     post,
+    operation_id = "create_household",
     path = "/api/v1/households",
     tag = "foyer",
     request_body = NewHousehold,
@@ -190,6 +191,7 @@ async fn create(
 
 #[utoipa::path(
     get,
+    operation_id = "read_household",
     path = "/api/v1/households/{id}",
     tag = "foyer",
     params(("id" = Uuid, Path)),
@@ -252,6 +254,7 @@ async fn update(
 /// Supprime le foyer et tout ce qu'il contient (propriétaires seulement).
 #[utoipa::path(
     delete,
+    operation_id = "remove_household",
     path = "/api/v1/households/{id}",
     tag = "foyer",
     params(("id" = Uuid, Path)),

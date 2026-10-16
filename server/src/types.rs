@@ -7,7 +7,7 @@ macro_rules! text_enum {
         $(#[$meta])*
         #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
         pub enum $name {
-            $($(#[$vmeta])* #[serde(rename = $text)] $variant,)+
+            $($(#[$vmeta])* #[serde(rename = $text)] #[schema(rename = $text)] $variant,)+
         }
 
         impl $name {

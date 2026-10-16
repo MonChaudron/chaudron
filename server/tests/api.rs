@@ -62,6 +62,27 @@ async fn openapi_decrit_les_routes() {
         doc["components"]["securitySchemes"]["session"]["in"],
         "cookie"
     );
+    // Les valeurs des énumérations sont celles que l'API envoie vraiment.
+    assert_eq!(
+        doc["components"]["schemas"]["Role"]["enum"],
+        serde_json::json!(["owner", "member"])
+    );
+    assert_eq!(
+        doc["components"]["schemas"]["MemberKind"]["enum"],
+        serde_json::json!(["adult", "teen", "child"])
+    );
+    // Identifiants d'opération uniques : le client TypeScript les utilise comme clés.
+    let mut ids: Vec<&str> = doc["paths"]
+        .as_object()
+        .unwrap()
+        .values()
+        .flat_map(|item| item.as_object().unwrap().values())
+        .filter_map(|op| op["operationId"].as_str())
+        .collect();
+    let count = ids.len();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), count, "operationId en double");
     // Les routes publiques n'exigent pas de session.
     assert_eq!(
         doc["paths"]["/api/v1/auth/providers"]["get"]["security"],
