@@ -51,6 +51,7 @@ export const equipment: Record<string, string> = {
   'equipment.hob': 'Plaques',
   'equipment.microwave': 'Micro-ondes',
   'equipment.airfryer': 'Airfryer',
+  'equipment.blender': 'Blender',
 };
 
 /** Libellé d'une clé de traduction, ou la clé elle-même si elle est inconnue (nouvel ingrédient). */

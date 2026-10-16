@@ -94,6 +94,49 @@ télécharger les XML `alim` et `compo` depuis [doi:10.57745/RDMHWY](https://doi
 node scripts/ciqual-extract.mjs <dossier> <date des fichiers> > server/data/ciqual.tsv
 ```
 
+## Publier par l'API
+
+Un propriétaire du foyer crée un **jeton d'API** (`POST /api/v1/households/{id}/tokens`, scopes `read`,
+`recipes:write`) ; sa valeur (`chd_…`) n'est montrée qu'une fois, seul son hash est stocké. Un script ou un assistant
+publie ensuite avec `Authorization: Bearer chd_…` :
+
+- `PUT /api/v1/households/{id}/recipes/{slug}` : une recette complète (créée ou remplacée, idempotent) ;
+- `POST /api/v1/households/{id}/import` : un lot, en une transaction (tout ou rien), idempotent par nom
+  d'ingrédient et par `slug` de recette.
+
+Les quantités sont données **pour une portion standard**, telles qu'achetées ; `state` est la forme d'achat (`fresh`,
+`frozen`, `canned`, `dried`, `cooked`), par défaut celle de l'ingrédient ; `kg`, `l` et `cl` sont convertis. Une
+variante est découpée en phases (mode rapide) et, si besoin, en gestes (mode pas à pas). Exemple de lot :
+
+```json
+{
+  "ingredients": [
+    {"name": "Patate douce", "aisle": "produce", "default_unit": "g", "default_state": "fresh",
+     "foods": [{"state": "fresh", "food_code": 4101}]}
+  ],
+  "recipes": [{
+    "slug": "dahl-patate-douce",
+    "title": "Dahl de lentilles corail et patate douce",
+    "tags": ["végétarien"],
+    "season_months": [10, 11, 12, 1, 2, 3],
+    "ingredients": [
+      {"ingredient": "lentil", "qty": 60, "unit": "g", "role": "protein"},
+      {"ingredient": "patate_douce", "qty": 120, "unit": "g", "role": "veg"},
+      {"ingredient": "garlic", "qty": 2, "unit": "piece", "role": "other", "per_batch": true}
+    ],
+    "variants": [{
+      "label": "Cocotte", "equipment": ["hob"], "active_min": 15, "total_min": 40,
+      "phases": [
+        {"title": "Revenir", "text": "Ail et épices 2 min dans un filet d'huile."},
+        {"title": "Mijoter", "text": "Lentilles, patate douce en dés, eau à hauteur : 25 min.", "timer_s": 1500}
+      ]
+    }]
+  }]
+}
+```
+
+Le contrat complet est sur `/api/v1/openapi.json`.
+
 ## Licence
 
 [AGPL-3.0](LICENSE). Polices Unbounded et Atkinson Hyperlegible Next sous SIL Open Font License 1.1

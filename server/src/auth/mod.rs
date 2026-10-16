@@ -14,7 +14,7 @@ use axum::{
     extract::{FromRequestParts, OptionalFromRequestParts, Path, Query, Request, State},
     http::{
         HeaderMap, HeaderValue, Method, StatusCode,
-        header::{COOKIE, ORIGIN, SET_COOKIE},
+        header::{AUTHORIZATION, COOKIE, ORIGIN, SET_COOKIE},
         request::Parts,
     },
     middleware::Next,
@@ -32,6 +32,7 @@ use crate::{
     crypto::{constant_time_eq, is_token, pkce_challenge, random_token, sha256},
     error::{ApiError, ApiResult},
     households::{self, HouseholdSummary},
+    types::Scope,
 };
 use providers::{Profile, ProviderId};
 
@@ -123,12 +124,100 @@ impl<S: Send + Sync> OptionalFromRequestParts<S> for CurrentUser {
     }
 }
 
+/// Jeton d'API reconnu (`Authorization: Bearer chd_…`) : il ne vaut que pour son foyer, et pour ses scopes.
+#[derive(Clone, Debug)]
+pub struct ApiToken {
+    pub household_id: Uuid,
+    pub scopes: Vec<Scope>,
+}
+
+/// Qui appelle : un compte connecté (toute la cuisine de ses foyers) ou un jeton d'API (son foyer, ses scopes).
+/// Extracteur : 401 sans session ni jeton valide.
+#[derive(Clone, Debug)]
+pub enum Caller {
+    User(Uuid),
+    Token(ApiToken),
+}
+
+impl<S: Send + Sync> FromRequestParts<S> for Caller {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, ApiError> {
+        if let Some(CurrentUser(id)) = parts.extensions.get::<CurrentUser>() {
+            return Ok(Self::User(*id));
+        }
+        parts
+            .extensions
+            .get::<ApiToken>()
+            .cloned()
+            .map(Self::Token)
+            .ok_or_else(ApiError::unauthenticated)
+    }
+}
+
+impl Caller {
+    /// Accès à un référentiel commun (ingrédients, Ciqual) : tout compte, ou un jeton qui a ce scope.
+    pub fn require_scope(&self, scope: Scope) -> ApiResult<()> {
+        match self {
+            Self::User(_) => Ok(()),
+            Self::Token(token) if token.scopes.contains(&scope) => Ok(()),
+            Self::Token(_) => Err(ApiError::forbidden(format!(
+                "Ce jeton n'a pas le droit « {} ».",
+                scope.as_str()
+            ))),
+        }
+    }
+
+    /// Accès au foyer : un compte du foyer, ou un jeton de ce foyer qui a ce scope. 404 hors du foyer.
+    pub async fn require(&self, db: &PgPool, household_id: Uuid, scope: Scope) -> ApiResult<()> {
+        match self {
+            Self::User(user_id) => households::role_in(db, household_id, *user_id)
+                .await
+                .map(drop),
+            Self::Token(token) if token.household_id != household_id => Err(ApiError::not_found()),
+            Self::Token(_) => self.require_scope(scope),
+        }
+    }
+}
+
+/// Jeton d'API de l'en-tête `Authorization: Bearer …`, s'il est valide (et note son dernier usage).
+async fn bearer_token(db: &PgPool, headers: &HeaderMap) -> Result<Option<ApiToken>, sqlx::Error> {
+    let Some(token) = headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+    else {
+        return Ok(None);
+    };
+    let row: Option<(Uuid, Vec<String>)> = sqlx::query_as(
+        "UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1 RETURNING household_id, scopes",
+    )
+    .bind(sha256(token.trim().as_bytes()))
+    .fetch_optional(db)
+    .await?;
+    Ok(row.map(|(household_id, scopes)| ApiToken {
+        household_id,
+        scopes: scopes
+            .into_iter()
+            .filter_map(|s| Scope::try_from(s).ok())
+            .collect(),
+    }))
+}
+
 /// Middleware de l'API : lit le cookie de session, place `CurrentUser` dans la requête, prolonge la session.
+/// Lit aussi un jeton d'API (`ApiToken`).
 pub async fn session_layer(
     State(state): State<AppState>,
     mut request: Request,
     next: Next,
 ) -> Response {
+    match bearer_token(&state.db, request.headers()).await {
+        Ok(Some(token)) => {
+            request.extensions_mut().insert(token);
+        }
+        Ok(None) => {}
+        Err(err) => return ApiError::from(err).into_response(),
+    }
     let secure = state.config.secure_cookies();
     let token = read_cookie(request.headers(), session_cookie_name(secure)).map(str::to_owned);
     let mut renew = None;
