@@ -3,8 +3,6 @@ import {
   diets,
   exclusionKinds,
   formatFactor,
-  ingredients as ingredientLabels,
-  label,
   meals,
   memberKinds,
   portionRoles,
@@ -255,7 +253,7 @@ function Exclusions({ value, onChange }: { value: MemberInput['exclusions']; onC
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<ExclusionKind>('allergy');
   const names = useMemo(
-    () => (catalog.data ?? []).map((i) => ({ id: i.id, name: label(ingredientLabels, i.name_key) })),
+    () => (catalog.data ?? []).map((i) => ({ id: i.id, name: i.name })),
     [catalog.data],
   );
   const nameOf = (id: string) => names.find((n) => n.id === id)?.name ?? '…';

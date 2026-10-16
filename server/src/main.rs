@@ -71,6 +71,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&database_url)
         .await?;
     sqlx::migrate!().run(&db).await?;
+    chaudron_server::ciqual::sync(&db).await?;
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port()));
     // Sans TCP_NODELAY, les fichiers servis en plusieurs écritures attendent ~40 ms (Nagle + ACK retardé).

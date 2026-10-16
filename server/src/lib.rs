@@ -2,12 +2,15 @@
 
 pub mod auth;
 pub mod catalog;
+pub mod ciqual;
 pub mod config;
 pub mod crypto;
 pub mod error;
 pub mod households;
 pub mod http;
+pub mod ingredients;
 pub mod members;
+pub mod text;
 pub mod types;
 pub mod validate;
 
@@ -93,7 +96,10 @@ impl AppState {
         members::remove,
         members::defaults,
         catalog::equipment,
-        catalog::ingredients,
+        ingredients::list_ingredients,
+        ingredients::create_ingredient,
+        ingredients::link_food,
+        ingredients::search_foods,
         catalog::household_equipment,
         catalog::set_household_equipment,
     )
@@ -179,6 +185,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(households::router())
         .merge(members::router())
         .merge(catalog::router())
+        .merge(ingredients::router())
         .route("/openapi.json", get(openapi))
         .layer(middleware::from_fn_with_state(
             state.clone(),

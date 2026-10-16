@@ -1,4 +1,5 @@
-// Libellés français. Le serveur ne stocke que des codes (`ingredient.peanut`, `adult`…) : l'i18n vit ici.
+// Libellés français des codes de l'interface (`adult`, `equipment.oven`…) : l'i18n vit ici. Les ingrédients ont
+// leur nom en base.
 
 export const memberKinds = {
   adult: 'Adulte',
@@ -50,57 +51,6 @@ export const equipment: Record<string, string> = {
   'equipment.hob': 'Plaques',
   'equipment.microwave': 'Micro-ondes',
   'equipment.airfryer': 'Airfryer',
-};
-
-export const ingredients: Record<string, string> = {
-  'ingredient.peanut': 'Arachide',
-  'ingredient.hazelnut': 'Noisette',
-  'ingredient.walnut': 'Noix',
-  'ingredient.almond': 'Amande',
-  'ingredient.milk': 'Lait',
-  'ingredient.cream': 'Crème',
-  'ingredient.butter': 'Beurre',
-  'ingredient.egg': 'Œuf',
-  'ingredient.wheat_flour': 'Farine de blé',
-  'ingredient.pasta': 'Pâtes',
-  'ingredient.rice': 'Riz',
-  'ingredient.shrimp': 'Crevette',
-  'ingredient.mussel': 'Moule',
-  'ingredient.salmon': 'Saumon',
-  'ingredient.cod': 'Cabillaud',
-  'ingredient.tuna': 'Thon',
-  'ingredient.anchovy': 'Anchois',
-  'ingredient.celery': 'Céleri',
-  'ingredient.mustard': 'Moutarde',
-  'ingredient.sesame': 'Sésame',
-  'ingredient.tofu': 'Tofu',
-  'ingredient.mushroom': 'Champignon',
-  'ingredient.bell_pepper': 'Poivron',
-  'ingredient.onion': 'Oignon',
-  'ingredient.garlic': 'Ail',
-  'ingredient.coriander': 'Coriandre',
-  'ingredient.spinach': 'Épinard',
-  'ingredient.cauliflower': 'Chou-fleur',
-  'ingredient.broccoli': 'Brocoli',
-  'ingredient.zucchini': 'Courgette',
-  'ingredient.eggplant': 'Aubergine',
-  'ingredient.tomato': 'Tomate',
-  'ingredient.carrot': 'Carotte',
-  'ingredient.potato': 'Pomme de terre',
-  'ingredient.beetroot': 'Betterave',
-  'ingredient.endive': 'Endive',
-  'ingredient.leek': 'Poireau',
-  'ingredient.olive': 'Olive',
-  'ingredient.lentil': 'Lentilles',
-  'ingredient.chickpea': 'Pois chiches',
-  'ingredient.blue_cheese': 'Fromage bleu',
-  'ingredient.goat_cheese': 'Fromage de chèvre',
-  'ingredient.chicken': 'Poulet',
-  'ingredient.minced_beef': 'Bœuf haché',
-  'ingredient.pork': 'Porc',
-  'ingredient.veal': 'Veau',
-  'ingredient.lamb': 'Agneau',
-  'ingredient.liver': 'Foie',
 };
 
 /** Libellé d'une clé de traduction, ou la clé elle-même si elle est inconnue (nouvel ingrédient). */

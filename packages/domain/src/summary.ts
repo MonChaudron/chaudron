@@ -59,5 +59,6 @@ export function searchKey(text: string): string {
     .replaceAll('æ', 'ae')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 }

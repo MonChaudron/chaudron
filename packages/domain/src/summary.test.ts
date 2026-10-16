@@ -37,4 +37,6 @@ test('recherche sans accents', () => {
   assert.equal(searchKey('Œuf'), 'oeuf');
   assert.equal(searchKey(' Épinard '), 'epinard');
   assert.equal(searchKey('Pois chiches'), 'pois chiches');
+  // Même règle que le serveur (server/src/text.rs) : espaces simples.
+  assert.equal(searchKey('Bœuf   haché'), 'boeuf hache');
 });

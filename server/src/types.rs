@@ -5,7 +5,7 @@
 macro_rules! text_enum {
     ($(#[$meta:meta])* pub enum $name:ident { $($(#[$vmeta:meta])* $variant:ident = $text:literal,)+ }) => {
         $(#[$meta])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
         pub enum $name {
             $($(#[$vmeta])* #[serde(rename = $text)] #[schema(rename = $text)] $variant,)+
         }
@@ -75,5 +75,46 @@ text_enum! {
     pub enum ExclusionKind {
         Allergy = "allergy",
         Dislike = "dislike",
+    }
+}
+
+text_enum! {
+    /// Forme d'achat d'un ingrédient : rayon des courses et ligne Ciqual pour les apports.
+    pub enum IngredientState {
+        /// Frais, ou tel quel (moutarde, lait).
+        Fresh = "fresh",
+        Frozen = "frozen",
+        Canned = "canned",
+        /// Sec ou déshydraté (pâtes, riz, lentilles, fruits à coque).
+        Dried = "dried",
+        /// Acheté cuit (crevettes, betteraves, riz précuit).
+        Cooked = "cooked",
+    }
+}
+
+text_enum! {
+    /// Rayon du magasin.
+    pub enum Aisle {
+        Fresh = "fresh",
+        Produce = "produce",
+        Butcher = "butcher",
+        Fish = "fish",
+        Dairy = "dairy",
+        Frozen = "frozen",
+        Grocery = "grocery",
+        Bakery = "bakery",
+        Other = "other",
+    }
+}
+
+text_enum! {
+    /// Unité normalisée.
+    pub enum Unit {
+        G = "g",
+        Ml = "ml",
+        Piece = "piece",
+        Tbsp = "tbsp",
+        Tsp = "tsp",
+        Pinch = "pinch",
     }
 }

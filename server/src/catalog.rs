@@ -1,4 +1,4 @@
-//! Référentiels communs (équipements, ingrédients) et équipements du foyer.
+//! Catalogue des équipements et équipements du foyer.
 
 use std::collections::BTreeSet;
 
@@ -21,13 +21,10 @@ use crate::{
 };
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/equipment", get(equipment))
-        .route("/ingredients", get(ingredients))
-        .route(
-            "/households/{id}/equipment",
-            get(household_equipment).put(set_household_equipment),
-        )
+    Router::new().route("/equipment", get(equipment)).route(
+        "/households/{id}/equipment",
+        get(household_equipment).put(set_household_equipment),
+    )
 }
 
 /// Appareil du catalogue.
@@ -56,38 +53,6 @@ async fn equipment(
     let list = sqlx::query_as("SELECT code, name_key, rules FROM equipment ORDER BY code")
         .fetch_all(&state.db)
         .await?;
-    Ok(Json(list))
-}
-
-/// Ingrédient du référentiel.
-#[derive(Serialize, ToSchema, FromRow)]
-pub struct Ingredient {
-    pub id: Uuid,
-    pub code: String,
-    /// Clé de traduction du nom.
-    pub name_key: String,
-    /// Rayon : `fresh`, `produce`, `butcher`, `fish`, `dairy`, `frozen`, `grocery`, `bakery`, `other`.
-    pub aisle: String,
-    /// Unité : `g`, `ml`, `piece`, `tbsp`, `tsp`, `pinch`.
-    pub default_unit: String,
-}
-
-/// Référentiel complet des ingrédients (la recherche se fait côté client, sur les noms traduits).
-#[utoipa::path(
-    get,
-    path = "/api/v1/ingredients",
-    tag = "référentiels",
-    responses((status = 200, body = Vec<Ingredient>))
-)]
-async fn ingredients(
-    State(state): State<AppState>,
-    _: CurrentUser,
-) -> ApiResult<Json<Vec<Ingredient>>> {
-    let list = sqlx::query_as(
-        "SELECT id, code, name_key, aisle, default_unit FROM ingredients ORDER BY code",
-    )
-    .fetch_all(&state.db)
-    .await?;
     Ok(Json(list))
 }
 

@@ -83,9 +83,19 @@ npm run api:generate                                         # régénère les t
 | `packages/api/` | Client TypeScript généré depuis l'OpenAPI |
 | `packages/domain/` | Charte (tokens jour et nuit), libellés français, résumés du barème et de la présence |
 | `deploy/` | docker-compose et exemple de configuration |
-| `scripts/` | Raccourcis de dev |
+| `scripts/` | Raccourcis de dev, extraction de la table Ciqual |
+
+**Table Ciqual** : `server/data/ciqual.tsv` est un extrait de la table de l'Anses (3 484 aliments, 8 apports pour
+100 g), embarqué dans le binaire et chargé en base au démarrage quand sa version change. Pour une nouvelle version,
+télécharger les XML `alim` et `compo` depuis [doi:10.57745/RDMHWY](https://doi.org/10.57745/RDMHWY), les renommer
+`alim.xml` et `compo.xml`, puis :
+
+```sh
+node scripts/ciqual-extract.mjs <dossier> <date des fichiers> > server/data/ciqual.tsv
+```
 
 ## Licence
 
 [AGPL-3.0](LICENSE). Polices Unbounded et Atkinson Hyperlegible Next sous SIL Open Font License 1.1
-(`apps/app/public/fonts/OFL-*.txt`).
+(`apps/app/public/fonts/OFL-*.txt`). Table de composition nutritionnelle des aliments Ciqual 2025, Anses, sous
+Licence Ouverte Etalab 2.0 (`server/data/ciqual.tsv`).

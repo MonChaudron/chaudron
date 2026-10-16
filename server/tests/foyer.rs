@@ -277,7 +277,8 @@ async fn referentiel_d_ingredients(db: PgPool) {
         .iter()
         .find(|i| i["code"] == "peanut")
         .unwrap();
-    assert_eq!(peanut["name_key"], "ingredient.peanut");
+    assert_eq!(peanut["name"], "Arachide");
+    assert_eq!(peanut.get("name_key"), None);
     assert_eq!(peanut["aisle"], "grocery");
     assert!(list.as_array().unwrap().len() >= 40);
 }

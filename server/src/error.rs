@@ -60,6 +60,10 @@ impl ApiError {
         Self::new(StatusCode::CONFLICT, code, message)
     }
 
+    pub fn is_conflict(&self) -> bool {
+        self.status == StatusCode::CONFLICT
+    }
+
     pub fn internal() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
