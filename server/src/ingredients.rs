@@ -297,6 +297,7 @@ pub struct Food {
 }
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct FoodQuery {
     /// Mots cherchés, tous présents, sans tenir compte des accents ni de la casse.
     pub q: String,

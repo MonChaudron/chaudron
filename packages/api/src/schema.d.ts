@@ -1219,14 +1219,14 @@ export interface operations {
     };
     search_foods: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
+            query: {
                 /** @description Mots cherchés, tous présents, sans tenir compte des accents ni de la casse. */
                 q: string;
                 /** @description 20 par défaut, 50 au plus. */
-                limit: number | null;
+                limit?: number;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -1799,14 +1799,15 @@ export interface operations {
     };
     list_recipes: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Mots cherchés dans le titre et les ingrédients, sans tenir compte des accents ni de la casse. */
+                q?: string;
+                /** @description Étiquette exacte. */
+                tag?: string;
+            };
             header?: never;
             path: {
                 id: string;
-                /** @description Mots cherchés dans le titre et les ingrédients, sans tenir compte des accents ni de la casse. */
-                q: string | null;
-                /** @description Étiquette exacte. */
-                tag: string | null;
             };
             cookie?: never;
         };

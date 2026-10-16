@@ -23,6 +23,17 @@ export type PendingInvite = Schemas['PendingInvite'];
 export type ProviderInfo = Schemas['ProviderInfo'];
 export type Role = Schemas['Role'];
 export type ErrorBody = Schemas['ErrorBody'];
+export type Recipe = Schemas['Recipe'];
+export type RecipeSummary = Schemas['RecipeSummary'];
+export type RecipeLine = Schemas['RecipeLine'];
+export type Variant = Schemas['Variant'];
+export type Phase = Schemas['Phase'];
+export type Step = Schemas['Step'];
+export type IngredientState = Schemas['IngredientState'];
+export type Unit = Schemas['Unit'];
+export type Scope = Schemas['Scope'];
+export type ApiTokenInfo = Schemas['ApiTokenInfo'];
+export type CreatedApiToken = Schemas['CreatedApiToken'];
 
 /** `baseUrl` vide : l'API est sur la même origine (production). En dev, l'adresse du serveur Rust. */
 export function createApi(baseUrl = '') {

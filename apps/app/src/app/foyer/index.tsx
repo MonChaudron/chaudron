@@ -136,6 +136,14 @@ function Household({ id, me, onLeft }: { id: string; me: string; onLeft: () => P
             onChanged={household.reload}
             onLeft={onLeft}
           />
+
+          {owner ? (
+            <Card>
+              <Title level={2}>Accès pour Claude</Title>
+              <Body tone="muted" size={16}>Un jeton qui laisse Claude publier les recettes du foyer.</Body>
+              <LinkButton label="Gérer les accès" href="/foyer/acces" />
+            </Card>
+          ) : null}
         </>
       </Columns>
     </Screen>
