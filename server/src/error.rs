@@ -60,6 +60,12 @@ impl ApiError {
         Self::new(StatusCode::CONFLICT, code, message)
     }
 
+    /// Préfixe le message (ex. le slug de la recette fautive d'un lot).
+    pub fn context(mut self, prefix: &str) -> Self {
+        self.message = format!("{prefix} : {}", self.message);
+        self
+    }
+
     pub fn is_conflict(&self) -> bool {
         self.status == StatusCode::CONFLICT
     }
