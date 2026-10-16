@@ -255,6 +255,53 @@
         }
       }
     },
+    "/api/v1/foods": {
+      "get": {
+        "tags": [
+          "référentiels"
+        ],
+        "summary": "Recherche dans la table Ciqual : les noms qui commencent par le premier mot d'abord, puis les plus courts.",
+        "operationId": "search_foods",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "path",
+            "description": "Mots cherchés, tous présents, sans tenir compte des accents ni de la casse.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "description": "20 par défaut, 50 au plus.",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Food"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households": {
       "post": {
         "tags": [
@@ -1092,8 +1139,8 @@
         "tags": [
           "référentiels"
         ],
-        "summary": "Référentiel complet des ingrédients (la recherche se fait côté client, sur les noms traduits).",
-        "operationId": "ingredients",
+        "summary": "Référentiel complet des ingrédients, trié par nom (la recherche se fait côté client).",
+        "operationId": "list_ingredients",
         "responses": {
           "200": {
             "content": {
@@ -1103,6 +1150,120 @@
                   "items": {
                     "$ref": "#/components/schemas/Ingredient"
                   }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "référentiels"
+        ],
+        "summary": "Crée un ingrédient (à partir d'une ligne Ciqual, ou sans). Son code est tiré du nom.",
+        "operationId": "create_ingredient",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewIngredient"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ingredient"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Un ingrédient porte déjà ce nom",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingredients/{id}/foods/{state}": {
+      "put": {
+        "tags": [
+          "référentiels"
+        ],
+        "summary": "Relie une forme d'achat de l'ingrédient à une ligne Ciqual (remplace la précédente).",
+        "operationId": "link_food",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/IngredientState"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FoodCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ingredient"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -1329,6 +1490,21 @@
   },
   "components": {
     "schemas": {
+      "Aisle": {
+        "type": "string",
+        "description": "Rayon du magasin.",
+        "enum": [
+          "fresh",
+          "produce",
+          "butcher",
+          "fish",
+          "dairy",
+          "frozen",
+          "grocery",
+          "bakery",
+          "other"
+        ]
+      },
       "DefaultPortions": {
         "type": "object",
         "description": "Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »).",
@@ -1424,6 +1600,117 @@
           "allergy",
           "dislike"
         ]
+      },
+      "Food": {
+        "type": "object",
+        "description": "Aliment de la table Ciqual, apports pour 100 g (nuls si non renseignés).",
+        "required": [
+          "code",
+          "name",
+          "group_code",
+          "subgroup_code"
+        ],
+        "properties": {
+          "carbs_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "energy_kcal": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "fat_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "fiber_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "group_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "protein_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "salt_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "sat_fat_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "subgroup_code": {
+            "type": "string"
+          },
+          "sugars_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          }
+        }
+      },
+      "FoodCode": {
+        "type": "object",
+        "description": "Ligne Ciqual d'une forme d'achat.",
+        "required": [
+          "food_code"
+        ],
+        "properties": {
+          "food_code": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "FoodLink": {
+        "type": "object",
+        "description": "Ligne Ciqual à relier à une forme d'achat.",
+        "required": [
+          "state",
+          "food_code"
+        ],
+        "properties": {
+          "food_code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "state": {
+            "$ref": "#/components/schemas/IngredientState"
+          }
+        }
       },
       "Health": {
         "type": "object",
@@ -1585,31 +1872,78 @@
         "required": [
           "id",
           "code",
-          "name_key",
+          "name",
           "aisle",
-          "default_unit"
+          "default_unit",
+          "default_state",
+          "foods"
         ],
         "properties": {
           "aisle": {
-            "type": "string",
-            "description": "Rayon : `fresh`, `produce`, `butcher`, `fish`, `dairy`, `frozen`, `grocery`, `bakery`, `other`."
+            "$ref": "#/components/schemas/Aisle"
           },
           "code": {
-            "type": "string"
+            "type": "string",
+            "description": "Tiré du nom à la création, stable ensuite."
+          },
+          "default_state": {
+            "$ref": "#/components/schemas/IngredientState",
+            "description": "Forme d'achat proposée par défaut dans une recette."
           },
           "default_unit": {
-            "type": "string",
-            "description": "Unité : `g`, `ml`, `piece`, `tbsp`, `tsp`, `pinch`."
+            "$ref": "#/components/schemas/Unit"
+          },
+          "foods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IngredientFood"
+            },
+            "description": "Lignes Ciqual par forme d'achat (frais, surgelé, conserve, sec, cuit), dans cet ordre."
           },
           "id": {
             "type": "string",
             "format": "uuid"
           },
-          "name_key": {
-            "type": "string",
-            "description": "Clé de traduction du nom."
+          "name": {
+            "type": "string"
           }
         }
+      },
+      "IngredientFood": {
+        "type": "object",
+        "description": "Ligne Ciqual d'un ingrédient pour une forme d'achat.",
+        "required": [
+          "state",
+          "food_code"
+        ],
+        "properties": {
+          "food_code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Code Ciqual."
+          },
+          "food_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nom Ciqual (absent si la ligne n'est pas chargée)."
+          },
+          "state": {
+            "$ref": "#/components/schemas/IngredientState"
+          }
+        }
+      },
+      "IngredientState": {
+        "type": "string",
+        "description": "Forme d'achat d'un ingrédient : rayon des courses et ligne Ciqual pour les apports.",
+        "enum": [
+          "fresh",
+          "frozen",
+          "canned",
+          "dried",
+          "cooked"
+        ]
       },
       "InviteCreated": {
         "type": "object",
@@ -1863,6 +2197,37 @@
           }
         }
       },
+      "NewIngredient": {
+        "type": "object",
+        "description": "Nouvel ingrédient.",
+        "required": [
+          "name",
+          "aisle",
+          "default_unit",
+          "default_state"
+        ],
+        "properties": {
+          "aisle": {
+            "$ref": "#/components/schemas/Aisle"
+          },
+          "default_state": {
+            "$ref": "#/components/schemas/IngredientState"
+          },
+          "default_unit": {
+            "$ref": "#/components/schemas/Unit"
+          },
+          "foods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FoodLink"
+            },
+            "description": "Lignes Ciqual, au plus une par forme d'achat."
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "NewMember": {
         "type": "object",
         "description": "Nouveau membre : barème par défaut de son type, présent à tous les repas, sans exclusion.",
@@ -2052,6 +2417,18 @@
             "$ref": "#/components/schemas/Role"
           }
         }
+      },
+      "Unit": {
+        "type": "string",
+        "description": "Unité normalisée.",
+        "enum": [
+          "g",
+          "ml",
+          "piece",
+          "tbsp",
+          "tsp",
+          "pinch"
+        ]
       }
     },
     "securitySchemes": {

@@ -113,6 +113,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/foods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recherche dans la table Ciqual : les noms qui commencent par le premier mot d'abord, puis les plus courts. */
+        get: operations["search_foods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households": {
         parameters: {
             query?: never;
@@ -261,9 +278,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Référentiel complet des ingrédients (la recherche se fait côté client, sur les noms traduits). */
-        get: operations["ingredients"];
+        /** Référentiel complet des ingrédients, trié par nom (la recherche se fait côté client). */
+        get: operations["list_ingredients"];
         put?: never;
+        /** Crée un ingrédient (à partir d'une ligne Ciqual, ou sans). Son code est tiré du nom. */
+        post: operations["create_ingredient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingredients/{id}/foods/{state}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Relie une forme d'achat de l'ingrédient à une ligne Ciqual (remplace la précédente). */
+        put: operations["link_food"];
         post?: never;
         delete?: never;
         options?: never;
@@ -375,6 +410,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Rayon du magasin.
+         * @enum {string}
+         */
+        Aisle: "fresh" | "produce" | "butcher" | "fish" | "dairy" | "frozen" | "grocery" | "bakery" | "other";
         /** @description Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »). */
         DefaultPortions: {
             adult: components["schemas"]["Portions"];
@@ -413,6 +453,41 @@ export interface components {
          * @enum {string}
          */
         ExclusionKind: "allergy" | "dislike";
+        /** @description Aliment de la table Ciqual, apports pour 100 g (nuls si non renseignés). */
+        Food: {
+            /** Format: float */
+            carbs_g?: number | null;
+            /** Format: int32 */
+            code: number;
+            /** Format: float */
+            energy_kcal?: number | null;
+            /** Format: float */
+            fat_g?: number | null;
+            /** Format: float */
+            fiber_g?: number | null;
+            group_code: string;
+            name: string;
+            /** Format: float */
+            protein_g?: number | null;
+            /** Format: float */
+            salt_g?: number | null;
+            /** Format: float */
+            sat_fat_g?: number | null;
+            subgroup_code: string;
+            /** Format: float */
+            sugars_g?: number | null;
+        };
+        /** @description Ligne Ciqual d'une forme d'achat. */
+        FoodCode: {
+            /** Format: int32 */
+            food_code: number;
+        };
+        /** @description Ligne Ciqual à relier à une forme d'achat. */
+        FoodLink: {
+            /** Format: int32 */
+            food_code: number;
+            state: components["schemas"]["IngredientState"];
+        };
         /** @description État du serveur et de ses dépendances. */
         Health: {
             /** @description `ok` ou `unreachable`. */
@@ -462,16 +537,34 @@ export interface components {
         };
         /** @description Ingrédient du référentiel. */
         Ingredient: {
-            /** @description Rayon : `fresh`, `produce`, `butcher`, `fish`, `dairy`, `frozen`, `grocery`, `bakery`, `other`. */
-            aisle: string;
+            aisle: components["schemas"]["Aisle"];
+            /** @description Tiré du nom à la création, stable ensuite. */
             code: string;
-            /** @description Unité : `g`, `ml`, `piece`, `tbsp`, `tsp`, `pinch`. */
-            default_unit: string;
+            /** @description Forme d'achat proposée par défaut dans une recette. */
+            default_state: components["schemas"]["IngredientState"];
+            default_unit: components["schemas"]["Unit"];
+            /** @description Lignes Ciqual par forme d'achat (frais, surgelé, conserve, sec, cuit), dans cet ordre. */
+            foods: components["schemas"]["IngredientFood"][];
             /** Format: uuid */
             id: string;
-            /** @description Clé de traduction du nom. */
-            name_key: string;
+            name: string;
         };
+        /** @description Ligne Ciqual d'un ingrédient pour une forme d'achat. */
+        IngredientFood: {
+            /**
+             * Format: int32
+             * @description Code Ciqual.
+             */
+            food_code: number;
+            /** @description Nom Ciqual (absent si la ligne n'est pas chargée). */
+            food_name?: string | null;
+            state: components["schemas"]["IngredientState"];
+        };
+        /**
+         * @description Forme d'achat d'un ingrédient : rayon des courses et ligne Ciqual pour les apports.
+         * @enum {string}
+         */
+        IngredientState: "fresh" | "frozen" | "canned" | "dried" | "cooked";
         /** @description Lien d'invitation créé. Le lien n'est donné qu'une fois : seul son hash est conservé. */
         InviteCreated: {
             /** Format: date-time */
@@ -555,6 +648,15 @@ export interface components {
             /** @description Fuseau IANA, `Europe/Paris` par défaut. */
             timezone?: string | null;
         };
+        /** @description Nouvel ingrédient. */
+        NewIngredient: {
+            aisle: components["schemas"]["Aisle"];
+            default_state: components["schemas"]["IngredientState"];
+            default_unit: components["schemas"]["Unit"];
+            /** @description Lignes Ciqual, au plus une par forme d'achat. */
+            foods?: components["schemas"]["FoodLink"][];
+            name: string;
+        };
         /** @description Nouveau membre : barème par défaut de son type, présent à tous les repas, sans exclusion. */
         NewMember: {
             diet?: components["schemas"]["Diet"] | null;
@@ -618,6 +720,11 @@ export interface components {
         RoleUpdate: {
             role: components["schemas"]["Role"];
         };
+        /**
+         * @description Unité normalisée.
+         * @enum {string}
+         */
+        Unit: "g" | "ml" | "piece" | "tbsp" | "tsp" | "pinch";
     };
     responses: never;
     parameters: never;
@@ -798,6 +905,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Equipment"][];
+                };
+            };
+        };
+    };
+    search_foods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mots cherchés, tous présents, sans tenir compte des accents ni de la casse. */
+                q: string;
+                /** @description 20 par défaut, 50 au plus. */
+                limit: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Food"][];
                 };
             };
         };
@@ -1405,7 +1536,7 @@ export interface operations {
             };
         };
     };
-    ingredients: {
+    list_ingredients: {
         parameters: {
             query?: never;
             header?: never;
@@ -1420,6 +1551,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ingredient"][];
+                };
+            };
+        };
+    };
+    create_ingredient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewIngredient"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ingredient"];
+                };
+            };
+            /** @description Un ingrédient porte déjà ce nom */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    link_food: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                state: components["schemas"]["IngredientState"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FoodCode"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ingredient"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

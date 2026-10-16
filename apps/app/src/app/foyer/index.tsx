@@ -1,7 +1,6 @@
 import { errorMessage, type HouseholdUser, type MemberKind } from '@chaudron/api';
 import {
   equipment as equipmentLabels,
-  ingredients as ingredientLabels,
   label,
   memberKinds,
   portionsSummary,
@@ -60,7 +59,7 @@ function Household({ id, me, onLeft }: { id: string; me: string; onLeft: () => P
   const owned = useLoad(() => api.GET('/api/v1/households/{id}/equipment', path), [id]);
   const ingredients = useLoad(() => api.GET('/api/v1/ingredients'), []);
   const ingredientNames = useMemo(
-    () => new Map((ingredients.data ?? []).map((i) => [i.id, label(ingredientLabels, i.name_key)])),
+    () => new Map((ingredients.data ?? []).map((i) => [i.id, i.name])),
     [ingredients.data],
   );
 
