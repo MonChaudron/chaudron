@@ -48,16 +48,58 @@ export function Screen({ children, header = true }: { children: ReactNode; heade
     );
   }
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: palette.bg }}
-      contentContainerStyle={{ alignItems: 'center', paddingBottom: space[7] }}
-      keyboardShouldPersistTaps="handled"
+    <View style={{ flex: 1, backgroundColor: palette.bg }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ alignItems: 'center', paddingBottom: space[7] }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={{ width: '100%', maxWidth: 480, paddingHorizontal: space[4], paddingTop: space[5], gap: space[5] }}>
+          {header ? <Header /> : null}
+          {children}
+        </View>
+      </ScrollView>
+      {header ? <TabBar /> : null}
+    </View>
+  );
+}
+
+/** Téléphone : les grandes sections en bas de l'écran, à portée de pouce. */
+function TabBar() {
+  const { palette, fonts, weights, radius } = useTheme();
+  const path = usePathname();
+  return (
+    <View
+      accessibilityRole="tablist"
+      style={{ flexDirection: 'row', gap: space[2], paddingHorizontal: space[3], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: palette.line, backgroundColor: palette.card }}
     >
-      <View style={{ width: '100%', maxWidth: 480, paddingHorizontal: space[4], paddingTop: space[5], gap: space[5] }}>
-        {header ? <Header /> : null}
-        {children}
-      </View>
-    </ScrollView>
+      {tabs.map((tab) => {
+        const active = tab.match(path);
+        return (
+          <Link
+            key={tab.label}
+            href={tab.href}
+            accessibilityRole="tab"
+            aria-selected={active}
+            style={{
+              flex: 1,
+              minHeight: 48,
+              lineHeight: 48,
+              textAlign: 'center',
+              borderRadius: radius.button,
+              backgroundColor: active ? palette.tagBg : 'transparent',
+              color: active ? palette.tagText : palette.muted,
+              fontFamily: fonts.text,
+              fontWeight: weights.medium,
+              fontSize: 16,
+              textDecorationLine: 'none',
+            }}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </View>
   );
 }
 
@@ -75,12 +117,20 @@ function Header() {
   );
 }
 
-const navigation: { href: Href; label: string; match: (path: string) => boolean }[] = [
-  { href: '/foyer', label: 'Le foyer', match: (p) => p === '/foyer' || p.startsWith('/foyer/membres') },
+type NavEntry = { href: Href; label: string; match: (path: string) => boolean };
+
+const navigation: NavEntry[] = [
+  { href: '/recettes', label: 'Recettes', match: (p) => p.startsWith('/recettes') },
+  { href: '/foyer', label: 'Le foyer', match: (p) => p === '/foyer' || p.startsWith('/foyer/membres') || p === '/foyer/acces' },
   { href: '/foyer/equipements', label: 'Le matériel', match: (p) => p === '/foyer/equipements' },
 ];
+/** Téléphone : le matériel est dans le foyer. */
+const tabs: NavEntry[] = [
+  { href: '/recettes', label: 'Recettes', match: (p) => p.startsWith('/recettes') },
+  { href: '/foyer', label: 'Le foyer', match: (p) => p.startsWith('/foyer') },
+];
 /** La suite de la V1, montrée pour donner la structure de l'appli. */
-const upcoming = ['Recettes', 'Menus', 'Courses'];
+const upcoming = ['Menus', 'Courses'];
 
 /** Bureau : logo, navigation, puis le compte en bas. */
 function Sidebar() {

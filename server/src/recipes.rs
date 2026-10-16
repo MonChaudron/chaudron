@@ -735,6 +735,7 @@ struct SummaryRow {
 }
 
 #[derive(Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct RecipeQuery {
     /// Mots cherchés dans le titre et les ingrédients, sans tenir compte des accents ni de la casse.
     pub q: Option<String>,
