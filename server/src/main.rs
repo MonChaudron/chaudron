@@ -8,7 +8,7 @@ use std::{
 };
 
 use axum::serve::ListenerExt;
-use chaudron_server::{AppState, app};
+use chaudron_server::{AppState, app, config::Config};
 use sqlx::postgres::PgPoolOptions;
 
 fn port() -> u16 {
@@ -56,6 +56,14 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|n| n.parse().ok())
         .unwrap_or(3);
     let web_dir = PathBuf::from(env::var("WEB_DIR").unwrap_or_else(|_| "web".into()));
+    let config = Config::from_env(port())?;
+    if config.fake_oauth {
+        tracing::warn!(
+            "AUTH_FAKE : fournisseur de connexion factice actif, n'importe qui peut se connecter"
+        );
+    }
+    let providers: Vec<_> = config.providers.iter().map(|p| p.id.as_str()).collect();
+    tracing::info!(public_url = %config.public_url, ?providers, signup = ?config.signup, "configuration");
 
     let db = PgPoolOptions::new()
         .max_connections(max_connections)
@@ -73,7 +81,7 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     });
     tracing::info!(%addr, web_dir = %web_dir.display(), "Chaudron démarré");
 
-    axum::serve(listener, app(AppState { db }, &web_dir))
+    axum::serve(listener, app(AppState::new(db, config), &web_dir))
         .with_graceful_shutdown(shutdown())
         .await?;
     Ok(())
