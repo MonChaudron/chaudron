@@ -6,6 +6,18 @@ WORKDIR /src
 COPY rust-toolchain.toml .
 RUN rustup toolchain install
 
+# Appli web (Expo) : export statique, servi par le binaire. Node ne sert qu'au build, pas dans l'image finale.
+FROM node:24-alpine AS web
+WORKDIR /src
+COPY package.json package-lock.json ./
+COPY apps/app/package.json apps/app/
+COPY packages/api/package.json packages/api/
+COPY packages/domain/package.json packages/domain/
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY apps apps
+COPY packages packages
+RUN npm run build:web
+
 # Binaire statique (musl) pour l'architecture de la machine de build : amd64 en CI, arm64 sur un runner arm.
 FROM toolchain AS build
 COPY . .
@@ -18,7 +30,7 @@ FROM scratch
 LABEL org.opencontainers.image.source="https://github.com/MonChaudron/chaudron" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 COPY --from=build /chaudron /chaudron
-COPY server/web /web
+COPY --from=web /src/apps/app/dist /web
 ENV PORT=8080 WEB_DIR=/web
 USER 10001:10001
 EXPOSE 8080

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Chaudron</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <!-- Polices de tous les thèmes : le navigateur ne télécharge que celles du thème affiché. -->
+  <link rel="stylesheet" href="/fonts.css">
+  <style>
+    /* Comme le gabarit d'Expo : #root en flex, c'est la ScrollView de chaque écran qui défile. */
+    html, body { height: 100%; margin: 0; }
+    body { overflow: hidden; }
+    #root { display: flex; flex: 1; height: 100%; }
+    body { background: var(--bg, #EDF4CC); }
+    @media (prefers-color-scheme: dark) { body { background: var(--bg, #11140A); } }
+  </style>
+  <script>
+    // Fond du thème choisi sur cet appareil, avant le chargement de l'appli (pas de flash de couleur).
+    try { const bg = localStorage.getItem('chaudron.bg'); if (bg && /^#[0-9a-f]{6}$/i.test(bg)) document.documentElement.style.setProperty('--bg', bg); } catch {}
+  </script>
+</head>
+<body>
+  <noscript>Chaudron a besoin de JavaScript.</noscript>
+  <div id="root"></div>
+</body>
+</html>

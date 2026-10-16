@@ -1,0 +1,44 @@
+name: app
+
+on:
+  pull_request:
+    paths: ["apps/**", "packages/**", "package.json", "package-lock.json", ".github/workflows/app.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/**", "packages/**", "package.json", "package-lock.json", ".github/workflows/app.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Image Node officielle : même version que l'étape web du Dockerfile, sans action tierce à épingler.
+    container: node:24-bookworm
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Le dépôt appartient à un autre utilisateur que celui du conteneur.
+      - name: Autoriser git dans le conteneur
+        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+      - name: Installer les dépendances
+        run: npm ci --no-audit --no-fund
+      - name: Vérifier que le client d'API est à jour
+        run: |
+          npm run api:generate
+          git diff --exit-code packages/api/src/schema.d.ts
+      - name: Vérifier les types
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm test
+      - name: Export web
+        run: npm run build:web

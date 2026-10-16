@@ -1,3 +1,8 @@
 /target
 deploy/.env
 deploy/data/
+node_modules/
+apps/app/.expo/
+apps/app/dist/
+apps/app/expo-env.d.ts
+*.tsbuildinfo

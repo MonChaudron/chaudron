@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Chaudron",
+    "slug": "chaudron",
+    "scheme": "chaudron",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Chaudron",
+      "shortName": "Chaudron",
+      "lang": "fr",
+      "themeColor": "#EDF4CC",
+      "backgroundColor": "#EDF4CC"
+    },
+    "plugins": ["expo-router", "expo-font"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

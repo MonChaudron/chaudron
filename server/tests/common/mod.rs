@@ -27,7 +27,7 @@ use uuid::Uuid;
 pub const PUBLIC_URL: &str = "http://localhost:28471";
 
 pub fn web_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/web")
 }
 
 pub fn config(fake_base: &str, signup: SignupPolicy) -> Config {
