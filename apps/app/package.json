@@ -1,0 +1,35 @@
+{
+  "name": "app",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@chaudron/api": "*",
+    "@chaudron/domain": "*",
+    "expo": "~58.0.12",
+    "expo-constants": "~58.0.12",
+    "expo-font": "~58.0.8",
+    "expo-linking": "~58.0.13",
+    "expo-router": "~58.0.21",
+    "expo-status-bar": "~58.0.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-safe-area-context": "~5.10.1",
+    "react-native-screens": "~4.30.0",
+    "react-native-svg": "15.16.0",
+    "react-native-web": "^0.21.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start --web",
+    "build:web": "expo export -p web",
+    "typecheck": "tsc --noEmit",
+    "lint": "expo lint"
+  },
+  "private": true,
+  "license": "AGPL-3.0-only"
+}

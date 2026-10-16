@@ -568,7 +568,7 @@ fn login_error(code: &'static str) -> ApiError {
         "inscriptions-fermees" => ApiError::new(
             StatusCode::FORBIDDEN,
             "signup_closed",
-            "Les inscriptions sont fermées : il faut un lien d'invitation.",
+            "Les inscriptions sont fermées : il faut un lien d’invitation.",
         ),
         "deja-lie" => ApiError::conflict(
             "already_linked",

@@ -4,3 +4,6 @@ target
 deploy
 scripts
 *.md
+**/node_modules
+apps/app/dist
+apps/app/.expo

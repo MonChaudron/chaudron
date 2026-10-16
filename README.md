@@ -43,7 +43,7 @@ curl http://localhost:28471/health   # {"status":"ok","database":"ok"}
 
 ## Développer
 
-Rien à installer à part Docker : Rust tourne dans un conteneur jetable.
+Le serveur tourne sans rien installer à part Docker : Rust tourne dans un conteneur jetable.
 
 ```sh
 scripts/dev.sh up --build      # l'appli construite depuis les sources + PostgreSQL, sur http://localhost:28471
@@ -56,13 +56,36 @@ par un fournisseur factice (`AUTH_FAKE=1`) : on choisit un nom et une adresse, s
 l'utilisent aussi, sur un vrai port, pour dérouler la connexion OAuth de bout en bout. La base de dev est joignable
 sur `localhost:5432`. Le contrat d'API est publié sur `/api/v1/openapi.json`.
 
+### L'appli (Expo)
+
+Pour travailler sur l'appli avec le rechargement à chaud, il faut Node 24 en local (le rechargement ne traverse pas
+les montages Windows vers un conteneur) :
+
+```sh
+npm install                                                  # une fois
+DEV_WEB_ORIGIN=http://localhost:8081 scripts/dev.sh up -d    # serveur et base, qui acceptent l'appli de :8081
+npm run dev                                                  # l'appli sur http://localhost:8081
+npm run typecheck && npm run lint && npm test                # comme la CI
+```
+
+**Contrat d'API** : le client TypeScript (`packages/api`) est généré depuis `packages/api/openapi.json`, lui-même écrit
+par le serveur. Après un changement de l'API :
+
+```sh
+UPDATE_OPENAPI=1 scripts/cargo.sh test --test api            # réécrit openapi.json
+npm run api:generate                                         # régénère les types
+```
+
 | Dossier | Contenu |
 |---|---|
-| `server/` | Serveur Rust (axum, sqlx, utoipa) : API, migrations, fichiers web |
+| `server/` | Serveur Rust (axum, sqlx, utoipa) : API, migrations ; sert l'appli construite |
+| `apps/app/` | Appli Expo (Expo Router), web d'abord |
+| `packages/api/` | Client TypeScript généré depuis l'OpenAPI |
+| `packages/domain/` | Charte (tokens jour et nuit), libellés français, résumés du barème et de la présence |
 | `deploy/` | docker-compose et exemple de configuration |
 | `scripts/` | Raccourcis de dev |
 
 ## Licence
 
 [AGPL-3.0](LICENSE). Polices Unbounded et Atkinson Hyperlegible Next sous SIL Open Font License 1.1
-(`server/web/fonts/OFL-*.txt`).
+(`apps/app/public/fonts/OFL-*.txt`).
