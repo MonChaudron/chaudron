@@ -458,11 +458,12 @@ export function ListRow({ title, detail, extra, onPress, last }: { title: string
 
 // Saisie
 
-export function Field({ label, hint, ...props }: TextInputProps & { label: string; hint?: string }) {
+/** Champ de saisie. `hideLabel` : le libellé n'est lu que par les lecteurs d'écran (champ dans une ligne). */
+export function Field({ label, hint, hideLabel = false, ...props }: TextInputProps & { label: string; hint?: string; hideLabel?: boolean }) {
   const { palette, fonts, radius, weights } = useTheme();
   return (
     <View style={{ gap: space[2] }}>
-      <Text style={{ fontFamily: fonts.text, fontWeight: weights.medium, fontSize: textSize.small, color: palette.text }}>{label}</Text>
+      {hideLabel ? null : <Text style={{ fontFamily: fonts.text, fontWeight: weights.medium, fontSize: textSize.small, color: palette.text }}>{label}</Text>}
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={palette.muted}

@@ -18,7 +18,7 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useLoad } from '../../lib/useLoad';
-import { Back, Body, Card, Columns, ErrorText, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { Back, Body, Card, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
 
 export default function RecipeScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -63,7 +63,10 @@ function RecipeView({ householdId, slug }: { householdId: string; slug: string }
   return (
     <Screen>
       <Router.Screen options={{ title: `${data.title} · Chaudron` }} />
-      <Back href="/recettes" label="Recettes" />
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Back href="/recettes" label="Recettes" />
+        <LinkButton kind="quiet" label="Modifier" href={`/recettes/modifier?slug=${data.slug}`} />
+      </Row>
       <Stack gap={space[3]}>
         <Title>{data.title}</Title>
         {data.description ? <Body tone="muted" style={{ maxWidth: 720 }}>{data.description}</Body> : null}
