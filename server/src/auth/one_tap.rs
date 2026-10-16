@@ -18,6 +18,8 @@ use super::providers::{Profile, Provider};
 use crate::http::{self, HttpClient};
 
 const KEYS_TTL: Duration = Duration::from_secs(3600);
+/// Au plus un rechargement par minute pour une clé inconnue.
+const MIN_REFRESH: Duration = Duration::from_secs(60);
 /// Tolérance d'horloge sur l'expiration.
 const CLOCK_SKEW_SECONDS: i64 = 60;
 
@@ -41,15 +43,19 @@ impl GoogleKeys {
         url: &str,
         kid: &str,
     ) -> Result<(String, String), String> {
-        let cached = {
+        let (cached, recent) = {
             let cache = self.cache.lock().unwrap();
-            cache
-                .as_ref()
-                .filter(|(at, _)| at.elapsed() < KEYS_TTL)
-                .and_then(|(_, keys)| keys.iter().find(|k| k.kid == kid).cloned())
+            let fresh = cache.as_ref().filter(|(at, _)| at.elapsed() < KEYS_TTL);
+            (
+                fresh.and_then(|(_, keys)| keys.iter().find(|k| k.kid == kid).cloned()),
+                fresh.is_some_and(|(at, _)| at.elapsed() < MIN_REFRESH),
+            )
         };
         let key = match cached {
             Some(key) => key,
+            // Clé inconnue alors qu'on vient de recharger : pas de nouvel appel à Google (sinon n'importe qui
+            // nous ferait l'appeler en boucle avec des `kid` inventés).
+            None if recent => return Err("clé de signature inconnue".into()),
             None => {
                 // Cache vide, périmé, ou clé tournée chez Google : on recharge.
                 let jwks = http::get_json(client, url, None).await?;

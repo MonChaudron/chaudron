@@ -2,7 +2,13 @@
 
 mod common;
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use axum::{Json, Router, http::StatusCode, routing::get};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -30,8 +36,8 @@ fn b64(data: &[u8]) -> String {
     URL_SAFE_NO_PAD.encode(data)
 }
 
-/// Sert les clés publiques comme `https://www.googleapis.com/oauth2/v3/certs`.
-async fn google_keys() -> String {
+/// Sert les clés publiques comme `https://www.googleapis.com/oauth2/v3/certs`, et compte les appels.
+async fn google_keys() -> (String, Arc<AtomicUsize>) {
     let public: RsaPublicKeyComponents<Vec<u8>> = key().public().into();
     let jwks = json!({"keys": [{
         "kid": "test-1", "kty": "RSA", "alg": "RS256", "use": "sig",
@@ -40,21 +46,34 @@ async fn google_keys() -> String {
     }]});
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
-    let router = Router::new().route("/certs", get(move || async move { Json(jwks) }));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counter = calls.clone();
+    let router = Router::new().route(
+        "/certs",
+        get(move || async move {
+            counter.fetch_add(1, Ordering::SeqCst);
+            Json(jwks)
+        }),
+    );
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    format!("{base}/certs")
+    (format!("{base}/certs"), calls)
 }
 
 async fn app(db: PgPool, signup: SignupPolicy) -> TestApp {
-    let jwks = google_keys().await;
-    TestApp::with(db, move |fake_base| {
+    app_counting(db, signup).await.0
+}
+
+async fn app_counting(db: PgPool, signup: SignupPolicy) -> (TestApp, Arc<AtomicUsize>) {
+    let (jwks, calls) = google_keys().await;
+    let app = TestApp::with(db, move |fake_base| {
         let mut config = config(fake_base, signup);
         let mut google = Provider::new(ProviderId::Google, CLIENT_ID.into(), "secret".into());
         google.jwks_url = Some(jwks);
         config.providers.insert(0, google);
         config
     })
-    .await
+    .await;
+    (app, calls)
 }
 
 fn now() -> i64 {
@@ -66,7 +85,13 @@ fn now() -> i64 {
 
 /// Jeton d'identité tel que Google le donnerait à la page.
 fn token(claims: Value) -> String {
-    let header = b64(br#"{"alg":"RS256","kid":"test-1","typ":"JWT"}"#);
+    token_with_kid(claims, "test-1")
+}
+
+fn token_with_kid(claims: Value, kid: &str) -> String {
+    let header = b64(json!({"alg": "RS256", "kid": kid, "typ": "JWT"})
+        .to_string()
+        .as_bytes());
     let payload = b64(claims.to_string().as_bytes());
     let input = format!("{header}.{payload}");
     let key = key();
@@ -201,4 +226,25 @@ async fn inscriptions_fermees_sauf_invitation(db: PgPool) {
     assert_eq!(response.status, StatusCode::OK, "{}", response.text);
     assert_eq!(response.json["return_to"], format!("/invitation/{invite}"));
     assert_eq!(guest.me().await["households"][0]["role"], "member");
+}
+
+#[sqlx::test]
+async fn cle_inconnue_sans_rappeler_google_en_boucle(db: PgPool) {
+    let (app, calls) = app_counting(db, SignupPolicy::Open).await;
+    let mut browser = app.browser();
+    let response = one_tap(
+        &mut browser,
+        json!({"credential": token(claims("a@example.org"))}),
+    )
+    .await;
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+    // Des `kid` inventés : refusés, sans nouvel appel aux clés de Google (au plus un par minute).
+    for i in 0..5 {
+        let credential = token_with_kid(claims("a@example.org"), &format!("invente-{i}"));
+        let response = one_tap(&mut browser, json!({ "credential": credential })).await;
+        assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
