@@ -36,6 +36,7 @@ pub fn config(fake_base: &str, signup: SignupPolicy) -> Config {
         providers: vec![Provider::fake(fake_base, fake_base)],
         signup,
         fake_oauth: false,
+        dev_web_origin: None,
     }
 }
 
@@ -79,8 +80,13 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn new(db: PgPool, signup: SignupPolicy) -> Self {
+        Self::with(db, |fake_base| config(fake_base, signup)).await
+    }
+
+    /// Appli avec une configuration sur mesure (reçoit l'adresse du fournisseur factice).
+    pub async fn with(db: PgPool, make: impl FnOnce(&str) -> Config) -> Self {
         let fake = Fake::start().await;
-        let app = app(AppState::new(db, config(&fake.base, signup)), &web_dir());
+        let app = app(AppState::new(db, make(&fake.base)), &web_dir());
         Self { app, fake }
     }
 

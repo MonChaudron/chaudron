@@ -4,6 +4,7 @@
 //! glissante d'un an. Pas de clé secrète à gérer, et la déconnexion révoque vraiment.
 
 pub mod fake;
+pub mod one_tap;
 pub mod providers;
 
 use std::convert::Infallible;
@@ -44,6 +45,7 @@ pub fn router() -> Router<AppState> {
         .route("/auth/providers", get(list_providers))
         .route("/auth/{provider}/login", get(login))
         .route("/auth/{provider}/callback", get(callback))
+        .route("/auth/google/one-tap", post(one_tap_login))
         .route("/auth/logout", post(logout))
         .route("/me", get(me).patch(update_me))
 }
@@ -179,7 +181,7 @@ pub async fn origin_guard(State(state): State<AppState>, request: Request, next:
     );
     if !safe
         && let Some(origin) = request.headers().get(ORIGIN)
-        && origin.as_bytes() != state.config.public_url.as_bytes()
+        && !state.config.allows_origin(origin.as_bytes())
     {
         return ApiError::forbidden("Origine refusée.").into_response();
     }
@@ -205,16 +207,34 @@ async fn create_session(db: &PgPool, user_id: Uuid) -> Result<String, sqlx::Erro
 
 // Connexion
 
+/// Fournisseur de connexion proposé par l'instance.
+#[derive(Serialize, ToSchema)]
+pub struct ProviderInfo {
+    pub id: ProviderId,
+    /// Identifiant client public (Google seulement) : sert à Google One Tap.
+    pub client_id: Option<String>,
+}
+
 /// Fournisseurs de connexion disponibles sur cette instance, dans l'ordre d'affichage.
 #[utoipa::path(
     get,
     path = "/api/v1/auth/providers",
     tag = "connexion",
     security(()),
-    responses((status = 200, body = Vec<ProviderId>))
+    responses((status = 200, body = Vec<ProviderInfo>))
 )]
-async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderId>> {
-    Json(state.config.providers.iter().map(|p| p.id).collect())
+async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderInfo>> {
+    Json(
+        state
+            .config
+            .providers
+            .iter()
+            .map(|p| ProviderInfo {
+                id: p.id,
+                client_id: (p.id == ProviderId::Google).then(|| p.client_id.clone()),
+            })
+            .collect(),
+    )
 }
 
 #[derive(Deserialize, IntoParams)]
@@ -337,12 +357,12 @@ async fn callback(
     match finish_login(&state, &provider, query, current, &headers).await {
         Ok((token, return_to)) => (
             AppendHeaders([clear, (SET_COOKIE, session_cookie(&token, secure))]),
-            Redirect::to(&return_to),
+            Redirect::to(&state.config.web_url(&return_to)),
         )
             .into_response(),
         Err(code) => (
             AppendHeaders([clear]),
-            Redirect::to(&format!("/connexion?erreur={code}")),
+            Redirect::to(&state.config.web_url(&format!("/connexion?erreur={code}"))),
         )
             .into_response(),
     }
@@ -525,6 +545,94 @@ async fn insert_identity(
     .execute(conn)
     .await?;
     Ok(())
+}
+
+/// Jeton reçu de Google One Tap.
+#[derive(Deserialize, ToSchema)]
+pub struct OneTapLogin {
+    /// Jeton d'identité (JWT) donné par Google à la page.
+    pub credential: String,
+    /// Jeton d'un lien d'invitation, si la connexion se fait depuis l'invitation.
+    pub invite: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct LoggedIn {
+    /// Page de l'appli où aller ensuite.
+    pub return_to: String,
+}
+
+/// Erreurs de connexion vues par l'API (One Tap), à partir des codes de la connexion classique.
+fn login_error(code: &'static str) -> ApiError {
+    match code {
+        "inscriptions-fermees" => ApiError::new(
+            StatusCode::FORBIDDEN,
+            "signup_closed",
+            "Les inscriptions sont fermées : il faut un lien d'invitation.",
+        ),
+        "deja-lie" => ApiError::conflict(
+            "already_linked",
+            "Ce compte Google est déjà lié à un autre compte Chaudron.",
+        ),
+        _ => ApiError::internal(),
+    }
+}
+
+/// Connexion par Google One Tap : vérifie le jeton de Google, puis comme la connexion classique (compte,
+/// invitation, session).
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/google/one-tap",
+    tag = "connexion",
+    security(()),
+    request_body = OneTapLogin,
+    responses(
+        (status = 200, description = "Connecté (cookie de session posé)", body = LoggedIn),
+        (status = 401, description = "Jeton refusé", body = crate::error::ErrorBody),
+        (status = 403, description = "Inscriptions fermées", body = crate::error::ErrorBody),
+        (status = 404, description = "Google non configuré", body = crate::error::ErrorBody),
+        (status = 409, description = "Compte Google lié à un autre compte", body = crate::error::ErrorBody),
+    )
+)]
+async fn one_tap_login(
+    State(state): State<AppState>,
+    current: Option<CurrentUser>,
+    Json(body): Json<OneTapLogin>,
+) -> ApiResult<Response> {
+    let google = state
+        .config
+        .provider(ProviderId::Google.as_str())
+        .ok_or_else(ApiError::not_found)?;
+    let profile = one_tap::verify(&state.google_keys, &state.http, google, &body.credential)
+        .await
+        .map_err(|err| {
+            tracing::warn!(%err, "jeton Google One Tap refusé");
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "one_tap_refused",
+                "Connexion Google refusée. Réessaie.",
+            )
+        })?;
+    let invite = body.invite.filter(|t| is_token(t));
+    let user_id = resolve_user(
+        &state,
+        ProviderId::Google,
+        &profile,
+        current,
+        invite.as_deref(),
+    )
+    .await
+    .map_err(login_error)?;
+    let token = create_session(&state.db, user_id).await?;
+    let return_to = invite.map_or_else(|| "/".into(), |t| format!("/invitation/{t}"));
+    Ok((
+        AppendHeaders([(
+            SET_COOKIE,
+            session_cookie(&token, state.config.secure_cookies()),
+        )]),
+        Json(LoggedIn { return_to }),
+    )
+        .into_response())
 }
 
 /// Ferme la session courante (sur cet appareil).

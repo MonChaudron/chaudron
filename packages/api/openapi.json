@@ -1,0 +1,2070 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Chaudron",
+    "description": "API de Chaudron : recettes, menus et courses du foyer.",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth/google/one-tap": {
+      "post": {
+        "tags": [
+          "connexion"
+        ],
+        "summary": "Connexion par Google One Tap : vérifie le jeton de Google, puis comme la connexion classique (compte,\ninvitation, session).",
+        "operationId": "one_tap_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OneTapLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Connecté (cookie de session posé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggedIn"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton refusé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inscriptions fermées",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Google non configuré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Compte Google lié à un autre compte",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "connexion"
+        ],
+        "summary": "Ferme la session courante (sur cet appareil).",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Déconnecté"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "connexion"
+        ],
+        "summary": "Fournisseurs de connexion disponibles sur cette instance, dans l'ordre d'affichage.",
+        "operationId": "list_providers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderInfo"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/auth/{provider}/callback": {
+      "get": {
+        "tags": [
+          "connexion"
+        ],
+        "summary": "Retour du fournisseur : crée ou retrouve le compte, ouvre la session, revient dans l'appli.",
+        "description": "En cas d'échec, redirige vers `/connexion?erreur=…` : `refus`, `fournisseur`, `expiree`,\n`inscriptions-fermees`, `deja-lie`, `interne`.",
+        "operationId": "callback",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderId"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "description": "Posé par le fournisseur en cas de refus (`access_denied`) ou d'erreur.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Vers l'appli, connecté, ou vers /connexion?erreur=…"
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/auth/{provider}/login": {
+      "get": {
+        "tags": [
+          "connexion"
+        ],
+        "summary": "Démarre la connexion : redirige vers le fournisseur. Connecté, lie ce fournisseur au compte courant.",
+        "operationId": "login",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProviderId"
+            }
+          },
+          {
+            "name": "invite",
+            "in": "query",
+            "description": "Jeton d'un lien d'invitation : permet de créer un compte et rejoint le foyer.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "return_to",
+            "in": "query",
+            "description": "Chemin de l'appli où revenir après la connexion (par défaut `/`, ou la page de l'invitation).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Vers la page de connexion du fournisseur"
+          },
+          "404": {
+            "description": "Fournisseur non configuré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/equipment": {
+      "get": {
+        "tags": [
+          "référentiels"
+        ],
+        "summary": "Catalogue des équipements.",
+        "operationId": "equipment",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Equipment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households": {
+      "post": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Crée un foyer ; le créateur en est propriétaire.",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewHousehold"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}": {
+      "get": {
+        "tags": [
+          "foyer"
+        ],
+        "operationId": "read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Supprime le foyer et tout ce qu'il contient (propriétaires seulement).",
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Supprimé"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "foyer"
+        ],
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseholdUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/equipment": {
+      "get": {
+        "tags": [
+          "foyer"
+        ],
+        "operationId": "household_equipment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdEquipment"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Remplace la liste des équipements du foyer.",
+        "operationId": "set_household_equipment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HouseholdEquipment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HouseholdEquipment"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Équipement inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/invites": {
+      "get": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Invitations ni utilisées ni expirées (propriétaires seulement).",
+        "operationId": "list_invites",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingInvite"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Crée un lien d'invitation à usage unique, valable 7 jours (propriétaires seulement).",
+        "operationId": "create_invite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCreated"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/invites/{invite_id}": {
+      "delete": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Annule une invitation (propriétaires seulement).",
+        "operationId": "revoke_invite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "invite_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Annulée"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/members": {
+      "get": {
+        "tags": [
+          "membres"
+        ],
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "membres"
+        ],
+        "summary": "Ajoute un membre, avec le barème par défaut de son type et présent à tous les repas.",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMember"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/members/{member_id}": {
+      "get": {
+        "tags": [
+          "membres"
+        ],
+        "operationId": "read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "member_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "membres"
+        ],
+        "summary": "Remplace le membre : nom, type, régime, compte, barème, présence et exclusions.",
+        "operationId": "replace",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "member_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemberInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "membres"
+        ],
+        "operationId": "remove",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "member_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Supprimé"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/users/{user_id}": {
+      "delete": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Retire un compte du foyer : un propriétaire retire qui il veut, chacun peut partir.\nLe dernier propriétaire ne peut pas partir (supprimer le foyer à la place).",
+        "operationId": "remove_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Retiré"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Dernier propriétaire",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Change le rôle d'un compte du foyer (propriétaires seulement). Il reste au moins un propriétaire.",
+        "operationId": "change_role",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Household"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Dernier propriétaire",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ingredients": {
+      "get": {
+        "tags": [
+          "référentiels"
+        ],
+        "summary": "Référentiel complet des ingrédients (la recherche se fait côté client, sur les noms traduits).",
+        "operationId": "ingredients",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ingredient"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/invites/{token}": {
+      "get": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Lit une invitation par son jeton (page `/invitation/{token}`).",
+        "operationId": "read_invite",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/invites/{token}/accept": {
+      "post": {
+        "tags": [
+          "foyer"
+        ],
+        "summary": "Rejoint le foyer de l'invitation, pour un utilisateur déjà connecté.",
+        "operationId": "accept",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Joined"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Invitation utilisée, expirée ou inconnue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "compte"
+        ],
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "compte"
+        ],
+        "operationId": "update_me",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "tags": [
+          "système"
+        ],
+        "summary": "Contrat OpenAPI de l'API.",
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "description": "Document OpenAPI 3.1"
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/portions/defaults": {
+      "get": {
+        "tags": [
+          "membres"
+        ],
+        "operationId": "defaults",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultPortions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "système"
+        ],
+        "summary": "Healthcheck Docker : répond 503 si la base ne répond pas.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Serveur et base opérationnels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Base injoignable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DefaultPortions": {
+        "type": "object",
+        "description": "Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »).",
+        "required": [
+          "adult",
+          "teen",
+          "child"
+        ],
+        "properties": {
+          "adult": {
+            "$ref": "#/components/schemas/Portions"
+          },
+          "child": {
+            "$ref": "#/components/schemas/Portions"
+          },
+          "teen": {
+            "$ref": "#/components/schemas/Portions"
+          }
+        }
+      },
+      "Diet": {
+        "type": "string",
+        "description": "Régime alimentaire.",
+        "enum": [
+          "Omnivore",
+          "Pescatarian",
+          "Vegetarian",
+          "Vegan"
+        ]
+      },
+      "Equipment": {
+        "type": "object",
+        "description": "Appareil du catalogue.",
+        "required": [
+          "code",
+          "name_key",
+          "rules"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Ex. `cookeo_6l`."
+          },
+          "name_key": {
+            "type": "string",
+            "description": "Clé de traduction du nom."
+          },
+          "rules": {
+            "type": "object",
+            "description": "Contraintes de l'appareil, ex. `{\"max_fill_l\": 4, \"min_liquid_ml\": 250}`."
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Corps des réponses d'erreur.",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Code stable, pour le client : `unauthenticated`, `not_found`, `forbidden`, `invalid`, `last_owner`…"
+          },
+          "message": {
+            "type": "string",
+            "description": "Message en français, affichable tel quel."
+          }
+        }
+      },
+      "Exclusion": {
+        "type": "object",
+        "description": "Ingrédient à éviter pour ce membre.",
+        "required": [
+          "ingredient_id",
+          "kind"
+        ],
+        "properties": {
+          "ingredient_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExclusionKind"
+          }
+        }
+      },
+      "ExclusionKind": {
+        "type": "string",
+        "description": "`allergy` : filtre dur ; `dislike` : à éviter.",
+        "enum": [
+          "Allergy",
+          "Dislike"
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "description": "État du serveur et de ses dépendances.",
+        "required": [
+          "status",
+          "database"
+        ],
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "`ok` ou `unreachable`."
+          },
+          "status": {
+            "type": "string",
+            "description": "`ok` ou `degraded`."
+          }
+        }
+      },
+      "Household": {
+        "type": "object",
+        "description": "Foyer et ses comptes.",
+        "required": [
+          "id",
+          "name",
+          "timezone",
+          "locale",
+          "role",
+          "users"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "Mon rôle dans ce foyer."
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HouseholdUser"
+            },
+            "description": "Comptes qui ont accès au foyer."
+          }
+        }
+      },
+      "HouseholdEquipment": {
+        "type": "object",
+        "description": "Équipements que possède le foyer.",
+        "required": [
+          "codes"
+        ],
+        "properties": {
+          "codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Codes du catalogue."
+          }
+        }
+      },
+      "HouseholdSummary": {
+        "type": "object",
+        "description": "Foyer, dans la liste des foyers d'un compte.",
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "Mon rôle dans ce foyer."
+          }
+        }
+      },
+      "HouseholdUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "HouseholdUser": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "display_name",
+          "role"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "Identity": {
+        "type": "object",
+        "required": [
+          "provider"
+        ],
+        "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ProviderId"
+          }
+        }
+      },
+      "Ingredient": {
+        "type": "object",
+        "description": "Ingrédient du référentiel.",
+        "required": [
+          "id",
+          "code",
+          "name_key",
+          "aisle",
+          "default_unit"
+        ],
+        "properties": {
+          "aisle": {
+            "type": "string",
+            "description": "Rayon : `fresh`, `produce`, `butcher`, `fish`, `dairy`, `frozen`, `grocery`, `bakery`, `other`."
+          },
+          "code": {
+            "type": "string"
+          },
+          "default_unit": {
+            "type": "string",
+            "description": "Unité : `g`, `ml`, `piece`, `tbsp`, `tsp`, `pinch`."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name_key": {
+            "type": "string",
+            "description": "Clé de traduction du nom."
+          }
+        }
+      },
+      "InviteCreated": {
+        "type": "object",
+        "description": "Lien d'invitation créé. Le lien n'est donné qu'une fois : seul son hash est conservé.",
+        "required": [
+          "id",
+          "url",
+          "expires_at"
+        ],
+        "properties": {
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "description": "À envoyer à la personne invitée (SMS, messagerie)."
+          }
+        }
+      },
+      "InviteInfo": {
+        "type": "object",
+        "description": "Ce que voit la personne qui ouvre le lien, connectée ou non.",
+        "required": [
+          "household_name",
+          "status"
+        ],
+        "properties": {
+          "household_name": {
+            "type": "string"
+          },
+          "invited_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Qui a invité."
+          },
+          "joined_household_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Le foyer, si l'utilisateur connecté en fait déjà partie."
+          },
+          "status": {
+            "$ref": "#/components/schemas/InviteStatus"
+          }
+        }
+      },
+      "InviteStatus": {
+        "type": "string",
+        "description": "État d'un lien d'invitation.",
+        "enum": [
+          "pending",
+          "used",
+          "expired"
+        ]
+      },
+      "Joined": {
+        "type": "object",
+        "required": [
+          "household_id"
+        ],
+        "properties": {
+          "household_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "LoggedIn": {
+        "type": "object",
+        "required": [
+          "return_to"
+        ],
+        "properties": {
+          "return_to": {
+            "type": "string",
+            "description": "Page de l'appli où aller ensuite."
+          }
+        }
+      },
+      "Me": {
+        "type": "object",
+        "description": "Utilisateur connecté, ses fournisseurs liés et ses foyers.",
+        "required": [
+          "id",
+          "display_name",
+          "identities",
+          "households"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "households": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HouseholdSummary"
+            }
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Identity"
+            }
+          }
+        }
+      },
+      "MeUpdate": {
+        "type": "object",
+        "required": [
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "description": "Nom affiché aux autres comptes du foyer."
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "diet",
+          "portions",
+          "presence",
+          "exclusions"
+        ],
+        "properties": {
+          "diet": {
+            "$ref": "#/components/schemas/Diet"
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Exclusion"
+            }
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemberKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "portions": {
+            "$ref": "#/components/schemas/Portions"
+          },
+          "presence": {
+            "$ref": "#/components/schemas/Presence"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Compte associé, si ce membre se connecte (les enfants n'en ont pas forcément)."
+          }
+        }
+      },
+      "MemberInput": {
+        "type": "object",
+        "description": "Membre complet, remplacé tel quel.",
+        "required": [
+          "name",
+          "kind",
+          "diet",
+          "portions",
+          "presence",
+          "exclusions"
+        ],
+        "properties": {
+          "diet": {
+            "$ref": "#/components/schemas/Diet"
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Exclusion"
+            }
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemberKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "portions": {
+            "$ref": "#/components/schemas/Portions"
+          },
+          "presence": {
+            "$ref": "#/components/schemas/Presence"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "MemberKind": {
+        "type": "string",
+        "description": "Type de mangeur : fixe le barème par défaut.",
+        "enum": [
+          "Adult",
+          "Teen",
+          "Child"
+        ]
+      },
+      "NewHousehold": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Fuseau IANA, `Europe/Paris` par défaut."
+          }
+        }
+      },
+      "NewMember": {
+        "type": "object",
+        "description": "Nouveau membre : barème par défaut de son type, présent à tous les repas, sans exclusion.",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "diet": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Diet",
+                "description": "`omnivore` par défaut."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MemberKind"
+          },
+          "name": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
+      "OneTapLogin": {
+        "type": "object",
+        "description": "Jeton reçu de Google One Tap.",
+        "required": [
+          "credential"
+        ],
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "Jeton d'identité (JWT) donné par Google à la page."
+          },
+          "invite": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Jeton d'un lien d'invitation, si la connexion se fait depuis l'invitation."
+          }
+        }
+      },
+      "PendingInvite": {
+        "type": "object",
+        "description": "Invitation en attente.",
+        "required": [
+          "id",
+          "created_at",
+          "expires_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Qui l'a créée."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "Portions": {
+        "type": "object",
+        "description": "Barème : multiplicateur par rôle d'ingrédient, appliqué aux quantités d'une portion standard.",
+        "required": [
+          "protein",
+          "starch",
+          "veg",
+          "fat",
+          "other"
+        ],
+        "properties": {
+          "fat": {
+            "type": "number",
+            "format": "float"
+          },
+          "other": {
+            "type": "number",
+            "format": "float"
+          },
+          "protein": {
+            "type": "number",
+            "format": "float"
+          },
+          "starch": {
+            "type": "number",
+            "format": "float"
+          },
+          "veg": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "Presence": {
+        "type": "object",
+        "description": "Présence aux repas, du lundi (indice 0) au dimanche (indice 6).",
+        "required": [
+          "lunch",
+          "dinner"
+        ],
+        "properties": {
+          "dinner": {
+            "type": "array",
+            "items": {
+              "type": "boolean"
+            },
+            "maxItems": 7,
+            "minItems": 7
+          },
+          "lunch": {
+            "type": "array",
+            "items": {
+              "type": "boolean"
+            },
+            "maxItems": 7,
+            "minItems": 7
+          }
+        }
+      },
+      "ProviderId": {
+        "type": "string",
+        "description": "Fournisseur d'identité.",
+        "enum": [
+          "google",
+          "amazon",
+          "fake"
+        ]
+      },
+      "ProviderInfo": {
+        "type": "object",
+        "description": "Fournisseur de connexion proposé par l'instance.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "client_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Identifiant client public (Google seulement) : sert à Google One Tap."
+          },
+          "id": {
+            "$ref": "#/components/schemas/ProviderId"
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "description": "Rôle d'un compte dans un foyer.",
+        "enum": [
+          "Owner",
+          "Member"
+        ]
+      },
+      "RoleUpdate": {
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-chaudron_session"
+      }
+    }
+  },
+  "security": [
+    {
+      "session": []
+    }
+  ]
+}
