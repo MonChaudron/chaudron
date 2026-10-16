@@ -34,6 +34,10 @@ export type Unit = Schemas['Unit'];
 export type Scope = Schemas['Scope'];
 export type ApiTokenInfo = Schemas['ApiTokenInfo'];
 export type CreatedApiToken = Schemas['CreatedApiToken'];
+export type RecipeInput = Schemas['RecipeInput'];
+export type Food = Schemas['Food'];
+export type Aisle = Schemas['Aisle'];
+export type PortionRole = Schemas['PortionRole'];
 
 /** `baseUrl` vide : l'API est sur la même origine (production). En dev, l'adresse du serveur Rust. */
 export function createApi(baseUrl = '') {

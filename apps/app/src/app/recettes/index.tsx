@@ -57,22 +57,27 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
   return (
     <Screen>
       <Router.Screen options={{ title: 'Recettes · Chaudron' }} />
-      <Stack gap={space[2]}>
-        <Title>Recettes</Title>
-        {all.data?.length ? (
-          <Body tone="muted" size={16}>
-            {all.data.length} recette{all.data.length > 1 ? 's' : ''} du foyer, chacune avec ses façons de la cuisiner.
-          </Body>
-        ) : null}
-      </Stack>
+      <View style={wide ? { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[4] } : { gap: space[3] }}>
+        <Stack gap={space[2]}>
+          <Title>Recettes</Title>
+          {all.data?.length ? (
+            <Body tone="muted" size={16}>
+              {all.data.length} recette{all.data.length > 1 ? 's' : ''} du foyer, chacune avec ses façons de la cuisiner.
+            </Body>
+          ) : null}
+        </Stack>
+        {!empty ? <LinkButton label="Nouvelle recette" href="/recettes/modifier" /> : null}
+      </View>
 
       {empty ? (
         <Card style={{ maxWidth: 640 }}>
           <Title level={2}>Pas encore de recette</Title>
           <Body tone="muted" size={16}>
-            Les recettes arrivent par l’API : un assistant comme Claude les publie avec un jeton d’accès du foyer.
+            Écris la première, ou laisse un assistant comme Claude les publier par l’API, avec un jeton d’accès du
+            foyer.
           </Body>
-          {owner ? <LinkButton kind="primary" label="Créer un accès pour Claude" href="/foyer/acces" /> : null}
+          <LinkButton kind="primary" label="Écrire une recette" href="/recettes/modifier" />
+          {owner ? <LinkButton label="Créer un accès pour Claude" href="/foyer/acces" /> : null}
         </Card>
       ) : (
         <>
