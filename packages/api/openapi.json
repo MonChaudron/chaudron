@@ -265,7 +265,7 @@
         "parameters": [
           {
             "name": "q",
-            "in": "path",
+            "in": "query",
             "description": "Mots cherchés, tous présents, sans tenir compte des accents ni de la casse.",
             "required": true,
             "schema": {
@@ -274,14 +274,11 @@
           },
           {
             "name": "limit",
-            "in": "path",
+            "in": "query",
             "description": "20 par défaut, 50 au plus.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "integer",
-                "null"
-              ],
+              "type": "integer",
               "format": "int64"
             }
           }
@@ -1084,26 +1081,20 @@
           },
           {
             "name": "q",
-            "in": "path",
+            "in": "query",
             "description": "Mots cherchés dans le titre et les ingrédients, sans tenir compte des accents ni de la casse.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           },
           {
             "name": "tag",
-            "in": "path",
+            "in": "query",
             "description": "Étiquette exacte.",
-            "required": true,
+            "required": false,
             "schema": {
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": "string"
             }
           }
         ],

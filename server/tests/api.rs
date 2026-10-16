@@ -83,6 +83,22 @@ async fn openapi_decrit_les_routes() {
     ids.sort_unstable();
     ids.dedup();
     assert_eq!(ids.len(), count, "operationId en double");
+    // Les filtres sont des paramètres de requête, facultatifs sauf la recherche Ciqual.
+    for (path, name, required) in [
+        ("/api/v1/foods", "q", true),
+        ("/api/v1/foods", "limit", false),
+        ("/api/v1/households/{id}/recipes", "q", false),
+        ("/api/v1/households/{id}/recipes", "tag", false),
+    ] {
+        let param = doc["paths"][path]["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap_or_else(|| panic!("{path} {name}"));
+        assert_eq!(param["in"], "query", "{path} {name}");
+        assert_eq!(param["required"], required, "{path} {name}");
+    }
     // Les routes publiques n'exigent pas de session.
     assert_eq!(
         doc["paths"]["/api/v1/auth/providers"]["get"]["security"],

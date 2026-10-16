@@ -58,3 +58,19 @@ export const equipment: Record<string, string> = {
 export function label(dictionary: Record<string, string>, key: string): string {
   return dictionary[key] ?? key.replace(/^[a-z]+\./, '').replaceAll('_', ' ');
 }
+
+/** Forme d'achat d'un ingrédient. */
+export const ingredientStates = {
+  fresh: 'Frais',
+  frozen: 'Surgelé',
+  canned: 'En conserve',
+  dried: 'Sec',
+  cooked: 'Cuit',
+} as const;
+
+/** Droits d'un jeton d'API. */
+export const scopes = {
+  read: 'Lire les recettes',
+  'recipes:write': 'Publier des recettes',
+  'menus:write': 'Publier des menus',
+} as const;
