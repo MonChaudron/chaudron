@@ -33,6 +33,8 @@ macro_rules! text_enum {
     };
 }
 
+pub(crate) use text_enum;
+
 text_enum! {
     /// Rôle d'un compte dans un foyer.
     pub enum Role {
@@ -116,5 +118,28 @@ text_enum! {
         Tbsp = "tbsp",
         Tsp = "tsp",
         Pinch = "pinch",
+    }
+}
+
+text_enum! {
+    /// Rôle d'un ingrédient dans le barème des portions.
+    pub enum PortionRole {
+        Protein = "protein",
+        Starch = "starch",
+        Veg = "veg",
+        Fat = "fat",
+        Other = "other",
+    }
+}
+
+text_enum! {
+    /// Droit d'un jeton d'API.
+    pub enum Scope {
+        /// Lire les recettes du foyer et les référentiels.
+        Read = "read",
+        /// Publier et supprimer des recettes, importer des lots.
+        RecipesWrite = "recipes:write",
+        /// Publier des menus (M3).
+        MenusWrite = "menus:write",
     }
 }

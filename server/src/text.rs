@@ -35,6 +35,21 @@ fn unaccent(c: char) -> char {
     }
 }
 
+/// Motifs `LIKE` (un par mot, caractères spéciaux échappés) pour chercher tous les mots dans une clé de recherche.
+pub fn like_patterns(query: &str) -> Vec<String> {
+    search_key(query)
+        .split(' ')
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let w = w
+                .replace('\\', r"\\")
+                .replace('%', r"\%")
+                .replace('_', r"\_");
+            format!("%{w}%")
+        })
+        .collect()
+}
+
 /// Code tiré d'un nom : clé de recherche, lettres et chiffres reliés par `_` (« Crème fraîche » → `creme_fraiche`).
 pub fn code(name: &str) -> String {
     search_key(name)
@@ -57,6 +72,13 @@ mod tests {
             search_key(" Pâtes, à l'ŒUF, maïs, ç "),
             "pates, a l'oeuf, mais, c"
         );
+    }
+
+    #[test]
+    fn motifs_de_recherche() {
+        assert_eq!(like_patterns(" Bœuf  HACHÉ "), ["%boeuf%", "%hache%"]);
+        assert_eq!(like_patterns(r"50%_x\"), [r"%50\%\_x\\%"]);
+        assert!(like_patterns("   ").is_empty());
     }
 
     #[test]

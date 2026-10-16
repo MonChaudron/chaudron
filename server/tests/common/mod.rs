@@ -10,7 +10,7 @@ use axum::{
     body::Body,
     http::{
         HeaderMap, Request, StatusCode,
-        header::{CONTENT_TYPE, COOKIE, LOCATION, ORIGIN, SET_COOKIE},
+        header::{AUTHORIZATION, CONTENT_TYPE, COOKIE, LOCATION, ORIGIN, SET_COOKIE},
     },
 };
 use chaudron_server::{
@@ -97,6 +97,16 @@ impl TestApp {
             fake_base: self.fake.base.clone(),
             cookies: BTreeMap::new(),
             origin: Some(PUBLIC_URL.into()),
+            bearer: None,
+        }
+    }
+
+    /// Client d'API sans navigateur (Claude, un script) : jeton `Bearer`, ni cookie ni `Origin`.
+    pub fn api_client(&self, token: &str) -> Browser {
+        Browser {
+            origin: None,
+            bearer: Some(token.into()),
+            ..self.browser()
         }
     }
 }
@@ -134,6 +144,7 @@ pub struct Browser {
     fake_base: String,
     pub cookies: BTreeMap<String, String>,
     pub origin: Option<String>,
+    pub bearer: Option<String>,
 }
 
 impl Browser {
@@ -146,6 +157,9 @@ impl Browser {
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect();
             request = request.header(COOKIE, cookies.join("; "));
+        }
+        if let Some(token) = &self.bearer {
+            request = request.header(AUTHORIZATION, format!("Bearer {token}"));
         }
         if method != "GET"
             && let Some(origin) = &self.origin

@@ -574,6 +574,75 @@
         }
       }
     },
+    "/api/v1/households/{id}/import": {
+      "post": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes).",
+        "operationId": "import",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Lot refusé, rien n'est écrit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/invites": {
       "get": {
         "tags": [
@@ -983,6 +1052,420 @@
         "responses": {
           "204": {
             "description": "Supprimé"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes": {
+      "get": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Recettes du foyer, par titre.",
+        "operationId": "list_recipes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "path",
+            "description": "Mots cherchés dans le titre et les ingrédients, sans tenir compte des accents ni de la casse.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "tag",
+            "in": "path",
+            "description": "Étiquette exacte.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecipeSummary"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}": {
+      "get": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Recette complète, avec les équipements qui manquent au foyer pour chaque variante.",
+        "operationId": "read_recipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Publie une recette : la crée (201) ou la remplace entièrement (200). Idempotent.",
+        "operationId": "put_recipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Remplacée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Créée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recettes"
+        ],
+        "operationId": "delete_recipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/tokens": {
+      "get": {
+        "tags": [
+          "jetons"
+        ],
+        "summary": "Jetons du foyer (propriétaires).",
+        "operationId": "list_tokens",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenInfo"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "jetons"
+        ],
+        "summary": "Crée un jeton d'API pour le foyer (propriétaires).",
+        "operationId": "create_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewApiToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedApiToken"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "jetons"
+        ],
+        "summary": "Révoque un jeton (propriétaires).",
+        "operationId": "revoke_token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           },
           "404": {
             "content": {
@@ -1505,6 +1988,62 @@
           "other"
         ]
       },
+      "ApiTokenInfo": {
+        "type": "object",
+        "description": "Jeton d'API, sans sa valeur.",
+        "required": [
+          "id",
+          "name",
+          "scopes",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          }
+        }
+      },
+      "CreatedApiToken": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiTokenInfo"
+          },
+          {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "string",
+                "description": "À envoyer en `Authorization: Bearer …`."
+              }
+            }
+          }
+        ],
+        "description": "Jeton créé : sa valeur n'est montrée qu'ici."
+      },
       "DefaultPortions": {
         "type": "object",
         "description": "Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »).",
@@ -1866,6 +2405,41 @@
           }
         }
       },
+      "ImportResult": {
+        "type": "object",
+        "description": "Ce que l'import a fait.",
+        "required": [
+          "ingredients_created",
+          "recipes_created",
+          "recipes_updated",
+          "menu_imported"
+        ],
+        "properties": {
+          "ingredients_created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Codes des ingrédients créés."
+          },
+          "menu_imported": {
+            "type": "boolean",
+            "description": "`false` : les menus arrivent au M3."
+          },
+          "recipes_created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recipes_updated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "Ingredient": {
         "type": "object",
         "description": "Ingrédient du référentiel.",
@@ -1945,6 +2519,21 @@
           "cooked"
         ]
       },
+      "InputUnit": {
+        "type": "string",
+        "description": "Unité saisie : `kg`, `l` et `cl` sont convertis en `g` et `ml`.",
+        "enum": [
+          "g",
+          "kg",
+          "ml",
+          "cl",
+          "l",
+          "piece",
+          "tbsp",
+          "tsp",
+          "pinch"
+        ]
+      },
       "InviteCreated": {
         "type": "object",
         "description": "Lien d'invitation créé. Le lien n'est donné qu'une fois : seul son hash est conservé.",
@@ -2020,6 +2609,59 @@
           }
         }
       },
+      "LineInput": {
+        "type": "object",
+        "description": "Ligne d'ingrédient saisie, pour une portion standard.",
+        "required": [
+          "ingredient",
+          "unit",
+          "role"
+        ],
+        "properties": {
+          "ingredient": {
+            "type": "string",
+            "description": "Code de l'ingrédient du référentiel (`minced_beef`)."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "per_batch": {
+            "type": "boolean",
+            "description": "Ne suit pas le nombre de portions (un citron, un cube de bouillon)."
+          },
+          "qty": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Quantité telle qu'achetée ; absente : « au goût »."
+          },
+          "role": {
+            "$ref": "#/components/schemas/PortionRole"
+          },
+          "state": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IngredientState",
+                "description": "Forme d'achat ; par défaut, celle de l'ingrédient."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "$ref": "#/components/schemas/InputUnit"
+          }
+        }
+      },
       "LoggedIn": {
         "type": "object",
         "required": [
@@ -2029,6 +2671,33 @@
           "return_to": {
             "type": "string",
             "description": "Page de l'appli où aller ensuite."
+          }
+        }
+      },
+      "Lot": {
+        "type": "object",
+        "description": "Lot publié par Claude : ingrédients à ajouter au référentiel, recettes, et le menu de la semaine.",
+        "properties": {
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewIngredient"
+            },
+            "description": "Ingrédients nouveaux ; ceux qui existent déjà (même nom, aux accents près) sont ignorés."
+          },
+          "menu": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Menu de la semaine : accepté, importé à partir du M3."
+          },
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeInput"
+            },
+            "description": "Chaque recette avec son `slug`."
           }
         }
       },
@@ -2179,6 +2848,25 @@
           "child"
         ]
       },
+      "NewApiToken": {
+        "type": "object",
+        "description": "Nouveau jeton.",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          }
+        }
+      },
       "NewHousehold": {
         "type": "object",
         "required": [
@@ -2312,6 +3000,98 @@
           }
         }
       },
+      "Phase": {
+        "type": "object",
+        "required": [
+          "title",
+          "text",
+          "day_offset",
+          "steps"
+        ],
+        "properties": {
+          "day_offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spoken_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "description": "Gestes du pas à pas ; vide : le pas à pas montre la phase."
+          },
+          "text": {
+            "type": "string"
+          },
+          "timer_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "PhaseInput": {
+        "type": "object",
+        "description": "Phase du mode rapide.",
+        "required": [
+          "title",
+          "text"
+        ],
+        "properties": {
+          "day_offset": {
+            "type": "integer",
+            "format": "int32",
+            "description": "-1 : la veille."
+          },
+          "spoken_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepInput"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "timer_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "PortionRole": {
+        "type": "string",
+        "description": "Rôle d'un ingrédient dans le barème des portions.",
+        "enum": [
+          "protein",
+          "starch",
+          "veg",
+          "fat",
+          "other"
+        ]
+      },
       "Portions": {
         "type": "object",
         "description": "Barème : multiplicateur par rôle d'ingrédient, appliqué aux quantités d'une portion standard.",
@@ -2399,6 +3179,223 @@
           }
         }
       },
+      "Recipe": {
+        "type": "object",
+        "description": "Recette complète.",
+        "required": [
+          "slug",
+          "title",
+          "description",
+          "tags",
+          "season_months",
+          "ingredients",
+          "variants",
+          "updated_at"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeLine"
+            }
+          },
+          "season_months": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "slug": {
+            "type": "string"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Variant"
+            },
+            "description": "La variante par défaut d'abord, puis dans l'ordre de publication."
+          }
+        }
+      },
+      "RecipeInput": {
+        "type": "object",
+        "description": "Recette complète, telle que publiée.",
+        "required": [
+          "title",
+          "ingredients",
+          "variants"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineInput"
+            }
+          },
+          "season_months": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Mois de saison, de 1 à 12."
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Obligatoire dans un lot ; dans un PUT, doit être celui de l'adresse s'il est donné."
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VariantInput"
+            }
+          }
+        }
+      },
+      "RecipeLine": {
+        "type": "object",
+        "description": "Ligne d'ingrédient, pour une portion standard.",
+        "required": [
+          "ingredient",
+          "ingredient_id",
+          "name",
+          "state",
+          "unit",
+          "role",
+          "optional",
+          "per_batch"
+        ],
+        "properties": {
+          "ingredient": {
+            "type": "string",
+            "description": "Code de l'ingrédient."
+          },
+          "ingredient_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "per_batch": {
+            "type": "boolean"
+          },
+          "qty": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Nulle : « au goût »."
+          },
+          "role": {
+            "$ref": "#/components/schemas/PortionRole"
+          },
+          "state": {
+            "$ref": "#/components/schemas/IngredientState"
+          },
+          "unit": {
+            "$ref": "#/components/schemas/Unit"
+          }
+        }
+      },
+      "RecipeSummary": {
+        "type": "object",
+        "description": "Recette, dans la liste du foyer.",
+        "required": [
+          "slug",
+          "title",
+          "description",
+          "tags",
+          "season_months",
+          "default_variant",
+          "variant_count"
+        ],
+        "properties": {
+          "default_variant": {
+            "$ref": "#/components/schemas/VariantSummary"
+          },
+          "description": {
+            "type": "string"
+          },
+          "season_months": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "slug": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "variant_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "Role": {
         "type": "string",
         "description": "Rôle d'un compte dans un foyer.",
@@ -2418,6 +3415,99 @@
           }
         }
       },
+      "Scope": {
+        "type": "string",
+        "description": "Droit d'un jeton d'API.",
+        "enum": [
+          "read",
+          "recipes:write",
+          "menus:write"
+        ]
+      },
+      "Step": {
+        "type": "object",
+        "required": [
+          "text",
+          "params"
+        ],
+        "properties": {
+          "equipment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "params": {
+            "type": "object"
+          },
+          "spoken_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "timer_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "video_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "StepInput": {
+        "type": "object",
+        "description": "Geste du mode pas à pas.",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "equipment": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Appareil du geste."
+          },
+          "params": {
+            "type": "object",
+            "description": "Réglages pour les futurs connecteurs (vitesse, température, programme)."
+          },
+          "spoken_text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Texte lu par Alexa, s'il diffère."
+          },
+          "text": {
+            "type": "string"
+          },
+          "timer_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "video_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Vidéo MP4 en HTTPS."
+          }
+        }
+      },
       "Unit": {
         "type": "string",
         "description": "Unité normalisée.",
@@ -2429,6 +3519,145 @@
           "tsp",
           "pinch"
         ]
+      },
+      "Variant": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "equipment",
+          "missing_equipment",
+          "active_min",
+          "total_min",
+          "vessels",
+          "is_default",
+          "phases"
+        ],
+        "properties": {
+          "active_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "label": {
+            "type": "string"
+          },
+          "missing_equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Équipements de la variante que le foyer n'a pas."
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Phase"
+            }
+          },
+          "total_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vessels": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "VariantInput": {
+        "type": "object",
+        "description": "Variante : une manière de cuisiner la recette.",
+        "required": [
+          "label",
+          "active_min",
+          "total_min",
+          "phases"
+        ],
+        "properties": {
+          "active_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Codes du catalogue d'équipements."
+          },
+          "is_default": {
+            "type": "boolean",
+            "description": "Une seule variante par défaut ; sans indication, la première."
+          },
+          "label": {
+            "type": "string"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PhaseInput"
+            }
+          },
+          "total_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vessels": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Récipients à laver ; 1 par défaut."
+          }
+        }
+      },
+      "VariantSummary": {
+        "type": "object",
+        "description": "Variante par défaut, dans la liste des recettes.",
+        "required": [
+          "label",
+          "equipment",
+          "active_min",
+          "total_min",
+          "vessels"
+        ],
+        "properties": {
+          "active_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string"
+          },
+          "total_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vessels": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       }
     },
     "securitySchemes": {

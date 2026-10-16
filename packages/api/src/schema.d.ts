@@ -181,6 +181,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes). */
+        post: operations["import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/invites": {
         parameters: {
             query?: never;
@@ -245,6 +262,76 @@ export interface paths {
         put: operations["replace"];
         post?: never;
         delete: operations["remove_member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recettes du foyer, par titre. */
+        get: operations["list_recipes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recette complète, avec les équipements qui manquent au foyer pour chaque variante. */
+        get: operations["read_recipe"];
+        /** Publie une recette : la crée (201) ou la remplace entièrement (200). Idempotent. */
+        put: operations["put_recipe"];
+        post?: never;
+        delete: operations["delete_recipe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Jetons du foyer (propriétaires). */
+        get: operations["list_tokens"];
+        put?: never;
+        /** Crée un jeton d'API pour le foyer (propriétaires). */
+        post: operations["create_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Révoque un jeton (propriétaires). */
+        delete: operations["revoke_token"];
         options?: never;
         head?: never;
         patch?: never;
@@ -415,6 +502,22 @@ export interface components {
          * @enum {string}
          */
         Aisle: "fresh" | "produce" | "butcher" | "fish" | "dairy" | "frozen" | "grocery" | "bakery" | "other";
+        /** @description Jeton d'API, sans sa valeur. */
+        ApiTokenInfo: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            name: string;
+            scopes: components["schemas"]["Scope"][];
+        };
+        /** @description Jeton créé : sa valeur n'est montrée qu'ici. */
+        CreatedApiToken: components["schemas"]["ApiTokenInfo"] & {
+            /** @description À envoyer en `Authorization: Bearer …`. */
+            token: string;
+        };
         /** @description Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »). */
         DefaultPortions: {
             adult: components["schemas"]["Portions"];
@@ -535,6 +638,15 @@ export interface components {
             email?: string | null;
             provider: components["schemas"]["ProviderId"];
         };
+        /** @description Ce que l'import a fait. */
+        ImportResult: {
+            /** @description Codes des ingrédients créés. */
+            ingredients_created: string[];
+            /** @description `false` : les menus arrivent au M3. */
+            menu_imported: boolean;
+            recipes_created: string[];
+            recipes_updated: string[];
+        };
         /** @description Ingrédient du référentiel. */
         Ingredient: {
             aisle: components["schemas"]["Aisle"];
@@ -565,6 +677,11 @@ export interface components {
          * @enum {string}
          */
         IngredientState: "fresh" | "frozen" | "canned" | "dried" | "cooked";
+        /**
+         * @description Unité saisie : `kg`, `l` et `cl` sont convertis en `g` et `ml`.
+         * @enum {string}
+         */
+        InputUnit: "g" | "kg" | "ml" | "cl" | "l" | "piece" | "tbsp" | "tsp" | "pinch";
         /** @description Lien d'invitation créé. Le lien n'est donné qu'une fois : seul son hash est conservé. */
         InviteCreated: {
             /** Format: date-time */
@@ -595,9 +712,35 @@ export interface components {
             /** Format: uuid */
             household_id: string;
         };
+        /** @description Ligne d'ingrédient saisie, pour une portion standard. */
+        LineInput: {
+            /** @description Code de l'ingrédient du référentiel (`minced_beef`). */
+            ingredient: string;
+            note?: string | null;
+            optional?: boolean;
+            /** @description Ne suit pas le nombre de portions (un citron, un cube de bouillon). */
+            per_batch?: boolean;
+            /**
+             * Format: float
+             * @description Quantité telle qu'achetée ; absente : « au goût ».
+             */
+            qty?: number | null;
+            role: components["schemas"]["PortionRole"];
+            state?: components["schemas"]["IngredientState"] | null;
+            unit: components["schemas"]["InputUnit"];
+        };
         LoggedIn: {
             /** @description Page de l'appli où aller ensuite. */
             return_to: string;
+        };
+        /** @description Lot publié par Claude : ingrédients à ajouter au référentiel, recettes, et le menu de la semaine. */
+        Lot: {
+            /** @description Ingrédients nouveaux ; ceux qui existent déjà (même nom, aux accents près) sont ignorés. */
+            ingredients?: components["schemas"]["NewIngredient"][];
+            /** @description Menu de la semaine : accepté, importé à partir du M3. */
+            menu?: Record<string, never> | null;
+            /** @description Chaque recette avec son `slug`. */
+            recipes?: components["schemas"]["RecipeInput"][];
         };
         /** @description Utilisateur connecté, ses fournisseurs liés et ses foyers. */
         Me: {
@@ -643,6 +786,11 @@ export interface components {
          * @enum {string}
          */
         MemberKind: "adult" | "teen" | "child";
+        /** @description Nouveau jeton. */
+        NewApiToken: {
+            name: string;
+            scopes: components["schemas"]["Scope"][];
+        };
         NewHousehold: {
             name: string;
             /** @description Fuseau IANA, `Europe/Paris` par défaut. */
@@ -683,6 +831,36 @@ export interface components {
             /** Format: uuid */
             id: string;
         };
+        Phase: {
+            /** Format: int32 */
+            day_offset: number;
+            spoken_text?: string | null;
+            /** @description Gestes du pas à pas ; vide : le pas à pas montre la phase. */
+            steps: components["schemas"]["Step"][];
+            text: string;
+            /** Format: int32 */
+            timer_s?: number | null;
+            title: string;
+        };
+        /** @description Phase du mode rapide. */
+        PhaseInput: {
+            /**
+             * Format: int32
+             * @description -1 : la veille.
+             */
+            day_offset?: number;
+            spoken_text?: string | null;
+            steps?: components["schemas"]["StepInput"][];
+            text: string;
+            /** Format: int32 */
+            timer_s?: number | null;
+            title: string;
+        };
+        /**
+         * @description Rôle d'un ingrédient dans le barème des portions.
+         * @enum {string}
+         */
+        PortionRole: "protein" | "starch" | "veg" | "fat" | "other";
         /** @description Barème : multiplicateur par rôle d'ingrédient, appliqué aux quantités d'une portion standard. */
         Portions: {
             /** Format: float */
@@ -712,6 +890,63 @@ export interface components {
             client_id?: string | null;
             id: components["schemas"]["ProviderId"];
         };
+        /** @description Recette complète. */
+        Recipe: {
+            description: string;
+            ingredients: components["schemas"]["RecipeLine"][];
+            season_months: number[];
+            slug: string;
+            source?: string | null;
+            tags: string[];
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description La variante par défaut d'abord, puis dans l'ordre de publication. */
+            variants: components["schemas"]["Variant"][];
+        };
+        /** @description Recette complète, telle que publiée. */
+        RecipeInput: {
+            description?: string;
+            ingredients: components["schemas"]["LineInput"][];
+            /** @description Mois de saison, de 1 à 12. */
+            season_months?: number[];
+            /** @description Obligatoire dans un lot ; dans un PUT, doit être celui de l'adresse s'il est donné. */
+            slug?: string | null;
+            source?: string | null;
+            tags?: string[];
+            title: string;
+            variants: components["schemas"]["VariantInput"][];
+        };
+        /** @description Ligne d'ingrédient, pour une portion standard. */
+        RecipeLine: {
+            /** @description Code de l'ingrédient. */
+            ingredient: string;
+            /** Format: uuid */
+            ingredient_id: string;
+            name: string;
+            note?: string | null;
+            optional: boolean;
+            per_batch: boolean;
+            /**
+             * Format: float
+             * @description Nulle : « au goût ».
+             */
+            qty?: number | null;
+            role: components["schemas"]["PortionRole"];
+            state: components["schemas"]["IngredientState"];
+            unit: components["schemas"]["Unit"];
+        };
+        /** @description Recette, dans la liste du foyer. */
+        RecipeSummary: {
+            default_variant: components["schemas"]["VariantSummary"];
+            description: string;
+            season_months: number[];
+            slug: string;
+            tags: string[];
+            title: string;
+            /** Format: int64 */
+            variant_count: number;
+        };
         /**
          * @description Rôle d'un compte dans un foyer.
          * @enum {string}
@@ -721,10 +956,83 @@ export interface components {
             role: components["schemas"]["Role"];
         };
         /**
+         * @description Droit d'un jeton d'API.
+         * @enum {string}
+         */
+        Scope: "read" | "recipes:write" | "menus:write";
+        Step: {
+            equipment?: string | null;
+            params: Record<string, never>;
+            spoken_text?: string | null;
+            text: string;
+            /** Format: int32 */
+            timer_s?: number | null;
+            video_url?: string | null;
+        };
+        /** @description Geste du mode pas à pas. */
+        StepInput: {
+            /** @description Appareil du geste. */
+            equipment?: string | null;
+            /** @description Réglages pour les futurs connecteurs (vitesse, température, programme). */
+            params?: Record<string, never>;
+            /** @description Texte lu par Alexa, s'il diffère. */
+            spoken_text?: string | null;
+            text: string;
+            /** Format: int32 */
+            timer_s?: number | null;
+            /** @description Vidéo MP4 en HTTPS. */
+            video_url?: string | null;
+        };
+        /**
          * @description Unité normalisée.
          * @enum {string}
          */
         Unit: "g" | "ml" | "piece" | "tbsp" | "tsp" | "pinch";
+        Variant: {
+            /** Format: int32 */
+            active_min: number;
+            equipment: string[];
+            /** Format: uuid */
+            id: string;
+            is_default: boolean;
+            label: string;
+            /** @description Équipements de la variante que le foyer n'a pas. */
+            missing_equipment: string[];
+            phases: components["schemas"]["Phase"][];
+            /** Format: int32 */
+            total_min: number;
+            /** Format: int32 */
+            vessels: number;
+        };
+        /** @description Variante : une manière de cuisiner la recette. */
+        VariantInput: {
+            /** Format: int32 */
+            active_min: number;
+            /** @description Codes du catalogue d'équipements. */
+            equipment?: string[];
+            /** @description Une seule variante par défaut ; sans indication, la première. */
+            is_default?: boolean;
+            label: string;
+            phases: components["schemas"]["PhaseInput"][];
+            /** Format: int32 */
+            total_min: number;
+            /**
+             * Format: int32
+             * @description Récipients à laver ; 1 par défaut.
+             */
+            vessels?: number | null;
+        };
+        /** @description Variante par défaut, dans la liste des recettes. */
+        VariantSummary: {
+            /** Format: int32 */
+            active_min: number;
+            equipment: string[];
+            label: string;
+            /** Format: int32 */
+            total_min: number;
+            /** Format: int32 */
+            vessels: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1141,6 +1449,56 @@ export interface operations {
             };
         };
     };
+    import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Lot"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Lot refusé, rien n'est écrit */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_invites: {
         parameters: {
             query?: never;
@@ -1428,6 +1786,287 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_recipes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                /** @description Mots cherchés dans le titre et les ingrédients, sans tenir compte des accents ni de la casse. */
+                q: string | null;
+                /** @description Étiquette exacte. */
+                tag: string | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeSummary"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeInput"];
+            };
+        };
+        responses: {
+            /** @description Remplacée */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            /** @description Créée */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenInfo"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewApiToken"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedApiToken"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    revoke_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
             };
             404: {
                 headers: {

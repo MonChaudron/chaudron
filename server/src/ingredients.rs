@@ -10,16 +10,16 @@ use axum::{
     routing::{get, put},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgExecutor, PgPool};
+use sqlx::{FromRow, PgConnection, PgExecutor, PgPool};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{
     AppState,
-    auth::CurrentUser,
+    auth::{Caller, CurrentUser},
     error::{ApiError, ApiResult, ErrorBody},
-    text::{code, search_key},
-    types::{Aisle, IngredientState, Unit},
+    text::{code, like_patterns, search_key},
+    types::{Aisle, IngredientState, Scope, Unit},
     validate,
 };
 
@@ -136,8 +136,9 @@ pub async fn load_one(db: &PgPool, id: Uuid) -> ApiResult<Ingredient> {
 )]
 pub async fn list_ingredients(
     State(state): State<AppState>,
-    _: CurrentUser,
+    caller: Caller,
 ) -> ApiResult<Json<Vec<Ingredient>>> {
+    caller.require_scope(Scope::Read)?;
     load(&state.db, None).await.map(Json)
 }
 
@@ -188,12 +189,14 @@ pub async fn create_ingredient(
     _: CurrentUser,
     Json(body): Json<NewIngredient>,
 ) -> ApiResult<(StatusCode, Json<Ingredient>)> {
-    let id = insert(&state.db, &body).await?;
+    let mut tx = state.db.begin().await?;
+    let id = insert(&mut tx, &body).await?;
+    tx.commit().await?;
     Ok((StatusCode::CREATED, Json(load_one(&state.db, id).await?)))
 }
 
 /// Crée un ingrédient et ses liens Ciqual ; utilisé aussi par l'import en lot.
-pub async fn insert(db: &PgPool, body: &NewIngredient) -> ApiResult<Uuid> {
+pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<Uuid> {
     let name = validate::name(&body.name)?;
     let code = code(name);
     if code.is_empty() {
@@ -203,9 +206,8 @@ pub async fn insert(db: &PgPool, body: &NewIngredient) -> ApiResult<Uuid> {
     if !body.foods.iter().all(|f| states.insert(f.state)) {
         return Err(ApiError::invalid("Une seule ligne Ciqual par état."));
     }
-    let mut tx = db.begin().await?;
     for food in &body.foods {
-        check_food(&mut *tx, food.food_code).await?;
+        check_food(&mut *conn, food.food_code).await?;
     }
     let id = Uuid::now_v7();
     sqlx::query(
@@ -219,7 +221,7 @@ pub async fn insert(db: &PgPool, body: &NewIngredient) -> ApiResult<Uuid> {
     .bind(body.aisle.as_str())
     .bind(body.default_unit.as_str())
     .bind(body.default_state.as_str())
-    .execute(&mut *tx)
+    .execute(&mut *conn)
     .await
     .map_err(|err| match ApiError::from(err) {
         e if e.is_conflict() => ApiError::conflict("conflict", "Cet ingrédient existe déjà."),
@@ -232,10 +234,9 @@ pub async fn insert(db: &PgPool, body: &NewIngredient) -> ApiResult<Uuid> {
         .bind(id)
         .bind(food.state.as_str())
         .bind(food.food_code)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
     }
-    tx.commit().await?;
     Ok(id)
 }
 
@@ -313,23 +314,15 @@ pub struct FoodQuery {
 )]
 pub async fn search_foods(
     State(state): State<AppState>,
-    _: CurrentUser,
+    caller: Caller,
     Query(query): Query<FoodQuery>,
 ) -> ApiResult<Json<Vec<Food>>> {
-    let key = search_key(&query.q);
-    let words: Vec<String> = key
-        .split(' ')
-        .filter(|w| !w.is_empty())
-        .map(|w| {
-            w.replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_")
-        })
-        .collect();
-    let Some(first) = words.first() else {
+    caller.require_scope(Scope::Read)?;
+    let patterns = like_patterns(&query.q);
+    // Le premier mot en début de nom : « %carot% » → « carot% ».
+    let Some(first) = patterns.first().map(|p| p[1..].to_owned()) else {
         return Ok(Json(Vec::new()));
     };
-    let patterns: Vec<String> = words.iter().map(|w| format!("%{w}%")).collect();
     let foods = sqlx::query_as(
         "SELECT code, name, group_code, subgroup_code, energy_kcal, protein_g, carbs_g, sugars_g, fat_g,
                 sat_fat_g, fiber_g, salt_g
@@ -337,7 +330,7 @@ pub async fn search_foods(
          ORDER BY search_key LIKE $2 DESC, length(name), name LIMIT $3",
     )
     .bind(&patterns)
-    .bind(format!("{first}%"))
+    .bind(first)
     .bind(query.limit.unwrap_or(20).clamp(1, 50))
     .fetch_all(&state.db)
     .await?;
