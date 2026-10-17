@@ -1,5 +1,5 @@
 import type { Aisle, Block, MenuSummary, ShoppingItem } from '@chaudron/api';
-import { aisles, applyPending, currentMenu, type PendingOp, formatQuantity, ingredientStates, shortDateText, space, todayIso } from '@chaudron/domain';
+import { aisles, applyPending, currentMenu, dateText, type PendingOp, formatQuantity, ingredientStates, shortDateText, space, todayIso } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -192,6 +192,13 @@ function ItemRow({ item, last, onToggle, onRemove }: { item: ShoppingItem; last:
           {detail ? <Body tone="muted" size={14}>{detail}</Body> : null}
           {item.checked && item.checked_by ? <Body tone="muted" size={14}>{`Pris par ${item.checked_by}`}</Body> : null}
           {item.grown && item.unit ? <Body tone="alert" size={14}>{`Le menu a changé : ${formatQuantity(item.grown, item.unit)} de plus à prendre.`}</Body> : null}
+          {item.freeze.map((hint) =>
+            hint.frozen ? (
+              <Body key={hint.date} tone="muted" size={14}>{`Congelé pour ${dateText(hint.date)} (${hint.recipe}).`}</Body>
+            ) : (
+              <Body key={hint.date} tone="alert" size={14}>{`À congeler en rentrant : la part de ${dateText(hint.date)} (${hint.recipe}).`}</Body>
+            ),
+          )}
         </View>
       </Pressable>
       {onRemove ? <Button kind="quiet" label="Retirer" accessibilityLabel={`Retirer ${item.label}`} onPress={onRemove} /> : null}

@@ -1,6 +1,6 @@
 import type { Agenda, MenuSlot, Warning } from '@chaudron/api';
 import { errorMessage } from '@chaudron/api';
-import { addDays, dayLabel, space, todayIso, weekDays } from '@chaudron/domain';
+import { addDays, dayLabel, shortDateText, space, todayIso, weekDays } from '@chaudron/domain';
 import { Redirect, Stack as Router } from 'expo-router';
 import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
@@ -90,6 +90,23 @@ function Week({ householdId }: { householdId: string }) {
     }
   }
 
+  async function freeze(slot: MenuSlot, ingredient: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: failure } = await api.POST('/api/v1/households/{id}/menus/{week_start}/freeze', {
+        params: { path: { id: householdId, week_start: slot.week_start } },
+        body: { slot: slot.id, ingredient, frozen: true },
+      });
+      if (failure) setError(errorMessage(failure));
+      else await agenda.reload();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const measure = () => {
     for (const [date, view] of days.current) {
       view.measureInWindow((_x, y, _w, h) => boxes.current.set(date, { y, h }));
@@ -143,6 +160,7 @@ function Week({ householdId }: { householdId: string }) {
               today={today}
               onPanel={() => setPanel(panel === slot.id ? null : slot.id)}
               onMove={(request) => void move(request, slot.week_start)}
+              onFreeze={(ingredient) => void freeze(slot, ingredient)}
               occupied={(d, meal) => occupied(d, meal, slot)}
               onDragStart={() => {
                 measure();
@@ -244,6 +262,7 @@ function Day({ date, today, agenda, register, drag, renderSlot, children }: { da
   const lunch = slots.filter((s) => s.meal === 'lunch');
   const dinner = slots.filter((s) => s.meal === 'dinner');
   const tomorrow = agenda.slots.filter((s) => s.date === addDays(date, 1) && s.prep_days_before === 1);
+  const thaw = agenda.slots.filter((s) => s.date === addDays(date, 1) && s.thaw.length);
   const own = new Set(slots.map((s) => s.id));
   // Avertissements du jour qui ne portent pas sur un plat du jour (le midi sans boîtes d'un plat déplacé).
   const loose: Warning[] = agenda.warnings.filter((w) => w.date === date && !w.slots.some((id) => own.has(id)));
@@ -275,6 +294,9 @@ function Day({ date, today, agenda, register, drag, renderSlot, children }: { da
       {tomorrow.map((s) => (
         <Body key={s.id} size={16}>{`Pour demain : ${s.recipe.title} se prépare en partie la veille.`}</Body>
       ))}
+      {thaw.map((s) => (
+        <Body key={`thaw-${s.id}`} size={16}>{`Ce soir, sortir du congélateur pour demain : ${s.thaw.map((t) => t.name.toLowerCase()).join(', ')} (${s.recipe.title}).`}</Body>
+      ))}
       <Warnings warnings={loose} />
       {children}
     </View>
@@ -294,7 +316,29 @@ function Meal({ label, children }: { label: string | null; children: ReactNode }
   );
 }
 
-function SlotBlock({ slot, big, warnings, drag, panel, busy, today, onPanel, onMove, occupied, onDragStart, onDrag, onDrop }: {
+/**
+ * Fraîcheur d'un plat, en une ligne : ce qui ne tiendra pas jusque-là, un bouton pour tout congeler en rentrant, un
+ * pour avancer le plat au dernier jour où tout est encore frais.
+ */
+function Freshness({ slot, warnings, today, busy, onFreeze, onMove }: { slot: MenuSlot; warnings: Warning[]; today: string; busy: boolean; onFreeze: (ingredient: string) => void; onMove: (request: MoveRequest) => void }) {
+  if (!warnings.length) return null;
+  const names = warnings.map((w) => w.ingredient_name ?? w.ingredient).join(', ');
+  const bought = warnings[0].purchased;
+  const advance = warnings.map((w) => w.advance_to).filter((d): d is string => !!d).sort()[0];
+  return (
+    <Stack gap={space[2]}>
+      <Body tone="alert" size={15}>{`Ne tiendra pas jusque-là : ${names.toLowerCase()}${bought ? ` (courses du ${shortDateText(bought)})` : ''}.`}</Body>
+      <Row gap={space[1]}>
+        <Button label="Congeler en rentrant" busy={busy} onPress={() => warnings.forEach((w) => w.ingredient && onFreeze(w.ingredient))} />
+        {advance && advance >= today && advance < slot.date ? (
+          <Button kind="quiet" label={`Avancer au ${shortDateText(advance)}`} onPress={() => onMove({ slot: slot.id, date: advance, meal: slot.meal, mode: 'insert' })} />
+        ) : null}
+      </Row>
+    </Stack>
+  );
+}
+
+function SlotBlock({ slot, big, warnings, drag, panel, busy, today, onPanel, onMove, onFreeze, occupied, onDragStart, onDrag, onDrop }: {
   slot: MenuSlot;
   big: boolean;
   warnings: Warning[];
@@ -304,12 +348,14 @@ function SlotBlock({ slot, big, warnings, drag, panel, busy, today, onPanel, onM
   today: string;
   onPanel: () => void;
   onMove: (request: MoveRequest) => void;
+  onFreeze: (ingredient: string) => void;
   occupied: (date: string, meal: MenuSlot['meal']) => MenuSlot[];
   onDragStart: () => void;
   onDrag: (dy: number, pageY: number) => void;
   onDrop: (pageY: number) => void;
 }) {
   const { palette, radius } = useTheme();
+  const fresh = warnings.filter((w) => w.kind === 'freshness');
   return (
     <View
       style={[
@@ -320,9 +366,16 @@ function SlotBlock({ slot, big, warnings, drag, panel, busy, today, onPanel, onM
       <SlotSummary
         slot={slot}
         big={big}
-        warnings={warnings}
+        warnings={warnings.filter((w) => w.kind !== 'freshness')}
         handle={<DragHandle label={`Glisser ${slot.recipe.title} vers un autre jour`} onStart={onDragStart} onDrag={onDrag} onDrop={onDrop} />}
-        actions={panel ? null : <TextAction label="Déplacer…" onPress={onPanel} />}
+        actions={
+          panel ? null : (
+            <Stack gap={space[1]}>
+              <Freshness slot={slot} warnings={fresh} today={today} busy={busy} onFreeze={onFreeze} onMove={onMove} />
+              <TextAction label="Déplacer…" onPress={onPanel} />
+            </Stack>
+          )
+        }
       />
       {panel ? <MovePanel slot={slot} today={today} occupied={occupied} onMove={onMove} onCancel={onPanel} busy={busy} /> : null}
     </View>

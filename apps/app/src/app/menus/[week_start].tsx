@@ -39,6 +39,8 @@ interface Draft {
   boxes: string;
   note: string;
   portionsDate: string | null;
+  /** Ingrédients congelés pour ce plat (codes) : gardés tels quels. */
+  thaw: string[];
 }
 
 let drafts = 0;
@@ -57,6 +59,7 @@ function toDraft(slot: MenuSlot): Draft {
     boxes: slot.next_lunch_covers_fixed ? String(slot.next_lunch_covers) : '',
     note: slot.note ?? '',
     portionsDate: slot.portions_date ?? null,
+    thaw: slot.thaw.map((t) => t.ingredient),
   };
 }
 
@@ -72,6 +75,7 @@ function toInput(d: Draft): SlotInput {
     next_lunch_covers: d.covers ? count(d.boxes) : null,
     portions_date: d.portionsDate,
     note: d.note.trim() || null,
+    thaw: d.thaw,
   };
 }
 
@@ -290,7 +294,7 @@ function Composer({ householdId, menu, isNew, busy, error, onSave, onCancel }: {
   const add = (date: string, meal: Meal, recipe: RecipeSummary) => {
     setSlots((list) => [
       ...list,
-      { key: draftKey(), date, meal, recipe: recipe.slug, title: recipe.title, variant: null, covers: meal === 'dinner', diners: '', boxes: '', note: '', portionsDate: null },
+      { key: draftKey(), date, meal, recipe: recipe.slug, title: recipe.title, variant: null, covers: meal === 'dinner', diners: '', boxes: '', note: '', portionsDate: null, thaw: [] },
     ]);
     setPicking(null);
   };

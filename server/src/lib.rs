@@ -122,6 +122,7 @@ impl AppState {
         menus::put_menu,
         menus::delete_menu,
         menus::move_slot,
+        menus::freeze,
         menus::agenda,
         shopping::read_list,
         shopping::apply_ops,

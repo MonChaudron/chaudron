@@ -343,6 +343,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/menus/{week_start}/freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Congeler un ingrédient d'un plat (en rentrant des courses) : l'alerte de fraîcheur tombe, et la veille du plat
+         *     rappelle de le sortir du congélateur. `frozen: false` annule.
+         */
+        post: operations["freeze"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/menus/{week_start}/move": {
         parameters: {
             query?: never;
@@ -743,6 +763,21 @@ export interface components {
             food_code: number;
             state: components["schemas"]["IngredientState"];
         };
+        /** @description Un plat dont la part de cet article est à congeler. */
+        FreezeHint: {
+            /** Format: date */
+            date: string;
+            frozen: boolean;
+            recipe: string;
+        };
+        /** @description Congeler (ou non) un ingrédient d'un plat. */
+        FreezeInput: {
+            frozen: boolean;
+            /** @description Code de l'ingrédient. */
+            ingredient: string;
+            /** Format: uuid */
+            slot: string;
+        };
         /** @description État du serveur et de ses dépendances. */
         Health: {
             /** @description `ok` ou `unreachable`. */
@@ -813,6 +848,11 @@ export interface components {
             foods: components["schemas"]["IngredientFood"][];
             /** Format: uuid */
             id: string;
+            /**
+             * Format: int32
+             * @description Jours au réfrigérateur, frais, quand ils diffèrent de ceux du rayon (le haché : 1).
+             */
+            keeps_days?: number | null;
             name: string;
         };
         /** @description Ligne Ciqual d'un ingrédient pour une forme d'achat. */
@@ -1031,6 +1071,8 @@ export interface components {
              * @description Portions du plat : `diners` + `next_lunch_covers`.
              */
             servings: number;
+            /** @description Ingrédients congelés pour ce plat : à sortir la veille. */
+            thaw: components["schemas"]["ThawItem"][];
             variant: components["schemas"]["SlotVariant"];
             /**
              * Format: date
@@ -1084,6 +1126,13 @@ export interface components {
             default_unit: components["schemas"]["Unit"];
             /** @description Lignes Ciqual, au plus une par forme d'achat. */
             foods?: components["schemas"]["FoodLink"][];
+            /**
+             * Format: int32
+             * @description Jours au réfrigérateur, frais, quand ils diffèrent de ceux du rayon (poisson 2, boucherie et boulangerie 3,
+             *     fruits et légumes, crèmerie et frais 7). Dans un lot, complète aussi un ingrédient qui existe déjà et n'en a
+             *     pas (le référentiel est commun à l'instance : rien n'est remplacé).
+             */
+            keeps_days?: number | null;
             name: string;
         };
         /** @description Nouveau membre : barème par défaut de son type, présent à tous les repas, sans exclusion. */
@@ -1268,6 +1317,8 @@ export interface components {
             checked_at?: string | null;
             /** @description Nom de qui a coché. */
             checked_by?: string | null;
+            /** @description Les plats pour lesquels cet ingrédient frais ne tiendra pas : à congeler en rentrant (ou déjà congelé). */
+            freeze: components["schemas"]["FreezeHint"][];
             /**
              * Format: float
              * @description Hausse de la quantité depuis que la case a été cochée (le menu a changé).
@@ -1370,6 +1421,8 @@ export interface components {
              * @description Total des portions (format des lots) : comparé aux portions calculées, seul l'écart est fixé en nombre.
              */
             servings?: number | null;
+            /** @description Ingrédients du plat congelés en rentrant des courses (codes) : rappel la veille de les sortir. */
+            thaw?: string[];
             /** @description Nom de la variante ; absent : la variante par défaut (ou la première dont le foyer a le matériel). */
             variant?: string | null;
         };
@@ -1414,6 +1467,11 @@ export interface components {
             /** Format: uuid */
             slot: string;
             variant: string;
+        };
+        /** @description Ingrédient congelé pour ce plat. */
+        ThawItem: {
+            ingredient: string;
+            name: string;
         };
         /**
          * @description Unité normalisée.
@@ -1466,12 +1524,24 @@ export interface components {
             vessels: number;
         };
         Warning: {
+            /**
+             * Format: date
+             * @description Fraîcheur : dernier jour où le plat serait encore frais.
+             */
+            advance_to?: string | null;
             /** Format: date */
             date: string;
             equipment: string[];
             exclusion?: components["schemas"]["ExclusionKind"] | null;
             /** @description Code de l'ingrédient. */
             ingredient?: string | null;
+            /** @description Nom de l'ingrédient, affichable. */
+            ingredient_name?: string | null;
+            /**
+             * Format: int32
+             * @description Fraîcheur : jours que l'ingrédient tient au réfrigérateur.
+             */
+            keeps_days?: number | null;
             kind: components["schemas"]["WarningKind"];
             meal: components["schemas"]["Meal"];
             member?: string | null;
@@ -1479,6 +1549,11 @@ export interface components {
             message: string;
             /** Format: date */
             other_menu?: string | null;
+            /**
+             * Format: date
+             * @description Fraîcheur : jour d'achat (case cochée, ou jour habituel des courses projeté).
+             */
+            purchased?: string | null;
             /** @description Créneaux concernés. */
             slots: string[];
             suggestion?: components["schemas"]["Suggestion"] | null;
@@ -1487,7 +1562,7 @@ export interface components {
          * @description Nature d'un avertissement.
          * @enum {string}
          */
-        WarningKind: "equipment_conflict" | "missing_equipment" | "exclusion" | "lunch_without_boxes" | "overlap" | "unknown_variant";
+        WarningKind: "equipment_conflict" | "missing_equipment" | "exclusion" | "lunch_without_boxes" | "overlap" | "unknown_variant" | "freshness";
     };
     responses: never;
     parameters: never;
@@ -2470,6 +2545,56 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    freeze: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FreezeInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Menu"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -22,7 +22,7 @@ use crate::{
     error::{ApiError, ApiResult, ErrorBody},
     members::{self, Member, Portions},
     recipes::{self, Recipe},
-    types::{ExclusionKind, Meal, Scope},
+    types::{Aisle, ExclusionKind, IngredientState, Meal, Scope, Unit},
 };
 
 pub fn router() -> Router<AppState> {
@@ -33,6 +33,7 @@ pub fn router() -> Router<AppState> {
             get(read_menu).put(put_menu).delete(delete_menu),
         )
         .route("/households/{id}/menus/{week_start}/move", post(move_slot))
+        .route("/households/{id}/menus/{week_start}/freeze", post(freeze))
         .route("/households/{id}/agenda", get(agenda))
 }
 
@@ -61,8 +62,12 @@ impl Day {
         Date::from_calendar_date(year, month, day).ok().map(Self)
     }
 
-    fn plus(self, days: i64) -> Self {
+    pub fn plus(self, days: i64) -> Self {
         Self(self.0 + Duration::days(days))
+    }
+
+    fn days_until(self, later: Day) -> i64 {
+        (later.0 - self.0).whole_days()
     }
 
     /// 0 = lundi … 6 = dimanche, comme la présence des membres.
@@ -182,6 +187,9 @@ pub struct SlotInput {
     #[schema(value_type = Option<String>, format = Date)]
     pub portions_date: Option<Day>,
     pub note: Option<String>,
+    /// Ingrédients du plat congelés en rentrant des courses (codes) : rappel la veille de les sortir.
+    #[serde(default)]
+    pub thaw: Vec<String>,
 }
 
 /// Menu complet, tel que publié.
@@ -220,7 +228,23 @@ pub struct MoveInput {
     pub mode: MoveMode,
 }
 
+/// Congeler (ou non) un ingrédient d'un plat.
+#[derive(Deserialize, ToSchema)]
+pub struct FreezeInput {
+    pub slot: Uuid,
+    /// Code de l'ingrédient.
+    pub ingredient: String,
+    pub frozen: bool,
+}
+
 // Lecture
+
+/// Ingrédient congelé pour ce plat.
+#[derive(Serialize, ToSchema)]
+pub struct ThawItem {
+    pub ingredient: String,
+    pub name: String,
+}
 
 #[derive(Serialize, ToSchema)]
 pub struct RecipeRef {
@@ -285,6 +309,8 @@ pub struct MenuSlot {
     #[schema(value_type = Option<String>, format = Date)]
     pub portions_date: Option<Day>,
     pub note: Option<String>,
+    /// Ingrédients congelés pour ce plat : à sortir la veille.
+    pub thaw: Vec<ThawItem>,
 }
 
 crate::types::text_enum! {
@@ -302,6 +328,8 @@ crate::types::text_enum! {
         Overlap = "overlap",
         /// La variante prévue n'existe plus : la variante par défaut la remplace.
         UnknownVariant = "unknown_variant",
+        /// Un ingrédient frais ne tiendra pas jusqu'au jour du plat : le congeler, ou avancer le plat.
+        Freshness = "freshness",
     }
 }
 
@@ -324,10 +352,20 @@ pub struct Warning {
     pub member: Option<String>,
     /// Code de l'ingrédient.
     pub ingredient: Option<String>,
+    /// Nom de l'ingrédient, affichable.
+    pub ingredient_name: Option<String>,
     pub exclusion: Option<ExclusionKind>,
     #[schema(value_type = Option<String>, format = Date)]
     pub other_menu: Option<Day>,
     pub suggestion: Option<Suggestion>,
+    /// Fraîcheur : jour d'achat (case cochée, ou jour habituel des courses projeté).
+    #[schema(value_type = Option<String>, format = Date)]
+    pub purchased: Option<Day>,
+    /// Fraîcheur : jours que l'ingrédient tient au réfrigérateur.
+    pub keeps_days: Option<i16>,
+    /// Fraîcheur : dernier jour où le plat serait encore frais.
+    #[schema(value_type = Option<String>, format = Date)]
+    pub advance_to: Option<Day>,
     /// En français, affichable tel quel.
     pub message: String,
 }
@@ -392,6 +430,7 @@ struct SlotRow {
     next_lunch_covers: Option<i16>,
     portions_date: Option<Date>,
     note: Option<String>,
+    thaw: Vec<String>,
 }
 
 impl SlotRow {
@@ -409,8 +448,31 @@ struct RecipeBrief {
     slug: String,
     title: String,
     variants: Vec<VariantBrief>,
-    /// Ingrédient (id, code, nom).
-    ingredients: Vec<(Uuid, String, String)>,
+    ingredients: Vec<Ingredient>,
+}
+
+/// Ligne de recette, pour les exclusions et la fraîcheur.
+struct Ingredient {
+    id: Uuid,
+    code: String,
+    name: String,
+    /// Clé de l'article de courses (`{id}:{état}:{unité}`).
+    key: String,
+    /// Jours au réfrigérateur, pour un ingrédient frais ; `None` : pas de souci (surgelé, sec, épicerie…).
+    keeps: Option<i16>,
+}
+
+/// Jours au réfrigérateur d'un ingrédient frais : le sien, sinon celui de son rayon.
+fn keeps_days(state: IngredientState, aisle: Aisle, own: Option<i16>) -> Option<i16> {
+    if !matches!(state, IngredientState::Fresh | IngredientState::Cooked) {
+        return None;
+    }
+    own.or(match aisle {
+        Aisle::Fish => Some(2),
+        Aisle::Butcher | Aisle::Bakery => Some(3),
+        Aisle::Produce | Aisle::Dairy | Aisle::Fresh => Some(7),
+        Aisle::Grocery | Aisle::Frozen | Aisle::Other => None,
+    })
 }
 
 #[derive(Clone, FromRow)]
@@ -481,16 +543,40 @@ async fn context(db: &PgPool, household_id: Uuid, recipe_ids: &[Uuid]) -> ApiRes
             r.variants.push(v);
         }
     }
-    let lines: Vec<(Uuid, Uuid, String, String)> = sqlx::query_as(
-        "SELECT l.recipe_id, i.id, i.code, i.name FROM recipe_ingredients l JOIN ingredients i ON i.id = l.ingredient_id
+    type Line = (
+        Uuid,
+        Uuid,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<i16>,
+    );
+    let lines: Vec<Line> = sqlx::query_as(
+        "SELECT l.recipe_id, i.id, i.code, i.name, l.state, l.unit, i.aisle, i.keeps_days
+         FROM recipe_ingredients l JOIN ingredients i ON i.id = l.ingredient_id
          WHERE l.recipe_id = ANY($1) ORDER BY l.position",
     )
     .bind(recipe_ids)
     .fetch_all(db)
     .await?;
-    for (recipe_id, id, code, name) in lines {
+    for (recipe_id, id, code, name, state, unit, aisle, own) in lines {
+        let (Ok(state), Ok(aisle), Ok(unit)) = (
+            IngredientState::try_from(state),
+            Aisle::try_from(aisle),
+            Unit::try_from(unit),
+        ) else {
+            continue;
+        };
         if let Some(r) = recipes.get_mut(&recipe_id) {
-            r.ingredients.push((id, code, name));
+            r.ingredients.push(Ingredient {
+                key: format!("{id}:{}:{}", state.as_str(), unit.as_str()),
+                keeps: keeps_days(state, aisle, own),
+                id,
+                code,
+                name,
+            });
         }
     }
     Ok(Context {
@@ -513,7 +599,7 @@ async fn menu_row(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
 macro_rules! slot_columns {
     () => {
         "s.id, s.date, s.meal, s.position, s.recipe_id, s.variant_label, s.covers_next_lunch, s.diners,
-         s.next_lunch_covers, s.portions_date, s.note"
+         s.next_lunch_covers, s.portions_date, s.note, s.thaw"
     };
 }
 
@@ -713,6 +799,19 @@ fn slot_view(row: &SlotRow, week_start: Day, ctx: &Context) -> MenuSlot {
         prep_days_before: variant.prep_days_before,
         portions_date: row.portions_date.map(Day),
         note: row.note.clone(),
+        thaw: row
+            .thaw
+            .iter()
+            .map(|code| ThawItem {
+                ingredient: code.clone(),
+                name: recipe
+                    .ingredients
+                    .iter()
+                    .find(|i| &i.code == code)
+                    .map(|i| i.name.clone())
+                    .unwrap_or_else(|| code.clone()),
+            })
+            .collect(),
     }
 }
 
@@ -725,17 +824,31 @@ fn warning(kind: WarningKind, date: Day, meal: Meal, slots: Vec<Uuid>, message: 
         equipment: Vec::new(),
         member: None,
         ingredient: None,
+        ingredient_name: None,
         exclusion: None,
         other_menu: None,
         suggestion: None,
+        purchased: None,
+        keeps_days: None,
+        advance_to: None,
         message,
     }
+}
+
+/// Jour d'achat des ingrédients d'un menu.
+struct Purchases {
+    /// Case cochée : le jour du geste, par clé d'article.
+    checked: HashMap<String, Day>,
+    /// Sinon : le jour habituel des courses avant le premier repas, ou la veille de ce repas.
+    projected: Day,
 }
 
 fn warnings(
     rows: &[SlotRow],
     ctx: &Context,
     overlaps: &HashMap<(Day, Meal), Vec<Day>>,
+    purchases: &Purchases,
+    week_start: Day,
 ) -> Vec<Warning> {
     let mut out = Vec::new();
     let mut meals: BTreeMap<(Day, u8), Vec<&SlotRow>> = BTreeMap::new();
@@ -851,10 +964,10 @@ fn warnings(
             }
             for member in eaters {
                 for exclusion in &member.exclusions {
-                    if let Some((_, code, name)) = recipe
+                    if let Some(Ingredient { code, name, .. }) = recipe
                         .ingredients
                         .iter()
-                        .find(|(id, _, _)| *id == exclusion.ingredient_id)
+                        .find(|i| i.id == exclusion.ingredient_id)
                     {
                         let what = match exclusion.kind {
                             ExclusionKind::Allergy => "allergie",
@@ -874,6 +987,7 @@ fn warnings(
                         );
                         w.member = Some(member.name.clone());
                         w.ingredient = Some(code.clone());
+                        w.ingredient_name = Some(name.clone());
                         w.exclusion = Some(exclusion.kind);
                         out.push(w);
                     }
@@ -936,8 +1050,93 @@ fn warnings(
             ),
         ));
     }
+    // Fraîcheur : un ingrédient frais acheté trop tôt pour le jour du plat (ou de sa phase de la veille).
+    for row in rows {
+        let recipe = &ctx.recipes[&row.recipe_id];
+        let (variant, _) = resolve(recipe, row.variant_label.as_deref(), &ctx.owned);
+        let cooked = row.day().plus(-i64::from(variant.prep_days_before));
+        let mut seen = HashSet::new();
+        for line in &recipe.ingredients {
+            let Some(keeps) = line.keeps else { continue };
+            if row.thaw.contains(&line.code) || !seen.insert(&line.code) {
+                continue;
+            }
+            let bought = purchases
+                .checked
+                .get(&line.key)
+                .copied()
+                .unwrap_or(purchases.projected);
+            let days = bought.days_until(cooked);
+            if days <= i64::from(keeps) {
+                continue;
+            }
+            let advance = bought.plus(i64::from(keeps)).max(week_start);
+            let mut w = warning(
+                WarningKind::Freshness,
+                row.day(),
+                row.meal,
+                vec![row.id],
+                format!(
+                    "{} {} : {} acheté le {}, cuisiné le {} : {days} jours, il tient {keeps} jour{}. À congeler en rentrant, ou avancer le plat au {}.",
+                    row.day().french(),
+                    meal_french(row.meal),
+                    line.name,
+                    bought.french(),
+                    cooked.french(),
+                    if keeps > 1 { "s" } else { "" },
+                    advance.french()
+                ),
+            );
+            w.ingredient = Some(line.code.clone());
+            w.ingredient_name = Some(line.name.clone());
+            w.purchased = Some(bought);
+            w.keeps_days = Some(keeps);
+            w.advance_to = Some(advance);
+            out.push(w);
+        }
+    }
     out.sort_by_key(|w| (w.date, meal_order(w.meal)));
     out
+}
+
+/// Jour d'achat : cases cochées du menu, et jour habituel des courses du foyer (le plus fréquent sur 90 jours).
+async fn purchases(
+    db: &PgPool,
+    household_id: Uuid,
+    menu_id: Uuid,
+    first_meal: Day,
+) -> ApiResult<Purchases> {
+    let checked: Vec<(String, Date)> = sqlx::query_as(
+        "SELECT s.key, (s.checked_at AT TIME ZONE h.timezone)::date
+         FROM shopping_items s JOIN menus m ON m.id = s.menu_id JOIN households h ON h.id = m.household_id
+         WHERE s.menu_id = $1 AND s.checked AND NOT s.manual AND s.checked_at IS NOT NULL",
+    )
+    .bind(menu_id)
+    .fetch_all(db)
+    .await?;
+    let usual: Option<i32> = sqlx::query_scalar(
+        "SELECT extract(isodow FROM s.checked_at AT TIME ZONE h.timezone)::int AS dow
+         FROM shopping_items s JOIN menus m ON m.id = s.menu_id JOIN households h ON h.id = m.household_id
+         WHERE m.household_id = $1 AND s.checked AND s.checked_at > now() - interval '90 days'
+         GROUP BY dow ORDER BY count(*) DESC, dow LIMIT 1",
+    )
+    .bind(household_id)
+    .fetch_optional(db)
+    .await?;
+    let projected = match usual {
+        Some(dow) => {
+            let first = i64::from(first_meal.0.weekday().number_from_monday());
+            first_meal.plus(-((first - i64::from(dow)).rem_euclid(7)))
+        }
+        None => first_meal.plus(-1),
+    };
+    Ok(Purchases {
+        checked: checked
+            .into_iter()
+            .map(|(key, date)| (key, Day(date)))
+            .collect(),
+        projected,
+    })
 }
 
 async fn compute(db: &PgPool, household_id: Uuid, menu: MenuRow) -> ApiResult<Menu> {
@@ -946,6 +1145,8 @@ async fn compute(db: &PgPool, household_id: Uuid, menu: MenuRow) -> ApiResult<Me
     let ctx = context(db, household_id, &recipe_ids).await?;
     let overlaps = overlaps(db, household_id, menu.id, &rows).await?;
     let week_start = Day(menu.week_start);
+    let first_meal = rows.first().map(SlotRow::day).unwrap_or(week_start);
+    let purchases = purchases(db, household_id, menu.id, first_meal).await?;
     Ok(Menu {
         week_start,
         title: menu.title,
@@ -954,7 +1155,7 @@ async fn compute(db: &PgPool, household_id: Uuid, menu: MenuRow) -> ApiResult<Me
             .iter()
             .map(|r| slot_view(r, week_start, &ctx))
             .collect(),
-        warnings: warnings(&rows, &ctx, &overlaps),
+        warnings: warnings(&rows, &ctx, &overlaps, &purchases, week_start),
     })
 }
 
@@ -1032,6 +1233,7 @@ pub(crate) async fn save(
         boxes: Option<i16>,
         portions_date: Option<Day>,
         note: Option<String>,
+        thaw: Vec<String>,
     }
     let mut prepared = Vec::with_capacity(input.slots.len());
     for slot in &input.slots {
@@ -1091,6 +1293,7 @@ pub(crate) async fn save(
                 .map(str::trim)
                 .filter(|n| !n.is_empty())
                 .map(str::to_owned),
+            thaw: slot.thaw.clone(),
         });
     }
 
@@ -1118,8 +1321,8 @@ pub(crate) async fn save(
             .or_default();
         sqlx::query(
             "INSERT INTO menu_slots (id, menu_id, date, meal, position, recipe_id, variant_label, covers_next_lunch,
-                                     diners, next_lunch_covers, portions_date, note)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                                     diners, next_lunch_covers, portions_date, note, thaw)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
         )
         .bind(Uuid::now_v7())
         .bind(menu_id)
@@ -1133,6 +1336,7 @@ pub(crate) async fn save(
         .bind(slot.boxes)
         .bind(slot.portions_date.map(|d| d.0))
         .bind(&slot.note)
+        .bind(&slot.thaw)
         .execute(&mut *conn)
         .await?;
         *position += 1;
@@ -1384,6 +1588,63 @@ pub async fn move_slot(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    state.notify(id, "menu", Some(week_start), None);
+    read(&state.db, id, week_start).await.map(Json)
+}
+
+/// Congeler un ingrédient d'un plat (en rentrant des courses) : l'alerte de fraîcheur tombe, et la veille du plat
+/// rappelle de le sortir du congélateur. `frozen: false` annule.
+#[utoipa::path(
+    post,
+    path = "/api/v1/households/{id}/menus/{week_start}/freeze",
+    tag = "menus",
+    params(("id" = Uuid, Path), ("week_start" = String, Path, format = Date)),
+    request_body = FreezeInput,
+    responses(
+        (status = 200, body = Menu),
+        (status = 403, body = ErrorBody),
+        (status = 404, body = ErrorBody),
+        (status = 422, body = ErrorBody),
+    )
+)]
+pub async fn freeze(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path((id, week_start)): Path<(Uuid, Day)>,
+    Json(body): Json<FreezeInput>,
+) -> ApiResult<Json<Menu>> {
+    caller.require(&state.db, id, Scope::MenusWrite).await?;
+    let menu = menu_row(&state.db, id, week_start).await?;
+    let in_recipe: Option<bool> = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM recipe_ingredients l JOIN ingredients i ON i.id = l.ingredient_id
+                        WHERE l.recipe_id = s.recipe_id AND i.code = $3)
+         FROM menu_slots s WHERE s.id = $1 AND s.menu_id = $2",
+    )
+    .bind(body.slot)
+    .bind(menu.id)
+    .bind(&body.ingredient)
+    .fetch_optional(&state.db)
+    .await?;
+    match in_recipe {
+        None => return Err(ApiError::not_found()),
+        Some(false) => {
+            return Err(ApiError::invalid(format!(
+                "{} n'est pas dans ce plat.",
+                body.ingredient
+            )));
+        }
+        Some(true) => {}
+    }
+    sqlx::query(
+        "UPDATE menu_slots SET thaw = CASE WHEN $3 THEN array_append(array_remove(thaw, $2), $2)
+                                           ELSE array_remove(thaw, $2) END
+         WHERE id = $1",
+    )
+    .bind(body.slot)
+    .bind(&body.ingredient)
+    .bind(body.frozen)
+    .execute(&state.db)
+    .await?;
     state.notify(id, "menu", Some(week_start), None);
     read(&state.db, id, week_start).await.map(Json)
 }

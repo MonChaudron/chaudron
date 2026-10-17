@@ -54,6 +54,8 @@ pub struct Ingredient {
     pub default_unit: Unit,
     /// Forme d'achat proposée par défaut dans une recette.
     pub default_state: IngredientState,
+    /// Jours au réfrigérateur, frais, quand ils diffèrent de ceux du rayon (le haché : 1).
+    pub keeps_days: Option<i16>,
     /// Lignes Ciqual par forme d'achat (frais, surgelé, conserve, sec, cuit), dans cet ordre.
     pub foods: Vec<IngredientFood>,
 }
@@ -69,6 +71,7 @@ struct IngredientRow {
     default_unit: Unit,
     #[sqlx(try_from = "String")]
     default_state: IngredientState,
+    keeps_days: Option<i16>,
 }
 
 #[derive(FromRow)]
@@ -83,7 +86,7 @@ struct FoodLinkRow {
 /// Ingrédients (tous, ou un seul), avec leurs lignes Ciqual.
 async fn load(db: &PgPool, only: Option<Uuid>) -> ApiResult<Vec<Ingredient>> {
     let rows: Vec<IngredientRow> = sqlx::query_as(
-        "SELECT id, code, name, aisle, default_unit, default_state FROM ingredients
+        "SELECT id, code, name, aisle, default_unit, default_state, keeps_days FROM ingredients
          WHERE $1::uuid IS NULL OR id = $1 ORDER BY search_key",
     )
     .bind(only)
@@ -116,6 +119,7 @@ async fn load(db: &PgPool, only: Option<Uuid>) -> ApiResult<Vec<Ingredient>> {
             aisle: r.aisle,
             default_unit: r.default_unit,
             default_state: r.default_state,
+            keeps_days: r.keeps_days,
         })
         .collect())
 }
@@ -156,6 +160,10 @@ pub struct NewIngredient {
     pub aisle: Aisle,
     pub default_unit: Unit,
     pub default_state: IngredientState,
+    /// Jours au réfrigérateur, frais, quand ils diffèrent de ceux du rayon (poisson 2, boucherie et boulangerie 3,
+    /// fruits et légumes, crèmerie et frais 7). Dans un lot, complète aussi un ingrédient qui existe déjà et n'en a
+    /// pas (le référentiel est commun à l'instance : rien n'est remplacé).
+    pub keeps_days: Option<i16>,
     /// Lignes Ciqual, au plus une par forme d'achat.
     #[serde(default)]
     pub foods: Vec<FoodLink>,
@@ -202,6 +210,11 @@ pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<
     if code.is_empty() {
         return Err(ApiError::invalid("Le nom doit contenir des lettres."));
     }
+    if body.keeps_days.is_some_and(|d| !(1..=60).contains(&d)) {
+        return Err(ApiError::invalid(
+            "Un ingrédient frais tient de 1 à 60 jours.",
+        ));
+    }
     let mut states = HashSet::new();
     if !body.foods.iter().all(|f| states.insert(f.state)) {
         return Err(ApiError::invalid("Une seule ligne Ciqual par état."));
@@ -211,8 +224,8 @@ pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<
     }
     let id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO ingredients (id, code, name, search_key, aisle, default_unit, default_state)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        "INSERT INTO ingredients (id, code, name, search_key, aisle, default_unit, default_state, keeps_days)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
     )
     .bind(id)
     .bind(&code)
@@ -221,6 +234,7 @@ pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<
     .bind(body.aisle.as_str())
     .bind(body.default_unit.as_str())
     .bind(body.default_state.as_str())
+    .bind(body.keeps_days)
     .execute(&mut *conn)
     .await
     .map_err(|err| match ApiError::from(err) {
