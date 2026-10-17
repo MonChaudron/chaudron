@@ -1001,6 +1001,7 @@ pub async fn import(
     }
     tx.commit().await?;
     if let Some(week_start) = menu_start {
+        state.notify(id, "menu", Some(week_start), None);
         result.warnings = menus::read(&state.db, id, week_start).await?.warnings;
     }
     Ok(Json(result))

@@ -192,6 +192,24 @@ impl Browser {
         read(response).await
     }
 
+    /// Ouvre une réponse sans lire son corps (flux SSE) : statut, en-têtes et corps à lire au fil de l'eau.
+    pub async fn open(&mut self, uri: &str) -> axum::response::Response {
+        let mut request = Request::builder().method("GET").uri(uri);
+        if !self.cookies.is_empty() {
+            let cookies: Vec<String> = self
+                .cookies
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            request = request.header(COOKIE, cookies.join("; "));
+        }
+        self.app
+            .clone()
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap()
+    }
+
     pub async fn get(&mut self, uri: &str) -> Response {
         self.request("GET", uri, None).await
     }

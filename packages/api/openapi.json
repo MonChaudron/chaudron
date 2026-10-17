@@ -641,6 +641,43 @@
         }
       }
     },
+    "/api/v1/households/{id}/events": {
+      "get": {
+        "tags": [
+          "courses"
+        ],
+        "summary": "Flux SSE : `event: shopping` ou `event: menu`, données `{\"week_start\": …, \"cursor\": …}` ; battement toutes les\n30 s (Cloudflare coupe une connexion muette au bout de 100 s). `event: resync` : des événements ont été perdus,\ntout relire.",
+        "operationId": "events",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Flux d'événements",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/import": {
       "post": {
         "tags": [
@@ -1434,6 +1471,55 @@
         }
       }
     },
+    "/api/v1/households/{id}/menus/{week_start}/shopping": {
+      "get": {
+        "tags": [
+          "courses"
+        ],
+        "summary": "Liste de courses d'un menu, calculée depuis ses créneaux, avec les cases cochées et les ajouts à la main.",
+        "operationId": "read_list",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingList"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes": {
       "get": {
         "tags": [
@@ -1673,6 +1759,122 @@
           },
           "409": {
             "description": "Prévue dans un menu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/shopping/ops": {
+      "get": {
+        "tags": [
+          "courses"
+        ],
+        "summary": "Journal des opérations du foyer après `since` (500 au plus) : un téléphone qui revient en ligne rattrape ce qu'il\na manqué.",
+        "operationId": "list_ops",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Dernier numéro déjà vu (0 : tout).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Journal"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "courses"
+        ],
+        "summary": "Applique des opérations sur les listes du foyer (cocher, décocher, ajouter, modifier, retirer), dans l'ordre,\ntout ou rien. Rejouables : une opération déjà vue ou plus ancienne que l'article ne change rien.",
+        "operationId": "apply_ops",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpsInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpsResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2437,6 +2639,15 @@
           }
         }
       },
+      "Block": {
+        "type": "string",
+        "description": "Bloc de la liste.",
+        "enum": [
+          "recipes",
+          "breakfast_desserts",
+          "special"
+        ]
+      },
       "CreatedApiToken": {
         "allOf": [
           {
@@ -3027,6 +3238,68 @@
           "household_id": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "Journal": {
+        "type": "object",
+        "required": [
+          "cursor",
+          "ops"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JournalOp"
+            }
+          }
+        }
+      },
+      "JournalOp": {
+        "type": "object",
+        "description": "Opération du journal.",
+        "required": [
+          "seq",
+          "op_id",
+          "week_start",
+          "kind",
+          "key",
+          "at"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nom de qui l'a faite."
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OpKind"
+          },
+          "op_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date"
           }
         }
       },
@@ -3649,6 +3922,49 @@
           }
         }
       },
+      "OpKind": {
+        "type": "string",
+        "description": "Opération sur un article.",
+        "enum": [
+          "check",
+          "uncheck",
+          "add",
+          "edit",
+          "remove"
+        ]
+      },
+      "OpsInput": {
+        "type": "object",
+        "required": [
+          "ops"
+        ],
+        "properties": {
+          "ops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingOp"
+            }
+          }
+        }
+      },
+      "OpsResult": {
+        "type": "object",
+        "required": [
+          "applied",
+          "cursor"
+        ],
+        "properties": {
+          "applied": {
+            "type": "integer",
+            "description": "Opérations appliquées (ni déjà vues, ni plus anciennes que l'état de l'article).",
+            "minimum": 0
+          },
+          "cursor": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "PendingInvite": {
         "type": "object",
         "description": "Invitation en attente.",
@@ -4117,6 +4433,217 @@
           "recipes:write",
           "menus:write"
         ]
+      },
+      "ShoppingItem": {
+        "type": "object",
+        "description": "Article de la liste.",
+        "required": [
+          "key",
+          "label",
+          "aisle",
+          "block",
+          "pantry",
+          "optional",
+          "manual",
+          "recipes",
+          "checked"
+        ],
+        "properties": {
+          "aisle": {
+            "$ref": "#/components/schemas/Aisle"
+          },
+          "block": {
+            "$ref": "#/components/schemas/Block"
+          },
+          "checked": {
+            "type": "boolean"
+          },
+          "checked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "checked_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nom de qui a coché."
+          },
+          "grown": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Hausse de la quantité depuis que la case a été cochée (le menu a changé)."
+          },
+          "ingredient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Code de l'ingrédient (article calculé)."
+          },
+          "key": {
+            "type": "string",
+            "description": "Clé stable de l'article : `{ingredient_id}:{état}:{unité}`, ou `manual:{uuid}`."
+          },
+          "label": {
+            "type": "string"
+          },
+          "manual": {
+            "type": "boolean"
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Facultatif dans toutes les recettes qui l'utilisent."
+          },
+          "pantry": {
+            "type": "boolean",
+            "description": "Cuillères, pincées, « au goût » : au placard, à vérifier plutôt qu'à acheter."
+          },
+          "qty": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Nulle : « au goût ». Les pièces sont arrondies à l'unité supérieure."
+          },
+          "recipes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recettes du menu qui l'utilisent."
+          },
+          "state": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IngredientState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Unit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ShoppingList": {
+        "type": "object",
+        "description": "Liste de courses d'un menu.",
+        "required": [
+          "week_start",
+          "cursor",
+          "items"
+        ],
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Dernier numéro du journal des opérations du foyer."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingItem"
+            },
+            "description": "Bloc des recettes (rayons dans l'ordre du magasin, placard à la fin), puis petits-déjeuners et desserts,\npuis le reste."
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ShoppingOp": {
+        "type": "object",
+        "description": "Opération d'un téléphone, rejouée telle quelle s'il était hors ligne.",
+        "required": [
+          "op_id",
+          "at",
+          "week_start",
+          "kind",
+          "key"
+        ],
+        "properties": {
+          "aisle": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Aisle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Heure du geste sur le téléphone (bornée à l'heure du serveur)."
+          },
+          "block": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Block"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OpKind"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "op_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Choisi par le téléphone : rejouer la même opération ne fait rien."
+          },
+          "qty": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "unit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Unit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date"
+          }
+        }
       },
       "SlotEater": {
         "type": "object",

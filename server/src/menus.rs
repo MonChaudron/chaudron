@@ -1292,6 +1292,7 @@ pub async fn put_menu(
     let mut tx = state.db.begin().await?;
     let created = save(&mut tx, &members, id, week_start, &body).await?;
     tx.commit().await?;
+    state.notify(id, "menu", Some(week_start), None);
     let status = if created {
         StatusCode::CREATED
     } else {
@@ -1325,6 +1326,7 @@ pub async fn delete_menu(
     if deleted.rows_affected() == 0 {
         return Err(ApiError::not_found());
     }
+    state.notify(id, "menu", Some(week_start), None);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1382,6 +1384,7 @@ pub async fn move_slot(
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
+    state.notify(id, "menu", Some(week_start), None);
     read(&state.db, id, week_start).await.map(Json)
 }
 

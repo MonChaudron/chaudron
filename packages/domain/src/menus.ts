@@ -116,3 +116,19 @@ export function nextMenuStart(menus: { last_date?: string | null }[], today: str
   const next = addDays(last, 1);
   return next > today ? next : today;
 }
+
+interface MenuSpan {
+  week_start: string;
+  first_date?: string | null;
+  last_date?: string | null;
+}
+
+/** Le menu des courses : celui en cours (le plus récent s'ils se chevauchent), sinon le prochain, sinon le dernier. */
+export function currentMenu<T extends MenuSpan>(menus: T[], today: string): T | undefined {
+  const dated = menus.filter((m) => m.first_date && m.last_date);
+  const running = dated.filter((m) => m.first_date! <= today && today <= m.last_date!).sort((a, b) => b.week_start.localeCompare(a.week_start));
+  if (running.length) return running[0];
+  const next = dated.filter((m) => m.first_date! > today).sort((a, b) => a.first_date!.localeCompare(b.first_date!));
+  if (next.length) return next[0];
+  return [...menus].sort((a, b) => b.week_start.localeCompare(a.week_start))[0];
+}
