@@ -198,6 +198,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Flux SSE : `event: shopping` ou `event: menu`, données `{"week_start": …, "cursor": …}` ; battement toutes les
+         *     30 s (Cloudflare coupe une connexion muette au bout de 100 s). `event: resync` : des événements ont été perdus,
+         *     tout relire.
+         */
+        get: operations["events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/import": {
         parameters: {
             query?: never;
@@ -342,6 +363,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/menus/{week_start}/shopping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Liste de courses d'un menu, calculée depuis ses créneaux, avec les cases cochées et les ajouts à la main. */
+        get: operations["read_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/recipes": {
         parameters: {
             query?: never;
@@ -372,6 +410,30 @@ export interface paths {
         put: operations["put_recipe"];
         post?: never;
         delete: operations["delete_recipe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/shopping/ops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Journal des opérations du foyer après `since` (500 au plus) : un téléphone qui revient en ligne rattrape ce qu'il
+         *     a manqué.
+         */
+        get: operations["list_ops"];
+        put?: never;
+        /**
+         * Applique des opérations sur les listes du foyer (cocher, décocher, ajouter, modifier, retirer), dans l'ordre,
+         *     tout ou rien. Rejouables : une opération déjà vue ou plus ancienne que l'article ne change rien.
+         */
+        post: operations["apply_ops"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -598,6 +660,11 @@ export interface components {
             name: string;
             scopes: components["schemas"]["Scope"][];
         };
+        /**
+         * @description Bloc de la liste.
+         * @enum {string}
+         */
+        Block: "recipes" | "breakfast_desserts" | "special";
         /** @description Jeton créé : sa valeur n'est montrée qu'ici. */
         CreatedApiToken: components["schemas"]["ApiTokenInfo"] & {
             /** @description À envoyer en `Authorization: Bearer …`. */
@@ -798,6 +865,26 @@ export interface components {
         Joined: {
             /** Format: uuid */
             household_id: string;
+        };
+        Journal: {
+            /** Format: int64 */
+            cursor: number;
+            ops: components["schemas"]["JournalOp"][];
+        };
+        /** @description Opération du journal. */
+        JournalOp: {
+            /** Format: date-time */
+            at: string;
+            /** @description Nom de qui l'a faite. */
+            by?: string | null;
+            key: string;
+            kind: components["schemas"]["OpKind"];
+            /** Format: uuid */
+            op_id: string;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date */
+            week_start: string;
         };
         /** @description Ligne d'ingrédient saisie, pour une portion standard. */
         LineInput: {
@@ -1014,6 +1101,20 @@ export interface components {
             /** @description Jeton d'un lien d'invitation, si la connexion se fait depuis l'invitation. */
             invite?: string | null;
         };
+        /**
+         * @description Opération sur un article.
+         * @enum {string}
+         */
+        OpKind: "check" | "uncheck" | "add" | "edit" | "remove";
+        OpsInput: {
+            ops: components["schemas"]["ShoppingOp"][];
+        };
+        OpsResult: {
+            /** @description Opérations appliquées (ni déjà vues, ni plus anciennes que l'état de l'article). */
+            applied: number;
+            /** Format: int64 */
+            cursor: number;
+        };
         /** @description Invitation en attente. */
         PendingInvite: {
             /** Format: date-time */
@@ -1158,6 +1259,78 @@ export interface components {
          * @enum {string}
          */
         Scope: "read" | "recipes:write" | "menus:write";
+        /** @description Article de la liste. */
+        ShoppingItem: {
+            aisle: components["schemas"]["Aisle"];
+            block: components["schemas"]["Block"];
+            checked: boolean;
+            /** Format: date-time */
+            checked_at?: string | null;
+            /** @description Nom de qui a coché. */
+            checked_by?: string | null;
+            /**
+             * Format: float
+             * @description Hausse de la quantité depuis que la case a été cochée (le menu a changé).
+             */
+            grown?: number | null;
+            /** @description Code de l'ingrédient (article calculé). */
+            ingredient?: string | null;
+            /** @description Clé stable de l'article : `{ingredient_id}:{état}:{unité}`, ou `manual:{uuid}`. */
+            key: string;
+            label: string;
+            manual: boolean;
+            /** @description Facultatif dans toutes les recettes qui l'utilisent. */
+            optional: boolean;
+            /** @description Cuillères, pincées, « au goût » : au placard, à vérifier plutôt qu'à acheter. */
+            pantry: boolean;
+            /**
+             * Format: float
+             * @description Nulle : « au goût ». Les pièces sont arrondies à l'unité supérieure.
+             */
+            qty?: number | null;
+            /** @description Recettes du menu qui l'utilisent. */
+            recipes: string[];
+            state?: components["schemas"]["IngredientState"] | null;
+            unit?: components["schemas"]["Unit"] | null;
+        };
+        /** @description Liste de courses d'un menu. */
+        ShoppingList: {
+            /**
+             * Format: int64
+             * @description Dernier numéro du journal des opérations du foyer.
+             */
+            cursor: number;
+            /**
+             * @description Bloc des recettes (rayons dans l'ordre du magasin, placard à la fin), puis petits-déjeuners et desserts,
+             *     puis le reste.
+             */
+            items: components["schemas"]["ShoppingItem"][];
+            /** Format: date */
+            week_start: string;
+        };
+        /** @description Opération d'un téléphone, rejouée telle quelle s'il était hors ligne. */
+        ShoppingOp: {
+            aisle?: components["schemas"]["Aisle"] | null;
+            /**
+             * Format: date-time
+             * @description Heure du geste sur le téléphone (bornée à l'heure du serveur).
+             */
+            at: string;
+            block?: components["schemas"]["Block"] | null;
+            key: string;
+            kind: components["schemas"]["OpKind"];
+            label?: string | null;
+            /**
+             * Format: uuid
+             * @description Choisi par le téléphone : rejouer la même opération ne fait rien.
+             */
+            op_id: string;
+            /** Format: float */
+            qty?: number | null;
+            unit?: components["schemas"]["Unit"] | null;
+            /** Format: date */
+            week_start: string;
+        };
         /** @description Un membre qui mange ce plat : au repas même (`dinner` ou `lunch`), ou en boîte le lendemain midi (`box`). */
         SlotEater: {
             /** @description `meal` : au repas ; `box` : boîte du lendemain. */
@@ -1773,6 +1946,36 @@ export interface operations {
             };
         };
     };
+    events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flux d'événements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     import: {
         parameters: {
             query?: never;
@@ -2326,6 +2529,36 @@ export interface operations {
             };
         };
     };
+    read_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingList"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_recipes: {
         parameters: {
             query?: {
@@ -2486,6 +2719,87 @@ export interface operations {
             };
             /** @description Prévue dans un menu */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_ops: {
+        parameters: {
+            query?: {
+                /** @description Dernier numéro déjà vu (0 : tout). */
+                since?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Journal"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    apply_ops: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpsInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpsResult"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -47,6 +47,11 @@ export type SlotInput = Schemas['SlotInput'];
 export type MoveMode = Schemas['MoveMode'];
 export type Warning = Schemas['Warning'];
 export type Agenda = Schemas['Agenda'];
+export type ShoppingList = Schemas['ShoppingList'];
+export type ShoppingItem = Schemas['ShoppingItem'];
+export type ShoppingOp = Schemas['ShoppingOp'];
+export type Block = Schemas['Block'];
+export type OpKind = Schemas['OpKind'];
 
 /** `baseUrl` vide : l'API est sur la même origine (production). En dev, l'adresse du serveur Rust. */
 export function createApi(baseUrl = '') {

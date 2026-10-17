@@ -6,12 +6,14 @@ pub mod ciqual;
 pub mod config;
 pub mod crypto;
 pub mod error;
+pub mod events;
 pub mod households;
 pub mod http;
 pub mod ingredients;
 pub mod members;
 pub mod menus;
 pub mod recipes;
+pub mod shopping;
 pub mod text;
 pub mod tokens;
 pub mod types;
@@ -50,6 +52,8 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub http: HttpClient,
     pub google_keys: Arc<GoogleKeys>,
+    /// Événements du foyer, pour le flux SSE.
+    pub events: tokio::sync::broadcast::Sender<events::Event>,
 }
 
 impl AppState {
@@ -59,6 +63,7 @@ impl AppState {
             config: Arc::new(config),
             http: http::client(),
             google_keys: Arc::default(),
+            events: events::channel(),
         }
     }
 }
@@ -114,6 +119,10 @@ impl AppState {
         menus::delete_menu,
         menus::move_slot,
         menus::agenda,
+        shopping::read_list,
+        shopping::apply_ops,
+        shopping::list_ops,
+        events::events,
         tokens::list_tokens,
         tokens::create_token,
         tokens::revoke_token,
@@ -205,6 +214,8 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(ingredients::router())
         .merge(recipes::router())
         .merge(menus::router())
+        .merge(shopping::router())
+        .merge(events::router())
         .merge(tokens::router())
         .route("/openapi.json", get(openapi))
         .layer(middleware::from_fn_with_state(

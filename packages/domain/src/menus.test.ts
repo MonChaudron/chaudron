@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { addDays, copySlots, dayLabel, nextMenuStart, scaleWith, servingsText, slotEaters, weekDays } from './menus.ts';
+import { addDays, copySlots, currentMenu, dayLabel, nextMenuStart, scaleWith, servingsText, slotEaters, weekDays } from './menus.ts';
 
 test('dates : jours suivants, au-delà du mois et de l’année', () => {
   assert.equal(addDays('2026-10-18', 1), '2026-10-19');
@@ -93,4 +93,16 @@ test('début du prochain menu : le lendemain du dernier repas prévu, pas avant 
   assert.equal(nextMenuStart([], '2026-10-17'), '2026-10-17');
   assert.equal(nextMenuStart([{ last_date: '2026-10-23' }, { last_date: '2026-10-16' }], '2026-10-17'), '2026-10-24');
   assert.equal(nextMenuStart([{ last_date: '2026-10-01' }, { last_date: null }], '2026-10-17'), '2026-10-17');
+});
+
+test('menu des courses : en cours, sinon le prochain, sinon le dernier', () => {
+  const menus = [
+    { week_start: '2026-10-11', first_date: '2026-10-11', last_date: '2026-10-17' },
+    { week_start: '2026-10-17', first_date: '2026-10-17', last_date: '2026-10-23' },
+    { week_start: '2026-10-25', first_date: '2026-10-25', last_date: '2026-10-30' },
+  ];
+  assert.equal(currentMenu(menus, '2026-10-17')?.week_start, '2026-10-17');
+  assert.equal(currentMenu(menus, '2026-10-24')?.week_start, '2026-10-25');
+  assert.equal(currentMenu(menus, '2026-11-15')?.week_start, '2026-10-25');
+  assert.equal(currentMenu([], '2026-10-17'), undefined);
 });

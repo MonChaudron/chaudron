@@ -91,7 +91,7 @@ function TabBar() {
               color: active ? palette.tagText : palette.muted,
               fontFamily: fonts.text,
               fontWeight: weights.medium,
-              fontSize: 16,
+              fontSize: 15,
               textDecorationLine: 'none',
             }}
           >
@@ -122,6 +122,7 @@ type NavEntry = { href: Href; label: string; match: (path: string) => boolean };
 const navigation: NavEntry[] = [
   { href: '/', label: 'Cette semaine', match: (p) => p === '/' },
   { href: '/menus', label: 'Menus', match: (p) => p.startsWith('/menus') },
+  { href: '/courses', label: 'Courses', match: (p) => p.startsWith('/courses') },
   { href: '/recettes', label: 'Recettes', match: (p) => p.startsWith('/recettes') },
   { href: '/foyer', label: 'Le foyer', match: (p) => p === '/foyer' || p.startsWith('/foyer/membres') || p === '/foyer/acces' },
   { href: '/foyer/equipements', label: 'Le matériel', match: (p) => p === '/foyer/equipements' },
@@ -130,11 +131,12 @@ const navigation: NavEntry[] = [
 const tabs: NavEntry[] = [
   { href: '/', label: 'Semaine', match: (p) => p === '/' },
   { href: '/menus', label: 'Menus', match: (p) => p.startsWith('/menus') },
+  { href: '/courses', label: 'Courses', match: (p) => p.startsWith('/courses') },
   { href: '/recettes', label: 'Recettes', match: (p) => p.startsWith('/recettes') },
   { href: '/foyer', label: 'Foyer', match: (p) => p.startsWith('/foyer') },
 ];
 /** La suite de la V1, montrée pour donner la structure de l'appli. */
-const upcoming = ['Courses'];
+const upcoming: string[] = [];
 
 /** Bureau : logo, navigation, puis le compte en bas. */
 function Sidebar() {
@@ -162,9 +164,11 @@ function Sidebar() {
             {entry.label}
           </Link>
         ))}
-        <Text style={{ marginTop: space[5], marginBottom: space[1], paddingHorizontal: space[4], fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase', color: palette.muted }}>
-          Bientôt
-        </Text>
+        {upcoming.length ? (
+          <Text style={{ marginTop: space[5], marginBottom: space[1], paddingHorizontal: space[4], fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase', color: palette.muted }}>
+            Bientôt
+          </Text>
+        ) : null}
         {upcoming.map((label) => (
           <Text key={label} style={{ ...item(false), color: palette.muted, opacity: 0.7 }}>
             {label}
