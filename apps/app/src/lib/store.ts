@@ -33,6 +33,19 @@ export async function getItem<T>(key: string): Promise<T | undefined> {
   });
 }
 
+/** Efface toute la copie de l'appareil (déconnexion : rien du foyer ne reste sur un appareil partagé). */
+export async function clearAll(): Promise<void> {
+  memory.clear();
+  const db = await open();
+  if (!db) return;
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+  });
+}
+
 export async function setItem(key: string, value: unknown): Promise<void> {
   const db = await open();
   if (!db) {

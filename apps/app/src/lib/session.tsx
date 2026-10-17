@@ -2,7 +2,7 @@ import type { Me, ProviderInfo } from '@chaudron/api';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { api } from './api';
-import { getItem, setItem } from './store';
+import { clearAll, getItem, setItem } from './store';
 
 interface SessionContext {
   /** `undefined` : chargement ; `null` : pas connecté. */
@@ -56,6 +56,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => apply(await load()), [apply]);
 
   const logout = useCallback(async () => {
+    // La copie de l'appareil part d'abord, réseau ou pas : compte, menus, courses, opérations en attente.
+    await clearAll();
     await api.POST('/api/v1/auth/logout').catch(() => undefined);
     await refresh();
   }, [refresh]);
