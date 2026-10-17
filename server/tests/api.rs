@@ -142,6 +142,8 @@ async fn cache_des_fichiers_de_l_appli() {
     assert_eq!(cache("/").await, "no-cache");
     assert_eq!(cache("/courses").await, "no-cache");
     assert_eq!(cache("/sw.js").await, "no-cache");
+    // Un fichier haché absent tombe sur la page de l'appli : jamais gardée un an (ni par Cloudflare).
+    assert_eq!(cache("/_expo/static/js/absent-0123.js").await, "no-cache");
 }
 
 #[tokio::test]

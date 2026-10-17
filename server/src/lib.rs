@@ -265,15 +265,15 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
 /// Cloudflare) ; la page et le service worker sont toujours revalidés, sinon une nouvelle version ne s'installe pas.
 async fn static_cache(uri: Uri, mut response: Response) -> Response {
     let path = uri.path();
-    let value = if path.starts_with("/_expo/static/") || path.starts_with("/assets/") {
-        "public, max-age=31536000, immutable"
-    } else if path == "/sw.js"
-        || response
-            .headers()
-            .get(CONTENT_TYPE)
-            .is_some_and(|t| t.as_bytes().starts_with(b"text/html"))
-    {
+    let html = response
+        .headers()
+        .get(CONTENT_TYPE)
+        .is_some_and(|t| t.as_bytes().starts_with(b"text/html"));
+    // La page d'abord : un fichier haché absent tombe sur `index.html`, qu'il ne faut jamais garder un an.
+    let value = if html || path == "/sw.js" {
         "no-cache"
+    } else if path.starts_with("/_expo/static/") || path.starts_with("/assets/") {
+        "public, max-age=31536000, immutable"
     } else {
         // Polices, icônes, manifeste : noms stables, revalidés chaque semaine.
         "public, max-age=604800"
