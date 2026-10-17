@@ -91,6 +91,17 @@ pub struct ShoppingItem {
     pub checked_at: Option<OffsetDateTime>,
     /// Hausse de la quantité depuis que la case a été cochée (le menu a changé).
     pub grown: Option<f32>,
+    /// Les plats pour lesquels cet ingrédient frais ne tiendra pas : à congeler en rentrant (ou déjà congelé).
+    pub freeze: Vec<FreezeHint>,
+}
+
+/// Un plat dont la part de cet article est à congeler.
+#[derive(Serialize, ToSchema)]
+pub struct FreezeHint {
+    #[schema(value_type = String, format = Date)]
+    pub date: Day,
+    pub recipe: String,
+    pub frozen: bool,
 }
 
 /// Liste de courses d'un menu.
@@ -249,7 +260,11 @@ fn aisle_for(state: IngredientState, aisle: Aisle) -> Aisle {
 }
 
 /// Les articles calculés d'un menu, par clé.
-async fn compute(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<Vec<Computed>> {
+async fn compute(
+    db: &PgPool,
+    household_id: Uuid,
+    week_start: Day,
+) -> ApiResult<(Vec<Computed>, menus::Menu)> {
     let menu = menus::read(db, household_id, week_start).await?;
     let mut slugs: Vec<&str> = menu.slots.iter().map(|s| s.recipe.slug.as_str()).collect();
     slugs.sort_unstable();
@@ -328,7 +343,42 @@ async fn compute(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<
         item.pantry =
             item.qty.is_none() || matches!(item.unit, Unit::Tbsp | Unit::Tsp | Unit::Pinch);
     }
-    Ok(items)
+    Ok((items, menu))
+}
+
+/// À congeler : les alertes de fraîcheur du menu sur cet ingrédient, et ce qui est déjà congelé pour un plat.
+fn freeze_hints(menu: &menus::Menu, code: &str) -> Vec<FreezeHint> {
+    let title = |slot: Uuid| {
+        menu.slots
+            .iter()
+            .find(|s| s.id == slot)
+            .map(|s| s.recipe.title.clone())
+            .unwrap_or_default()
+    };
+    let mut hints: Vec<FreezeHint> = menu
+        .warnings
+        .iter()
+        .filter(|w| {
+            w.kind == menus::WarningKind::Freshness && w.ingredient.as_deref() == Some(code)
+        })
+        .map(|w| FreezeHint {
+            date: w.date,
+            recipe: w.slots.first().map(|s| title(*s)).unwrap_or_default(),
+            frozen: false,
+        })
+        .chain(
+            menu.slots
+                .iter()
+                .filter(|s| s.thaw.iter().any(|t| t.ingredient == code))
+                .map(|s| FreezeHint {
+                    date: s.date,
+                    recipe: s.recipe.title.clone(),
+                    frozen: true,
+                }),
+        )
+        .collect();
+    hints.sort_by_key(|h| h.date);
+    hints
 }
 
 #[derive(FromRow)]
@@ -389,7 +439,7 @@ async fn cursor(db: &PgPool, household_id: Uuid) -> ApiResult<i64> {
 
 pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<ShoppingList> {
     let menu_id = menu_id(db, household_id, week_start).await?;
-    let computed = compute(db, household_id, week_start).await?;
+    let (computed, menu) = compute(db, household_id, week_start).await?;
     let states: Vec<StateRow> = sqlx::query_as(
         "SELECT s.key, s.manual, s.label, s.qty, s.unit, s.aisle, s.block, s.checked, u.display_name AS checked_by,
                 s.checked_at, s.qty_at_check, s.removed
@@ -409,6 +459,7 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
                 (true, Some(before), Some(now)) if now > before + 1e-3 => Some(now - before),
                 _ => None,
             };
+            let freeze = freeze_hints(&menu, &c.ingredient);
             ShoppingItem {
                 key: c.key,
                 label: c.label,
@@ -426,6 +477,7 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
                 checked_by: state.filter(|_| checked).and_then(|s| s.checked_by.clone()),
                 checked_at: state.filter(|_| checked).and_then(|s| s.checked_at),
                 grown,
+                freeze,
             }
         })
         .collect();
@@ -447,6 +499,7 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
             checked_by: s.checked_by.clone().filter(|_| s.checked),
             checked_at: s.checked_at.filter(|_| s.checked),
             grown: None,
+            freeze: Vec::new(),
         });
     }
     items.sort_by_cached_key(|i| {
@@ -671,6 +724,7 @@ pub async fn apply_ops(
                 .map_err(|_| ApiError::invalid(format!("Pas de menu le {}.", op.week_start)))?;
             let computed = compute(&state.db, id, op.week_start)
                 .await?
+                .0
                 .into_iter()
                 .map(|c| (c.key, c.qty))
                 .collect();

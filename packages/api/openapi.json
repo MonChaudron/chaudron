@@ -1394,6 +1394,83 @@
         }
       }
     },
+    "/api/v1/households/{id}/menus/{week_start}/freeze": {
+      "post": {
+        "tags": [
+          "menus"
+        ],
+        "summary": "Congeler un ingrédient d'un plat (en rentrant des courses) : l'alerte de fraîcheur tombe, et la veille du plat\nrappelle de le sortir du congélateur. `frozen: false` annule.",
+        "operationId": "freeze",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreezeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/menus/{week_start}/move": {
       "post": {
         "tags": [
@@ -2875,6 +2952,49 @@
           }
         }
       },
+      "FreezeHint": {
+        "type": "object",
+        "description": "Un plat dont la part de cet article est à congeler.",
+        "required": [
+          "date",
+          "recipe",
+          "frozen"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "frozen": {
+            "type": "boolean"
+          },
+          "recipe": {
+            "type": "string"
+          }
+        }
+      },
+      "FreezeInput": {
+        "type": "object",
+        "description": "Congeler (ou non) un ingrédient d'un plat.",
+        "required": [
+          "slot",
+          "ingredient",
+          "frozen"
+        ],
+        "properties": {
+          "frozen": {
+            "type": "boolean"
+          },
+          "ingredient": {
+            "type": "string",
+            "description": "Code de l'ingrédient."
+          },
+          "slot": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "description": "État du serveur et de ses dépendances.",
@@ -3109,6 +3229,14 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "keeps_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Jours au réfrigérateur, frais, quand ils diffèrent de ceux du rayon (le haché : 1)."
           },
           "name": {
             "type": "string"
@@ -3639,7 +3767,8 @@
           "scale",
           "eaters",
           "express",
-          "prep_days_before"
+          "prep_days_before",
+          "thaw"
         ],
         "properties": {
           "covers_next_lunch": {
@@ -3717,6 +3846,13 @@
             "type": "integer",
             "format": "int32",
             "description": "Portions du plat : `diners` + `next_lunch_covers`."
+          },
+          "thaw": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThawItem"
+            },
+            "description": "Ingrédients congelés pour ce plat : à sortir la veille."
           },
           "variant": {
             "$ref": "#/components/schemas/SlotVariant"
@@ -3862,6 +3998,14 @@
               "$ref": "#/components/schemas/FoodLink"
             },
             "description": "Lignes Ciqual, au plus une par forme d'achat."
+          },
+          "keeps_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Jours au réfrigérateur, frais, quand ils diffèrent de ceux du rayon (poisson 2, boucherie et boulangerie 3,\nfruits et légumes, crèmerie et frais 7). Dans un lot, complète aussi un ingrédient qui existe déjà et n'en a\npas (le référentiel est commun à l'instance : rien n'est remplacé)."
           },
           "name": {
             "type": "string"
@@ -4446,7 +4590,8 @@
           "optional",
           "manual",
           "recipes",
-          "checked"
+          "checked",
+          "freeze"
         ],
         "properties": {
           "aisle": {
@@ -4471,6 +4616,13 @@
               "null"
             ],
             "description": "Nom de qui a coché."
+          },
+          "freeze": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreezeHint"
+            },
+            "description": "Les plats pour lesquels cet ingrédient frais ne tiendra pas : à congeler en rentrant (ou déjà congelé)."
           },
           "grown": {
             "type": [
@@ -4733,6 +4885,13 @@
             "format": "int32",
             "description": "Total des portions (format des lots) : comparé aux portions calculées, seul l'écart est fixé en nombre."
           },
+          "thaw": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ingrédients du plat congelés en rentrant des courses (codes) : rappel la veille de les sortir."
+          },
           "variant": {
             "type": [
               "string",
@@ -4881,6 +5040,22 @@
             "format": "uuid"
           },
           "variant": {
+            "type": "string"
+          }
+        }
+      },
+      "ThawItem": {
+        "type": "object",
+        "description": "Ingrédient congelé pour ce plat.",
+        "required": [
+          "ingredient",
+          "name"
+        ],
+        "properties": {
+          "ingredient": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           }
         }
@@ -5047,6 +5222,14 @@
           "message"
         ],
         "properties": {
+          "advance_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Fraîcheur : dernier jour où le plat serait encore frais."
+          },
           "date": {
             "type": "string",
             "format": "date"
@@ -5074,6 +5257,21 @@
             ],
             "description": "Code de l'ingrédient."
           },
+          "ingredient_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nom de l'ingrédient, affichable."
+          },
+          "keeps_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Fraîcheur : jours que l'ingrédient tient au réfrigérateur."
+          },
           "kind": {
             "$ref": "#/components/schemas/WarningKind"
           },
@@ -5096,6 +5294,14 @@
               "null"
             ],
             "format": "date"
+          },
+          "purchased": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Fraîcheur : jour d'achat (case cochée, ou jour habituel des courses projeté)."
           },
           "slots": {
             "type": "array",
@@ -5126,7 +5332,8 @@
           "exclusion",
           "lunch_without_boxes",
           "overlap",
-          "unknown_variant"
+          "unknown_variant",
+          "freshness"
         ]
       }
     },

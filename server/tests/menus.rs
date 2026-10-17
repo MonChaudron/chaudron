@@ -105,12 +105,14 @@ fn plan(menu: &Value) -> Vec<String> {
         .collect()
 }
 
+/// Les avertissements, sauf la fraîcheur (testée à part, dans `fraicheur.rs`).
 fn kinds(warnings: &Value) -> Vec<&str> {
     warnings
         .as_array()
         .unwrap()
         .iter()
         .map(|w| w["kind"].as_str().unwrap())
+        .filter(|k| *k != "freshness")
         .collect()
 }
 
@@ -344,7 +346,12 @@ async fn avertissements(db: PgPool) {
     // Deux plats le même soir : rangés dans l'ordre donné.
     assert_eq!(slots[0]["position"], 0);
     assert_eq!(slots[1]["position"], 1);
-    let warnings = menu["warnings"].as_array().unwrap();
+    let warnings: Vec<&Value> = menu["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|w| w["kind"] != "freshness")
+        .collect();
     assert_eq!(
         kinds(&menu["warnings"]),
         ["equipment_conflict", "exclusion", "missing_equipment"]
@@ -442,7 +449,12 @@ async fn deplacer_un_plat(db: PgPool) {
     assert_eq!(menu["slots"][2]["portions_date"], "2026-10-19");
     assert_eq!(menu["slots"][1]["portions_date"], Value::Null);
     // Le mardi midi n'a plus ses boîtes.
-    let warnings = menu["warnings"].as_array().unwrap();
+    let warnings: Vec<&Value> = menu["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|w| w["kind"] != "freshness")
+        .collect();
     assert_eq!(kinds(&menu["warnings"]), ["lunch_without_boxes"]);
     assert_eq!(warnings[0]["date"], "2026-10-20");
     assert_eq!(warnings[0]["meal"], "lunch");
@@ -727,9 +739,10 @@ async fn importer_un_menu(db: PgPool) {
             "recipes_created": ["tajine"],
             "recipes_updated": [],
             "menu_imported": true,
-            "warnings": [],
+            "warnings": response.json["warnings"],
         })
     );
+    assert_eq!(kinds(&response.json["warnings"]), Vec::<&str>::new());
     let read = alice.get(&menu).await.json;
     assert_eq!(read["title"], "Lot");
     assert_eq!(read["notes"], "Les boîtes.");

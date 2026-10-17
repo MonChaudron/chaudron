@@ -974,6 +974,19 @@ pub async fn import(
                 .await
                 .map_err(|e| e.context(name))?;
             result.ingredients_created.push(code(name));
+        } else if let Some(days) = ingredient.keeps_days {
+            // Un ingrédient connu : le référentiel est commun à l'instance, le lot complète une durée absente
+            // (le saumon fumé), il ne remplace jamais celle qui existe.
+            if !(1..=60).contains(&days) {
+                return Err(ApiError::invalid(format!("{name} : de 1 à 60 jours.")));
+            }
+            sqlx::query(
+                "UPDATE ingredients SET keeps_days = $2 WHERE code = $1 AND keeps_days IS NULL",
+            )
+            .bind(code(name))
+            .bind(days)
+            .execute(&mut *tx)
+            .await?;
         }
     }
     for recipe in &lot.recipes {
