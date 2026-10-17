@@ -1,13 +1,19 @@
-import type { Member, Recipe, RecipeLine, Variant } from '@chaudron/api';
+import type { Member, MenuSlot, Recipe, RecipeLine, Variant, Warning } from '@chaudron/api';
 import {
+  dayLabel,
+  type Eater,
   equipment as equipmentLabels,
   formatDuration,
   formatQuantity,
   ingredientStates,
   label,
   scaleLine,
+  scaleWith,
   seasonText,
+  servingsText,
+  slotEaters,
   space,
+  todayIso,
   variantDelta,
 } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams } from 'expo-router';
@@ -19,9 +25,10 @@ import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Card, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 
 export default function RecipeScreen() {
-  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { slug, slot, menu } = useLocalSearchParams<{ slug: string; slot?: string; menu?: string }>();
   const { me } = useSession();
   const home = me?.households[0];
   if (me === null) return <Redirect href="/connexion" />;
@@ -32,10 +39,11 @@ export default function RecipeScreen() {
       </Screen>
     );
   }
-  return <RecipeView householdId={home.id} slug={slug} />;
+  return <RecipeView householdId={home.id} slug={slug} slotId={slot} weekStart={menu} />;
 }
 
-function RecipeView({ householdId, slug }: { householdId: string; slug: string }) {
+/** Ouverte depuis un créneau (`?slot=…&menu=…`) : la variante prévue, les quantités et les avertissements du créneau. */
+function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: string; slug: string; slotId?: string; weekStart?: string }) {
   const recipe = useLoad(
     () => api.GET('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } }),
     [householdId, slug],
@@ -44,13 +52,23 @@ function RecipeView({ householdId, slug }: { householdId: string; slug: string }
     () => api.GET('/api/v1/households/{id}/members', { params: { path: { id: householdId } } }),
     [householdId],
   );
+  const planned = useLoad(
+    async () =>
+      slotId && weekStart
+        ? api.GET('/api/v1/households/{id}/menus/{week_start}', { params: { path: { id: householdId, week_start: weekStart } } })
+        : { data: null },
+    [householdId, slotId, weekStart],
+  );
   const [chosen, setChosen] = useState<string | null>(null);
+  const slot = planned.data?.slots.find((s) => s.id === slotId) ?? null;
+  const slotWarnings = slot && planned.data ? warningsOf(planned.data.warnings, slot.id) : [];
+  const back = slotId ? <Back href="/" label="Cette semaine" /> : <Back href="/recettes" label="Recettes" />;
 
   const data = recipe.data;
   if (!data) {
     return (
       <Screen>
-        <Back href="/recettes" label="Recettes" />
+        {back}
         {recipe.error ? <ErrorText>{recipe.error}</ErrorText> : <Loading />}
       </Screen>
     );
@@ -58,13 +76,13 @@ function RecipeView({ householdId, slug }: { householdId: string; slug: string }
   const base = data.variants[0];
   // Sans choix, la première variante que le foyer peut faire avec son matériel.
   const doable = data.variants.find((v) => v.missing_equipment.length === 0) ?? base;
-  const variant = data.variants.find((v) => v.id === chosen) ?? doable;
+  const variant = data.variants.find((v) => v.id === chosen) ?? data.variants.find((v) => v.label === slot?.variant.label) ?? doable;
 
   return (
     <Screen>
       <Router.Screen options={{ title: `${data.title} · Chaudron` }} />
       <Row style={{ justifyContent: 'space-between' }}>
-        <Back href="/recettes" label="Recettes" />
+        {back}
         <LinkButton kind="quiet" label="Modifier" href={`/recettes/modifier?slug=${data.slug}`} />
       </Row>
       <Stack gap={space[3]}>
@@ -72,11 +90,12 @@ function RecipeView({ householdId, slug }: { householdId: string; slug: string }
         {data.description ? <Body tone="muted" style={{ maxWidth: 720 }}>{data.description}</Body> : null}
         <Meta recipe={data} />
       </Stack>
+      {slot ? <Planned slot={slot} warnings={slotWarnings} /> : null}
 
       <Variants recipe={data} variant={variant} base={base} onChoose={setChosen} />
 
       <Columns weights={[2, 3]}>
-        <Ingredients lines={data.ingredients} members={members.data} />
+        <Ingredients lines={data.ingredients} members={members.data} slot={slot} />
         <Steps variant={variant} />
       </Columns>
     </Screen>
@@ -147,20 +166,37 @@ function Figure({ value, caption }: { value: string; caption: string }) {
   );
 }
 
-/** Quantités pour tout le foyer (barème de chacun), avec le détail par membre à la demande. */
-function Ingredients({ lines, members }: { lines: RecipeLine[]; members?: Member[] }) {
+/** Le repas prévu : jour, portions, avertissements. */
+function Planned({ slot, warnings }: { slot: MenuSlot; warnings: Warning[] }) {
+  return (
+    <Card>
+      <Title level={2}>{`${dayLabel(slot.date, todayIso())} ${mealLabels[slot.meal]}`}</Title>
+      <SlotBadges slot={slot} />
+      {slot.note ? <Body size={16}>{slot.note}</Body> : null}
+      <Warnings warnings={warnings} />
+    </Card>
+  );
+}
+
+/**
+ * Quantités pour tout le foyer (barème de chacun), ou pour le créneau ouvert depuis un menu ; détail par membre à la
+ * demande.
+ */
+function Ingredients({ lines, members, slot }: { lines: RecipeLine[]; members?: Member[]; slot: MenuSlot | null }) {
   const [detail, setDetail] = useState(false);
-  const eaters = (members ?? []).map((m) => ({ name: m.name, portions: m.portions }));
-  const who = eaters.length
-    ? `Pour le foyer : ${eaters.map((e) => e.name).join(', ')}.`
-    : 'Pour une portion standard : ajoute les membres du foyer pour avoir les quantités de chacun.';
+  const eaters: Eater[] = slot ? slotEaters(slot) : (members ?? []).map((m) => ({ name: m.name, portions: m.portions }));
+  const who = slot
+    ? `Pour ${servingsText(slot)} portions${eaters.length ? ` : ${eaters.map((e) => e.name).join(', ')}` : ''}.`
+    : eaters.length
+      ? `Pour le foyer : ${eaters.map((e) => e.name).join(', ')}.`
+      : 'Pour une portion standard : ajoute les membres du foyer pour avoir les quantités de chacun.';
   return (
     <Card>
       <Title level={2}>Ingrédients</Title>
       <Body tone="muted" size={15}>{who}</Body>
       <View>
         {lines.map((line, i) => (
-          <IngredientRow key={`${line.ingredient}-${i}`} line={line} eaters={eaters} detail={detail} last={i === lines.length - 1} />
+          <IngredientRow key={`${line.ingredient}-${i}`} line={line} eaters={eaters} slot={slot} detail={detail} last={i === lines.length - 1} />
         ))}
       </View>
       {eaters.length > 1 ? (
@@ -172,9 +208,11 @@ function Ingredients({ lines, members }: { lines: RecipeLine[]; members?: Member
   );
 }
 
-function IngredientRow({ line, eaters, detail, last }: { line: RecipeLine; eaters: { name: string; portions: Member['portions'] }[]; detail: boolean; last: boolean }) {
+function IngredientRow({ line, eaters, slot, detail, last }: { line: RecipeLine; eaters: Eater[]; slot: MenuSlot | null; detail: boolean; last: boolean }) {
   const { palette, fonts, weights } = useTheme();
-  const scaled = scaleLine(line, eaters);
+  // Pour un créneau, le total vient de son multiplicateur (qui tient compte d'un nombre fixé) ; le détail, des mangeurs.
+  const byEater = scaleLine(line, eaters);
+  const scaled = slot ? { total: scaleWith(line, slot.scale).total, perEater: byEater.perEater } : byEater;
   // La forme d'achat seulement quand elle change les courses : sec va de soi (riz, épices).
   const shown = line.state === 'frozen' || line.state === 'canned' || line.state === 'cooked';
   const notes = [shown ? ingredientStates[line.state].toLowerCase() : null, line.optional ? 'facultatif' : null, line.note]

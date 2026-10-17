@@ -38,6 +38,15 @@ export type RecipeInput = Schemas['RecipeInput'];
 export type Food = Schemas['Food'];
 export type Aisle = Schemas['Aisle'];
 export type PortionRole = Schemas['PortionRole'];
+export type Meal = Schemas['Meal'];
+export type Menu = Schemas['Menu'];
+export type MenuSlot = Schemas['MenuSlot'];
+export type MenuSummary = Schemas['MenuSummary'];
+export type MenuInput = Schemas['MenuInput'];
+export type SlotInput = Schemas['SlotInput'];
+export type MoveMode = Schemas['MoveMode'];
+export type Warning = Schemas['Warning'];
+export type Agenda = Schemas['Agenda'];
 
 /** `baseUrl` vide : l'API est sur la même origine (production). En dev, l'adresse du serveur Rust. */
 export function createApi(baseUrl = '') {
