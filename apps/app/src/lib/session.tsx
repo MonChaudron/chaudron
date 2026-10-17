@@ -2,6 +2,7 @@ import type { Me, ProviderInfo } from '@chaudron/api';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { api } from './api';
+import { getItem, setItem } from './store';
 
 interface SessionContext {
   /** `undefined` : chargement ; `null` : pas connecté. */
@@ -22,16 +23,20 @@ interface Loaded {
   offline: boolean;
 }
 
-/** Le compte, et les fournisseurs de connexion si on n'est pas connecté. */
+/**
+ * Le compte, et les fournisseurs de connexion si on n'est pas connecté. Sans réseau, le compte gardé sur l'appareil :
+ * la session reste valable, on lit la copie de travail.
+ */
 async function load(): Promise<Loaded> {
   try {
     const { data, response } = await api.GET('/api/v1/me');
     const me = response.ok && data ? data : null;
+    void setItem('me', me);
     if (me) return { me, offline: false };
     const list = await api.GET('/api/v1/auth/providers');
     return { me: null, providers: list.data ?? [], offline: false };
   } catch {
-    return { me: null, offline: true };
+    return { me: (await getItem<Me | null>('me')) ?? null, offline: true };
   }
 }
 
@@ -42,7 +47,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const apply = useCallback((state: Loaded) => {
     setOffline(state.offline);
-    if (state.offline) setMe((current) => (current === undefined ? null : current));
+    if (state.offline) setMe((current) => (current === undefined ? state.me : current));
     else setMe(state.me);
     if (state.providers) setProviders(state.providers);
     return state.me;

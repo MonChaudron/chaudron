@@ -2,13 +2,14 @@ import type { Agenda, MenuSlot, Warning } from '@chaudron/api';
 import { errorMessage } from '@chaudron/api';
 import { addDays, dayLabel, space, todayIso, weekDays } from '@chaudron/domain';
 import { Redirect, Stack as Router } from 'expo-router';
-import { type ComponentRef, type ReactNode, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from 'react';
+import { Platform, View } from 'react-native';
 
 import { api } from '../lib/api';
 import { useSession } from '../lib/session';
 import { useTheme } from '../lib/theme';
-import { useLoad } from '../lib/useLoad';
+import { setItem } from '../lib/store';
+import { useCached } from '../lib/useCached';
 import { Body, Button, Card, ErrorText, LinkButton, Loading, Row, Screen, Stack, Title, useWide } from '../ui';
 import { DragHandle, mealLabels, modeHelp, type MoveRequest, MovePanel, SlotSummary, TextAction, Warnings, warningsOf } from '../ui/menu';
 
@@ -41,11 +42,11 @@ interface Drag {
 /** Les 7 jours qui viennent, tous menus confondus ; on glisse un plat d'un jour à l'autre. */
 function Week({ householdId }: { householdId: string }) {
   const today = todayIso();
-  // Un jour de plus : la phase de la veille du dernier plat se rappelle le septième jour.
-  const agenda = useLoad(
-    () => api.GET('/api/v1/households/{id}/agenda', { params: { path: { id: householdId }, query: { from: today, days: DAYS + 1 } } }),
-    [householdId, today],
+  // Deux semaines : la copie de travail de l'appareil (cette semaine et la suivante) ; on en montre sept jours.
+  const agenda = useCached(`agenda:${householdId}`, () =>
+    api.GET('/api/v1/households/{id}/agenda', { params: { path: { id: householdId }, query: { from: today, days: 2 * DAYS } } }),
   );
+  usePrefetch(householdId, agenda.offline ? undefined : agenda.data);
   const [panel, setPanel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +113,8 @@ function Week({ householdId }: { householdId: string }) {
     <Screen>
       <Router.Screen options={{ title: 'Cette semaine · Chaudron' }} />
       <Title>Cette semaine</Title>
+      {agenda.offline ? <Body tone="muted" size={15}>Hors ligne : la semaine gardée sur cet appareil.</Body> : null}
+      <InstallHint />
       <ErrorText>{error}</ErrorText>
       {empty ? (
         <Card>
@@ -165,6 +168,65 @@ function Week({ householdId }: { householdId: string }) {
       ))}
       </Grid>
     </Screen>
+  );
+}
+
+/**
+ * Garde sur l'appareil ce qu'il faut pour la semaine sans réseau : chaque recette de l'agenda (la fiche s'ouvre
+ * hors ligne), et pour chaque menu, le menu complet et sa liste de courses.
+ */
+function usePrefetch(householdId: string, agenda: Agenda | undefined) {
+  useEffect(() => {
+    if (!agenda) return;
+    for (const recipe of agenda.recipes) void setItem(`recipe:${householdId}:${recipe.slug}`, recipe);
+    for (const weekStart of new Set(agenda.slots.map((s) => s.week_start))) {
+      const path = { id: householdId, week_start: weekStart };
+      void api.GET('/api/v1/households/{id}/menus/{week_start}', { params: { path } }).then(({ data }) => data && setItem(`menu:${householdId}:${weekStart}`, data)).catch(() => undefined);
+      void api.GET('/api/v1/households/{id}/menus/{week_start}/shopping', { params: { path } }).then(({ data }) => data && setItem(`shopping:${householdId}:${weekStart}`, data)).catch(() => undefined);
+    }
+    void api.GET('/api/v1/households/{id}/menus', { params: { path: { id: householdId } } }).then(({ data }) => data && setItem(`menus:${householdId}`, data)).catch(() => undefined);
+    void api.GET('/api/v1/households/{id}/members', { params: { path: { id: householdId } } }).then(({ data }) => data && setItem(`members:${householdId}`, data)).catch(() => undefined);
+  }, [householdId, agenda]);
+}
+
+const HINT_KEY = 'chaudron.installHint';
+
+/**
+ * iPhone dans Safari, hors écran d'accueil : Safari efface au bout de quelques jours les données d'un site qu'on
+ * n'a pas ajouté à l'écran d'accueil (la copie hors ligne avec). On le dit une fois.
+ */
+function InstallHint() {
+  const [hidden, setHidden] = useState(() => {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined') return true;
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone;
+    let dismissed = false;
+    try {
+      dismissed = localStorage.getItem(HINT_KEY) === '1';
+    } catch {
+      // Stockage indisponible : on montre le conseil.
+    }
+    return !ios || !!standalone || dismissed;
+  });
+  if (hidden) return null;
+  return (
+    <Card>
+      <Body size={16}>Pour garder la semaine et les courses sans réseau sur iPhone : Partager, puis « Sur l’écran d’accueil ».</Body>
+      <Row>
+        <Button
+          kind="quiet"
+          label="Compris"
+          onPress={() => {
+            try {
+              localStorage.setItem(HINT_KEY, '1');
+            } catch {
+              // Tant pis : il reviendra.
+            }
+            setHidden(true);
+          }}
+        />
+      </Row>
+    </Card>
   );
 }
 

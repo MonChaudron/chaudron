@@ -1,6 +1,5 @@
-import type { Aisle, Block, MenuSummary, ShoppingItem, ShoppingList, ShoppingOp } from '@chaudron/api';
-import { errorMessage } from '@chaudron/api';
-import { aisles, currentMenu, formatQuantity, ingredientStates, shortDateText, space, todayIso } from '@chaudron/domain';
+import type { Aisle, Block, MenuSummary, ShoppingItem } from '@chaudron/api';
+import { aisles, applyPending, currentMenu, type PendingOp, formatQuantity, ingredientStates, shortDateText, space, todayIso } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -9,7 +8,8 @@ import { api } from '../../lib/api';
 import { newId, useHouseholdEvents } from '../../lib/events';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
-import { useLoad } from '../../lib/useLoad';
+import { useShoppingQueue } from '../../lib/queue';
+import { useCached } from '../../lib/useCached';
 import { Body, Button, Card, Columns, ErrorText, Field, Loading, Pill, Row, Screen, Stack, Title } from '../../ui';
 import { TextAction } from '../../ui/menu';
 
@@ -32,7 +32,7 @@ export default function Shopping() {
 function Lists({ householdId }: { householdId: string }) {
   const router = useRouter();
   const { menu: chosen } = useLocalSearchParams<{ menu?: string }>();
-  const menus = useLoad(() => api.GET('/api/v1/households/{id}/menus', { params: { path: { id: householdId } } }), [householdId]);
+  const menus = useCached(`menus:${householdId}`, () => api.GET('/api/v1/households/{id}/menus', { params: { path: { id: householdId } } }));
   const today = todayIso();
   if (!menus.data) {
     return (
@@ -74,18 +74,19 @@ const blockTitles: Record<Block, string> = {
 };
 
 function List({ householdId, weekStart, menus, title, onChoose }: { householdId: string; weekStart: string; menus: MenuSummary[]; title?: MenuSummary; onChoose: (weekStart: string) => void }) {
-  const list = useLoad(
-    () => api.GET('/api/v1/households/{id}/menus/{week_start}/shopping', { params: { path: { id: householdId, week_start: weekStart } } }),
-    [householdId, weekStart],
+  const list = useCached(`shopping:${householdId}:${weekStart}`, () =>
+    api.GET('/api/v1/households/{id}/menus/{week_start}/shopping', { params: { path: { id: householdId, week_start: weekStart } } }),
   );
-  const [error, setError] = useState<string | null>(null);
+  const queue = useShoppingQueue(householdId, () => void list.reload());
   const [hideDone, setHideDone] = useState(false);
   const [pantry, setPantry] = useState(false);
   useHouseholdEvents(householdId, (event) => {
+    if (event.kind === 'resync') void queue.flush();
     if (event.kind === 'resync' || event.week_start === weekStart) void list.reload();
   });
 
-  const data = list.data;
+  // Ce que dit le serveur, plus ce qui attend d'être envoyé.
+  const data = list.data ? applyPending(list.data, queue.pending) : undefined;
   if (!data) {
     return (
       <Screen>
@@ -95,35 +96,12 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
     );
   }
 
-  /** Applique l'opération tout de suite à l'écran, puis l'envoie ; en cas d'échec, relit la liste. */
-  async function send(op: Omit<ShoppingOp, 'op_id' | 'at' | 'week_start'>, local: (list: ShoppingList) => ShoppingList) {
-    list.setData(local(data!));
-    setError(null);
-    try {
-      const { error: failure } = await api.POST('/api/v1/households/{id}/shopping/ops', {
-        params: { path: { id: householdId } },
-        body: { ops: [{ ...op, op_id: newId(), at: new Date().toISOString(), week_start: weekStart }] },
-      });
-      if (failure) {
-        setError(errorMessage(failure));
-        await list.reload();
-      }
-    } catch (err) {
-      setError(errorMessage(err));
-      await list.reload();
-    }
-  }
-  const toggle = (item: ShoppingItem) =>
-    void send({ kind: item.checked ? 'uncheck' : 'check', key: item.key }, (l) => ({
-      ...l,
-      items: l.items.map((i) => (i.key === item.key ? { ...i, checked: !item.checked, grown: null } : i)),
-    }));
-  const add = (block: Block, label: string) => {
-    const key = `manual:${newId()}`;
-    const item: ShoppingItem = { key, label, block, aisle: 'other', manual: true, pantry: false, optional: false, checked: false, recipes: [] };
-    void send({ kind: 'add', key, label, block }, (l) => ({ ...l, items: [...l.items, item] }));
-  };
-  const remove = (item: ShoppingItem) => void send({ kind: 'remove', key: item.key }, (l) => ({ ...l, items: l.items.filter((i) => i.key !== item.key) }));
+  /** L'opération s'affiche tout de suite et part dans la file : envoyée maintenant, ou au retour du réseau. */
+  const send = (op: Pick<PendingOp, 'kind' | 'key' | 'label' | 'block'>) => queue.enqueue({ ...op, op_id: newId(), at: new Date().toISOString(), week_start: weekStart });
+  const toggle = (item: ShoppingItem) => send({ kind: item.checked ? 'uncheck' : 'check', key: item.key });
+  const add = (block: Block, label: string) => send({ kind: 'add', key: `manual:${newId()}`, label, block });
+  const remove = (item: ShoppingItem) => send({ kind: 'remove', key: item.key });
+  const waiting = queue.pending.length;
 
   const recipes = data.items.filter((i) => i.block === 'recipes' && !i.pantry);
   const stock = data.items.filter((i) => i.block === 'recipes' && i.pantry);
@@ -151,7 +129,12 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
           <Pill label="Masquer ce qui est pris" selected={hideDone} onPress={() => setHideDone(!hideDone)} />
         </Row>
       </Stack>
-      <ErrorText>{error}</ErrorText>
+      {list.offline || waiting ? (
+        <Body tone="muted" size={15}>
+          {[list.offline ? 'Hors ligne : la liste gardée sur cet appareil.' : null, waiting ? `${waiting} changement${waiting > 1 ? 's' : ''} en attente d’envoi.` : null].filter(Boolean).join(' ')}
+        </Body>
+      ) : null}
+      <ErrorText>{queue.error}</ErrorText>
       <Columns weights={[3, 2]}>
         <Stack gap={space[5]}>
           {[...byAisle].map(([aisle, items]) => (
