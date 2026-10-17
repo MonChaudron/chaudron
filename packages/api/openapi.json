@@ -474,6 +474,76 @@
         }
       }
     },
+    "/api/v1/households/{id}/agenda": {
+      "get": {
+        "tags": [
+          "menus"
+        ],
+        "summary": "Les repas d'une période, tous menus confondus, avec leurs recettes et les avertissements de la période.",
+        "operationId": "agenda",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Premier jour, `2026-10-18`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Nombre de jours, de 1 à 28.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agenda"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/equipment": {
       "get": {
         "tags": [
@@ -576,7 +646,7 @@
         "tags": [
           "recettes"
         ],
-        "summary": "Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes).",
+        "summary": "Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,\n`week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`.",
         "operationId": "import",
         "parameters": [
           {
@@ -1062,6 +1132,308 @@
         }
       }
     },
+    "/api/v1/households/{id}/menus": {
+      "get": {
+        "tags": [
+          "menus"
+        ],
+        "summary": "Menus du foyer, du plus récent au plus ancien.",
+        "operationId": "list_menus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MenuSummary"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/menus/{week_start}": {
+      "get": {
+        "tags": [
+          "menus"
+        ],
+        "summary": "Menu complet : créneaux, portions, avertissements.",
+        "operationId": "read_menu",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "menus"
+        ],
+        "summary": "Publie un menu : le crée (201) ou remplace tous ses créneaux (200). Idempotent.",
+        "operationId": "put_menu",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MenuInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Remplacé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Créé",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "menus"
+        ],
+        "operationId": "delete_menu",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/menus/{week_start}/move": {
+      "post": {
+        "tags": [
+          "menus"
+        ],
+        "summary": "Déplace un plat vers un autre repas du menu : repas libre, ou occupé (intercaler, échanger, même soir). Les\nplats qui changent de jour gardent les portions de leur jour d'origine.",
+        "operationId": "move_slot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "week_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes": {
       "get": {
         "tags": [
@@ -1291,6 +1663,16 @@
             }
           },
           "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Prévue dans un menu",
             "content": {
               "application/json": {
                 "schema": {
@@ -1964,6 +2346,46 @@
   },
   "components": {
     "schemas": {
+      "Agenda": {
+        "type": "object",
+        "description": "Les repas d'une période, tous menus confondus, avec les recettes pour lire et cuisiner sans autre appel.",
+        "required": [
+          "from",
+          "days",
+          "slots",
+          "recipes",
+          "warnings"
+        ],
+        "properties": {
+          "days": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "from": {
+            "type": "string",
+            "format": "date"
+          },
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Recipe"
+            }
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MenuSlot"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Warning"
+            }
+          }
+        }
+      },
       "Aisle": {
         "type": "string",
         "description": "Rayon du magasin.",
@@ -2403,7 +2825,8 @@
           "ingredients_created",
           "recipes_created",
           "recipes_updated",
-          "menu_imported"
+          "menu_imported",
+          "warnings"
         ],
         "properties": {
           "ingredients_created": {
@@ -2415,7 +2838,7 @@
           },
           "menu_imported": {
             "type": "boolean",
-            "description": "`false` : les menus arrivent au M3."
+            "description": "Le lot avait un menu, et il est publié."
           },
           "recipes_created": {
             "type": "array",
@@ -2428,6 +2851,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Warning"
+            },
+            "description": "Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions…"
           }
         }
       },
@@ -2677,11 +3107,15 @@
             "description": "Ingrédients nouveaux ; ceux qui existent déjà (même nom, aux accents près) sont ignorés."
           },
           "menu": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "Menu de la semaine : accepté, importé à partir du M3."
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MenuInput",
+                "description": "Menu de la semaine (`week_start` obligatoire) : remplace le menu de même `week_start`."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "recipes": {
             "type": "array",
@@ -2740,6 +3174,14 @@
             "description": "Nom affiché aux autres comptes du foyer."
           }
         }
+      },
+      "Meal": {
+        "type": "string",
+        "description": "Repas de la journée.",
+        "enum": [
+          "lunch",
+          "dinner"
+        ]
       },
       "Member": {
         "type": "object",
@@ -2837,6 +3279,252 @@
           "adult",
           "teen",
           "child"
+        ]
+      },
+      "Menu": {
+        "type": "object",
+        "description": "Menu complet, avec portions et avertissements.",
+        "required": [
+          "week_start",
+          "title",
+          "notes",
+          "slots",
+          "warnings"
+        ],
+        "properties": {
+          "notes": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MenuSlot"
+            },
+            "description": "Par date, repas (midi puis soir) et rang."
+          },
+          "title": {
+            "type": "string"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Warning"
+            }
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "MenuInput": {
+        "type": "object",
+        "description": "Menu complet, tel que publié.",
+        "required": [
+          "slots"
+        ],
+        "properties": {
+          "notes": {
+            "type": "string"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlotInput"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "week_start": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Obligatoire dans un lot ; dans un PUT, doit être celui de l'adresse s'il est donné."
+          }
+        }
+      },
+      "MenuSlot": {
+        "type": "object",
+        "description": "Plat prévu, avec ses portions.",
+        "required": [
+          "id",
+          "week_start",
+          "date",
+          "meal",
+          "position",
+          "recipe",
+          "variant",
+          "covers_next_lunch",
+          "diners",
+          "diners_fixed",
+          "next_lunch_covers",
+          "next_lunch_covers_fixed",
+          "servings",
+          "scale",
+          "eaters",
+          "express",
+          "prep_days_before"
+        ],
+        "properties": {
+          "covers_next_lunch": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "diners": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "diners_fixed": {
+            "type": "boolean",
+            "description": "`diners` est un nombre fixé, et non les membres présents."
+          },
+          "eaters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SlotEater"
+            },
+            "description": "Les membres dont le barème fait `scale`."
+          },
+          "express": {
+            "type": "boolean",
+            "description": "Variante de 15 minutes actives au plus."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "meal": {
+            "$ref": "#/components/schemas/Meal"
+          },
+          "next_lunch_covers": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_lunch_covers_fixed": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "portions_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Portions calculées comme ce jour-là (plat déplacé)."
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rang du plat dans le repas (deux plats le même soir)."
+          },
+          "prep_days_before": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Jours d'avance d'une phase faite avant (1 : la veille)."
+          },
+          "recipe": {
+            "$ref": "#/components/schemas/RecipeRef"
+          },
+          "scale": {
+            "$ref": "#/components/schemas/Portions",
+            "description": "Multiplicateur de chaque rôle d'ingrédient : la somme des barèmes de ceux qui mangent (au prorata quand un\nnombre est fixé). Quantité d'une ligne = portion standard × `scale[rôle]`."
+          },
+          "servings": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Portions du plat : `diners` + `next_lunch_covers`."
+          },
+          "variant": {
+            "$ref": "#/components/schemas/SlotVariant"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date",
+            "description": "Menu du créneau."
+          }
+        }
+      },
+      "MenuSummary": {
+        "type": "object",
+        "description": "Menu, dans l'historique.",
+        "required": [
+          "week_start",
+          "title",
+          "slot_count"
+        ],
+        "properties": {
+          "first_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "last_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "slot_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "week_start": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "MoveInput": {
+        "type": "object",
+        "description": "Déplacer un plat vers un autre repas du menu.",
+        "required": [
+          "slot",
+          "date",
+          "meal",
+          "mode"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "meal": {
+            "$ref": "#/components/schemas/Meal"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/MoveMode"
+          },
+          "slot": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Créneau à déplacer."
+          }
+        }
+      },
+      "MoveMode": {
+        "type": "string",
+        "description": "Que faire du plat qui occupe déjà le repas d'arrivée.",
+        "enum": [
+          "insert",
+          "swap",
+          "together"
         ]
       },
       "NewApiToken": {
@@ -3343,6 +4031,21 @@
           }
         }
       },
+      "RecipeRef": {
+        "type": "object",
+        "required": [
+          "slug",
+          "title"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "RecipeSummary": {
         "type": "object",
         "description": "Recette, dans la liste du foyer.",
@@ -3414,6 +4117,145 @@
           "recipes:write",
           "menus:write"
         ]
+      },
+      "SlotEater": {
+        "type": "object",
+        "description": "Un membre qui mange ce plat : au repas même (`dinner` ou `lunch`), ou en boîte le lendemain midi (`box`).",
+        "required": [
+          "member_id",
+          "name",
+          "at",
+          "portions"
+        ],
+        "properties": {
+          "at": {
+            "type": "string",
+            "description": "`meal` : au repas ; `box` : boîte du lendemain."
+          },
+          "member_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "portions": {
+            "$ref": "#/components/schemas/Portions"
+          }
+        }
+      },
+      "SlotInput": {
+        "type": "object",
+        "description": "Plat prévu à un repas.",
+        "required": [
+          "date",
+          "meal",
+          "recipe"
+        ],
+        "properties": {
+          "covers_next_lunch": {
+            "type": "boolean",
+            "description": "Le plat fait aussi les boîtes du lendemain midi."
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "diners": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Mangeurs du repas, en nombre ; absent : les membres présents."
+          },
+          "meal": {
+            "$ref": "#/components/schemas/Meal"
+          },
+          "next_lunch_covers": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Boîtes du lendemain, en nombre ; absent : les membres présents le lendemain midi."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "portions_date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Les portions se calculent comme ce jour-là (plat déplacé après les courses)."
+          },
+          "recipe": {
+            "type": "string",
+            "description": "Slug d'une recette du foyer."
+          },
+          "servings": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Total des portions (format des lots) : comparé aux portions calculées, seul l'écart est fixé en nombre."
+          },
+          "variant": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Nom de la variante ; absent : la variante par défaut (ou la première dont le foyer a le matériel)."
+          }
+        }
+      },
+      "SlotVariant": {
+        "type": "object",
+        "description": "Variante retenue pour le créneau.",
+        "required": [
+          "label",
+          "equipment",
+          "missing_equipment",
+          "active_min",
+          "total_min",
+          "vessels"
+        ],
+        "properties": {
+          "active_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "label": {
+            "type": "string"
+          },
+          "missing_equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Équipements de la variante que le foyer n'a pas."
+          },
+          "total_min": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vessels": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "Step": {
         "type": "object",
@@ -3496,6 +4338,23 @@
               "null"
             ],
             "description": "Vidéo MP4 en HTTPS."
+          }
+        }
+      },
+      "Suggestion": {
+        "type": "object",
+        "description": "Autre variante qui lève un conflit.",
+        "required": [
+          "slot",
+          "variant"
+        ],
+        "properties": {
+          "slot": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "variant": {
+            "type": "string"
           }
         }
       },
@@ -3649,6 +4508,99 @@
             "format": "int32"
           }
         }
+      },
+      "Warning": {
+        "type": "object",
+        "required": [
+          "kind",
+          "date",
+          "meal",
+          "slots",
+          "equipment",
+          "message"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exclusion": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ExclusionKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ingredient": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Code de l'ingrédient."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/WarningKind"
+          },
+          "meal": {
+            "$ref": "#/components/schemas/Meal"
+          },
+          "member": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "En français, affichable tel quel."
+          },
+          "other_menu": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Créneaux concernés."
+          },
+          "suggestion": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Suggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "WarningKind": {
+        "type": "string",
+        "description": "Nature d'un avertissement.",
+        "enum": [
+          "equipment_conflict",
+          "missing_equipment",
+          "exclusion",
+          "lunch_without_boxes",
+          "overlap",
+          "unknown_variant"
+        ]
       }
     },
     "securitySchemes": {

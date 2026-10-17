@@ -164,6 +164,23 @@ export interface paths {
         patch: operations["update"];
         trace?: never;
     };
+    "/api/v1/households/{id}/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les repas d'une période, tous menus confondus, avec leurs recettes et les avertissements de la période. */
+        get: operations["agenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/equipment": {
         parameters: {
             query?: never;
@@ -190,7 +207,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes). */
+        /**
+         * Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,
+         *     `week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`.
+         */
         post: operations["import"];
         delete?: never;
         options?: never;
@@ -262,6 +282,61 @@ export interface paths {
         put: operations["replace"];
         post?: never;
         delete: operations["remove_member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/menus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Menus du foyer, du plus récent au plus ancien. */
+        get: operations["list_menus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/menus/{week_start}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Menu complet : créneaux, portions, avertissements. */
+        get: operations["read_menu"];
+        /** Publie un menu : le crée (201) ou remplace tous ses créneaux (200). Idempotent. */
+        put: operations["put_menu"];
+        post?: never;
+        delete: operations["delete_menu"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/menus/{week_start}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Déplace un plat vers un autre repas du menu : repas libre, ou occupé (intercaler, échanger, même soir). Les
+         *     plats qui changent de jour gardent les portions de leur jour d'origine.
+         */
+        post: operations["move_slot"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -497,6 +572,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Les repas d'une période, tous menus confondus, avec les recettes pour lire et cuisiner sans autre appel. */
+        Agenda: {
+            /** Format: int32 */
+            days: number;
+            /** Format: date */
+            from: string;
+            recipes: components["schemas"]["Recipe"][];
+            slots: components["schemas"]["MenuSlot"][];
+            warnings: components["schemas"]["Warning"][];
+        };
         /**
          * @description Rayon du magasin.
          * @enum {string}
@@ -642,10 +727,12 @@ export interface components {
         ImportResult: {
             /** @description Codes des ingrédients créés. */
             ingredients_created: string[];
-            /** @description `false` : les menus arrivent au M3. */
+            /** @description Le lot avait un menu, et il est publié. */
             menu_imported: boolean;
             recipes_created: string[];
             recipes_updated: string[];
+            /** @description Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions… */
+            warnings: components["schemas"]["Warning"][];
         };
         /** @description Ingrédient du référentiel. */
         Ingredient: {
@@ -737,8 +824,7 @@ export interface components {
         Lot: {
             /** @description Ingrédients nouveaux ; ceux qui existent déjà (même nom, aux accents près) sont ignorés. */
             ingredients?: components["schemas"]["NewIngredient"][];
-            /** @description Menu de la semaine : accepté, importé à partir du M3. */
-            menu?: Record<string, never> | null;
+            menu?: components["schemas"]["MenuInput"] | null;
             /** @description Chaque recette avec son `slug`. */
             recipes?: components["schemas"]["RecipeInput"][];
         };
@@ -755,6 +841,11 @@ export interface components {
             /** @description Nom affiché aux autres comptes du foyer. */
             display_name: string;
         };
+        /**
+         * @description Repas de la journée.
+         * @enum {string}
+         */
+        Meal: "lunch" | "dinner";
         Member: {
             diet: components["schemas"]["Diet"];
             exclusions: components["schemas"]["Exclusion"][];
@@ -786,6 +877,109 @@ export interface components {
          * @enum {string}
          */
         MemberKind: "adult" | "teen" | "child";
+        /** @description Menu complet, avec portions et avertissements. */
+        Menu: {
+            notes: string;
+            /** @description Par date, repas (midi puis soir) et rang. */
+            slots: components["schemas"]["MenuSlot"][];
+            title: string;
+            warnings: components["schemas"]["Warning"][];
+            /** Format: date */
+            week_start: string;
+        };
+        /** @description Menu complet, tel que publié. */
+        MenuInput: {
+            notes?: string;
+            slots: components["schemas"]["SlotInput"][];
+            title?: string;
+            /**
+             * Format: date
+             * @description Obligatoire dans un lot ; dans un PUT, doit être celui de l'adresse s'il est donné.
+             */
+            week_start?: string | null;
+        };
+        /** @description Plat prévu, avec ses portions. */
+        MenuSlot: {
+            covers_next_lunch: boolean;
+            /** Format: date */
+            date: string;
+            /** Format: int32 */
+            diners: number;
+            /** @description `diners` est un nombre fixé, et non les membres présents. */
+            diners_fixed: boolean;
+            /** @description Les membres dont le barème fait `scale`. */
+            eaters: components["schemas"]["SlotEater"][];
+            /** @description Variante de 15 minutes actives au plus. */
+            express: boolean;
+            /** Format: uuid */
+            id: string;
+            meal: components["schemas"]["Meal"];
+            /** Format: int32 */
+            next_lunch_covers: number;
+            next_lunch_covers_fixed: boolean;
+            note?: string | null;
+            /**
+             * Format: date
+             * @description Portions calculées comme ce jour-là (plat déplacé).
+             */
+            portions_date?: string | null;
+            /**
+             * Format: int32
+             * @description Rang du plat dans le repas (deux plats le même soir).
+             */
+            position: number;
+            /**
+             * Format: int32
+             * @description Jours d'avance d'une phase faite avant (1 : la veille).
+             */
+            prep_days_before: number;
+            recipe: components["schemas"]["RecipeRef"];
+            /**
+             * @description Multiplicateur de chaque rôle d'ingrédient : la somme des barèmes de ceux qui mangent (au prorata quand un
+             *     nombre est fixé). Quantité d'une ligne = portion standard × `scale[rôle]`.
+             */
+            scale: components["schemas"]["Portions"];
+            /**
+             * Format: int32
+             * @description Portions du plat : `diners` + `next_lunch_covers`.
+             */
+            servings: number;
+            variant: components["schemas"]["SlotVariant"];
+            /**
+             * Format: date
+             * @description Menu du créneau.
+             */
+            week_start: string;
+        };
+        /** @description Menu, dans l'historique. */
+        MenuSummary: {
+            /** Format: date */
+            first_date?: string | null;
+            /** Format: date */
+            last_date?: string | null;
+            /** Format: int64 */
+            slot_count: number;
+            title: string;
+            /** Format: date */
+            week_start: string;
+        };
+        /** @description Déplacer un plat vers un autre repas du menu. */
+        MoveInput: {
+            /** Format: date */
+            date: string;
+            meal: components["schemas"]["Meal"];
+            mode: components["schemas"]["MoveMode"];
+            /**
+             * Format: uuid
+             * @description Créneau à déplacer.
+             */
+            slot: string;
+        };
+        /**
+         * @description Que faire du plat qui occupe déjà le repas d'arrivée.
+         * @enum {string}
+         */
+        MoveMode: "insert" | "swap" | "together";
         /** @description Nouveau jeton. */
         NewApiToken: {
             name: string;
@@ -936,6 +1130,10 @@ export interface components {
             state: components["schemas"]["IngredientState"];
             unit: components["schemas"]["Unit"];
         };
+        RecipeRef: {
+            slug: string;
+            title: string;
+        };
         /** @description Recette, dans la liste du foyer. */
         RecipeSummary: {
             default_variant: components["schemas"]["VariantSummary"];
@@ -960,6 +1158,61 @@ export interface components {
          * @enum {string}
          */
         Scope: "read" | "recipes:write" | "menus:write";
+        /** @description Un membre qui mange ce plat : au repas même (`dinner` ou `lunch`), ou en boîte le lendemain midi (`box`). */
+        SlotEater: {
+            /** @description `meal` : au repas ; `box` : boîte du lendemain. */
+            at: string;
+            /** Format: uuid */
+            member_id: string;
+            name: string;
+            portions: components["schemas"]["Portions"];
+        };
+        /** @description Plat prévu à un repas. */
+        SlotInput: {
+            /** @description Le plat fait aussi les boîtes du lendemain midi. */
+            covers_next_lunch?: boolean;
+            /** Format: date */
+            date: string;
+            /**
+             * Format: int32
+             * @description Mangeurs du repas, en nombre ; absent : les membres présents.
+             */
+            diners?: number | null;
+            meal: components["schemas"]["Meal"];
+            /**
+             * Format: int32
+             * @description Boîtes du lendemain, en nombre ; absent : les membres présents le lendemain midi.
+             */
+            next_lunch_covers?: number | null;
+            note?: string | null;
+            /**
+             * Format: date
+             * @description Les portions se calculent comme ce jour-là (plat déplacé après les courses).
+             */
+            portions_date?: string | null;
+            /** @description Slug d'une recette du foyer. */
+            recipe: string;
+            /**
+             * Format: int32
+             * @description Total des portions (format des lots) : comparé aux portions calculées, seul l'écart est fixé en nombre.
+             */
+            servings?: number | null;
+            /** @description Nom de la variante ; absent : la variante par défaut (ou la première dont le foyer a le matériel). */
+            variant?: string | null;
+        };
+        /** @description Variante retenue pour le créneau. */
+        SlotVariant: {
+            /** Format: int32 */
+            active_min: number;
+            equipment: string[];
+            label: string;
+            /** @description Équipements de la variante que le foyer n'a pas. */
+            missing_equipment: string[];
+            /** Format: int32 */
+            total_min: number;
+            /** Format: int32 */
+            vessels: number;
+        };
         Step: {
             equipment?: string | null;
             params: Record<string, never>;
@@ -982,6 +1235,12 @@ export interface components {
             timer_s?: number | null;
             /** @description Vidéo MP4 en HTTPS. */
             video_url?: string | null;
+        };
+        /** @description Autre variante qui lève un conflit. */
+        Suggestion: {
+            /** Format: uuid */
+            slot: string;
+            variant: string;
         };
         /**
          * @description Unité normalisée.
@@ -1033,6 +1292,29 @@ export interface components {
             /** Format: int32 */
             vessels: number;
         };
+        Warning: {
+            /** Format: date */
+            date: string;
+            equipment: string[];
+            exclusion?: components["schemas"]["ExclusionKind"] | null;
+            /** @description Code de l'ingrédient. */
+            ingredient?: string | null;
+            kind: components["schemas"]["WarningKind"];
+            meal: components["schemas"]["Meal"];
+            member?: string | null;
+            /** @description En français, affichable tel quel. */
+            message: string;
+            /** Format: date */
+            other_menu?: string | null;
+            /** @description Créneaux concernés. */
+            slots: string[];
+            suggestion?: components["schemas"]["Suggestion"] | null;
+        };
+        /**
+         * @description Nature d'un avertissement.
+         * @enum {string}
+         */
+        WarningKind: "equipment_conflict" | "missing_equipment" | "exclusion" | "lunch_without_boxes" | "overlap" | "unknown_variant";
     };
     responses: never;
     parameters: never;
@@ -1358,6 +1640,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Household"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    agenda: {
+        parameters: {
+            query: {
+                /** @description Premier jour, `2026-10-18`. */
+                from: string;
+                /** @description Nombre de jours, de 1 à 28. */
+                days: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agenda"];
                 };
             };
             404: {
@@ -1797,6 +2121,211 @@ export interface operations {
             };
         };
     };
+    list_menus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MenuSummary"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_menu: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Menu"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_menu: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MenuInput"];
+            };
+        };
+        responses: {
+            /** @description Remplacé */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Menu"];
+                };
+            };
+            /** @description Créé */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Menu"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_menu: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    move_slot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                week_start: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Menu"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_recipes: {
         parameters: {
             query?: {
@@ -1948,6 +2477,15 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Prévue dans un menu */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

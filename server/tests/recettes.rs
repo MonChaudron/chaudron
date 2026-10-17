@@ -461,7 +461,6 @@ fn lot() -> Value {
             {"name": "Lentilles", "aisle": "grocery", "default_unit": "g", "default_state": "dried"},
         ],
         "recipes": [chili, dahl],
-        "menu": {"week_start": "2026-09-07", "slots": []},
     })
 }
 
@@ -483,6 +482,7 @@ async fn importer_un_lot(db: PgPool) {
             "recipes_created": ["chili-con-carne", "dahl"],
             "recipes_updated": [],
             "menu_imported": false,
+            "warnings": [],
         })
     );
     let dahl = alice
@@ -500,6 +500,7 @@ async fn importer_un_lot(db: PgPool) {
             "recipes_created": [],
             "recipes_updated": ["chili-con-carne", "dahl"],
             "menu_imported": false,
+            "warnings": [],
         })
     );
     let list = alice
