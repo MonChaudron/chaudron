@@ -120,6 +120,30 @@ async fn route_inconnue_de_l_appli_renvoie_index() {
     assert!(body.contains("<title>Chaudron</title>"));
 }
 
+/// En-têtes de cache des fichiers de l'appli : hachés, gardés un an ; la page et le service worker, toujours
+/// revalidés (sinon une nouvelle version ne s'installe pas).
+#[tokio::test]
+async fn cache_des_fichiers_de_l_appli() {
+    async fn cache(uri: &str) -> String {
+        let response = offline_app(unreachable_db())
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        response.headers()["cache-control"]
+            .to_str()
+            .unwrap()
+            .to_owned()
+    }
+    assert_eq!(
+        cache("/_expo/static/js/entry-0123abcd.js").await,
+        "public, max-age=31536000, immutable"
+    );
+    assert_eq!(cache("/").await, "no-cache");
+    assert_eq!(cache("/courses").await, "no-cache");
+    assert_eq!(cache("/sw.js").await, "no-cache");
+}
+
 #[tokio::test]
 async fn route_inconnue_de_l_api_renvoie_404() {
     let (status, body) = get(offline_app(unreachable_db()), "/api/v1/inconnue").await;

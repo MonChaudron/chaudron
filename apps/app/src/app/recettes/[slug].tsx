@@ -23,7 +23,7 @@ import { Pressable, Text, View } from 'react-native';
 import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
-import { useLoad } from '../../lib/useLoad';
+import { useCached } from '../../lib/useCached';
 import { Back, Body, Card, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 
@@ -44,20 +44,14 @@ export default function RecipeScreen() {
 
 /** Ouverte depuis un créneau (`?slot=…&menu=…`) : la variante prévue, les quantités et les avertissements du créneau. */
 function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: string; slug: string; slotId?: string; weekStart?: string }) {
-  const recipe = useLoad(
-    () => api.GET('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } }),
-    [householdId, slug],
+  const recipe = useCached(`recipe:${householdId}:${slug}`, () =>
+    api.GET('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } }),
   );
-  const members = useLoad(
-    () => api.GET('/api/v1/households/{id}/members', { params: { path: { id: householdId } } }),
-    [householdId],
-  );
-  const planned = useLoad(
-    async () =>
-      slotId && weekStart
-        ? api.GET('/api/v1/households/{id}/menus/{week_start}', { params: { path: { id: householdId, week_start: weekStart } } })
-        : { data: null },
-    [householdId, slotId, weekStart],
+  const members = useCached(`members:${householdId}`, () => api.GET('/api/v1/households/{id}/members', { params: { path: { id: householdId } } }));
+  const planned = useCached(`menu:${householdId}:${weekStart ?? ''}`, async () =>
+    slotId && weekStart
+      ? api.GET('/api/v1/households/{id}/menus/{week_start}', { params: { path: { id: householdId, week_start: weekStart } } })
+      : { data: null },
   );
   const [chosen, setChosen] = useState<string | null>(null);
   const slot = planned.data?.slots.find((s) => s.id === slotId) ?? null;

@@ -24,8 +24,12 @@ use std::{path::Path, sync::Arc};
 use axum::{
     Json, Router,
     extract::State,
-    http::{HeaderValue, Method, StatusCode, header::CONTENT_TYPE},
+    http::{
+        HeaderValue, Method, StatusCode, Uri,
+        header::{CACHE_CONTROL, CONTENT_TYPE},
+    },
     middleware,
+    response::Response,
     routing::{any, get},
 };
 use serde::Serialize;
@@ -251,5 +255,33 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
     if state.config.fake_oauth {
         router = router.nest("/dev/oauth", FakeOAuth::default().router());
     }
+    let web = Router::new()
+        .fallback_service(web)
+        .layer(middleware::map_response(static_cache));
     router.fallback_service(web).with_state(state)
+}
+
+/// Cache des fichiers de l'appli : les fichiers hachés d'Expo ne changent jamais (un an, `immutable`, gardés par
+/// Cloudflare) ; la page et le service worker sont toujours revalidés, sinon une nouvelle version ne s'installe pas.
+async fn static_cache(uri: Uri, mut response: Response) -> Response {
+    let path = uri.path();
+    let value = if path.starts_with("/_expo/static/") || path.starts_with("/assets/") {
+        "public, max-age=31536000, immutable"
+    } else if path == "/sw.js"
+        || response
+            .headers()
+            .get(CONTENT_TYPE)
+            .is_some_and(|t| t.as_bytes().starts_with(b"text/html"))
+    {
+        "no-cache"
+    } else {
+        // Polices, icônes, manifeste : noms stables, revalidés chaque semaine.
+        "public, max-age=604800"
+    };
+    if response.status().is_success() {
+        response
+            .headers_mut()
+            .insert(CACHE_CONTROL, HeaderValue::from_static(value));
+    }
+    response
 }
