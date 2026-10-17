@@ -168,7 +168,11 @@ struct MemberRow {
 }
 
 /// Membres du foyer (ou un seul), avec barème, présence et exclusions.
-async fn load(db: &PgPool, household_id: Uuid, member_id: Option<Uuid>) -> ApiResult<Vec<Member>> {
+pub(crate) async fn load(
+    db: &PgPool,
+    household_id: Uuid,
+    member_id: Option<Uuid>,
+) -> ApiResult<Vec<Member>> {
     let rows: Vec<MemberRow> = sqlx::query_as(
         "SELECT id, name, kind, diet, user_id FROM members
          WHERE household_id = $1 AND ($2::uuid IS NULL OR id = $2) ORDER BY created_at, id",

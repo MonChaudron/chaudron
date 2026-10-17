@@ -10,6 +10,7 @@ pub mod households;
 pub mod http;
 pub mod ingredients;
 pub mod members;
+pub mod menus;
 pub mod recipes;
 pub mod text;
 pub mod tokens;
@@ -107,6 +108,12 @@ impl AppState {
         recipes::put_recipe,
         recipes::delete_recipe,
         recipes::import,
+        menus::list_menus,
+        menus::read_menu,
+        menus::put_menu,
+        menus::delete_menu,
+        menus::move_slot,
+        menus::agenda,
         tokens::list_tokens,
         tokens::create_token,
         tokens::revoke_token,
@@ -197,6 +204,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(catalog::router())
         .merge(ingredients::router())
         .merge(recipes::router())
+        .merge(menus::router())
         .merge(tokens::router())
         .route("/openapi.json", get(openapi))
         .layer(middleware::from_fn_with_state(

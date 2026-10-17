@@ -22,6 +22,8 @@ use crate::{
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
     ingredients::{self, NewIngredient},
+    members,
+    menus::{self, MenuInput, Warning},
     text::{code, like_patterns, search_key},
     types::{IngredientState, PortionRole, Scope, Unit},
 };
@@ -288,7 +290,7 @@ struct StepRow {
     params: Value,
 }
 
-async fn load(db: &PgPool, household_id: Uuid, slug: &str) -> ApiResult<Recipe> {
+pub(crate) async fn load(db: &PgPool, household_id: Uuid, slug: &str) -> ApiResult<Recipe> {
     let recipe: RecipeRow = sqlx::query_as(
         "SELECT id, slug, title, description, tags, season_months, source, updated_at
          FROM recipes WHERE household_id = $1 AND slug = $2",
@@ -857,6 +859,7 @@ pub async fn put_recipe(
         (status = 204),
         (status = 403, body = ErrorBody),
         (status = 404, body = ErrorBody),
+        (status = 409, description = "Prévue dans un menu", body = ErrorBody),
     )
 )]
 pub async fn delete_recipe(
@@ -865,6 +868,20 @@ pub async fn delete_recipe(
     Path((id, slug)): Path<(Uuid, String)>,
 ) -> ApiResult<StatusCode> {
     caller.require(&state.db, id, Scope::RecipesWrite).await?;
+    let in_menu: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM menu_slots s JOIN recipes r ON r.id = s.recipe_id
+                        WHERE r.household_id = $1 AND r.slug = $2)",
+    )
+    .bind(id)
+    .bind(&slug)
+    .fetch_one(&state.db)
+    .await?;
+    if in_menu {
+        return Err(ApiError::conflict(
+            "recipe_in_menu",
+            "Cette recette est prévue dans un menu : retirez-la du menu d'abord.",
+        ));
+    }
     let deleted = sqlx::query("DELETE FROM recipes WHERE household_id = $1 AND slug = $2")
         .bind(id)
         .bind(&slug)
@@ -885,9 +902,8 @@ pub struct Lot {
     /// Chaque recette avec son `slug`.
     #[serde(default)]
     pub recipes: Vec<RecipeInput>,
-    /// Menu de la semaine : accepté, importé à partir du M3.
-    #[schema(value_type = Option<Object>)]
-    pub menu: Option<Value>,
+    /// Menu de la semaine (`week_start` obligatoire) : remplace le menu de même `week_start`.
+    pub menu: Option<MenuInput>,
 }
 
 /// Ce que l'import a fait.
@@ -897,11 +913,14 @@ pub struct ImportResult {
     pub ingredients_created: Vec<String>,
     pub recipes_created: Vec<String>,
     pub recipes_updated: Vec<String>,
-    /// `false` : les menus arrivent au M3.
+    /// Le lot avait un menu, et il est publié.
     pub menu_imported: bool,
+    /// Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions…
+    pub warnings: Vec<Warning>,
 }
 
-/// Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes).
+/// Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,
+/// `week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`.
 #[utoipa::path(
     post,
     path = "/api/v1/households/{id}/import",
@@ -921,12 +940,24 @@ pub async fn import(
     Path(id): Path<Uuid>,
     Json(lot): Json<Lot>,
 ) -> ApiResult<Json<ImportResult>> {
-    caller.require(&state.db, id, Scope::RecipesWrite).await?;
+    if lot.menu.is_none() || !lot.ingredients.is_empty() || !lot.recipes.is_empty() {
+        caller.require(&state.db, id, Scope::RecipesWrite).await?;
+    }
+    let menu_start = match &lot.menu {
+        Some(menu) => {
+            caller.require(&state.db, id, Scope::MenusWrite).await?;
+            Some(menu.week_start.ok_or_else(|| {
+                ApiError::invalid("Le menu du lot a une date de début (`week_start`).")
+            })?)
+        }
+        None => None,
+    };
     let mut result = ImportResult {
         ingredients_created: Vec::new(),
         recipes_created: Vec::new(),
         recipes_updated: Vec::new(),
         menu_imported: false,
+        warnings: Vec::new(),
     };
     let mut tx = state.db.begin().await?;
     for ingredient in &lot.ingredients {
@@ -961,6 +992,16 @@ pub async fn import(
             result.recipes_updated.push(slug.to_owned());
         }
     }
+    if let (Some(menu), Some(week_start)) = (&lot.menu, menu_start) {
+        let members = members::load(&state.db, id, None).await?;
+        menus::save(&mut tx, &members, id, week_start, menu)
+            .await
+            .map_err(|e| e.context(&format!("menu du {week_start}")))?;
+        result.menu_imported = true;
+    }
     tx.commit().await?;
+    if let Some(week_start) = menu_start {
+        result.warnings = menus::read(&state.db, id, week_start).await?.warnings;
+    }
     Ok(Json(result))
 }
