@@ -16,7 +16,7 @@ use axum::{
 use chaudron_server::{
     AppState, app,
     auth::{fake::FakeOAuth, providers::Provider},
-    config::{Config, SignupPolicy},
+    config::{Config, OAuthClient, SignupPolicy},
 };
 use http_body_util::BodyExt;
 use serde_json::Value;
@@ -25,6 +25,23 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 pub const PUBLIC_URL: &str = "http://localhost:28471";
+
+/// Client OAuth de la liaison de compte Alexa, tel que déclaré dans `.env`.
+pub const ALEXA_ID: &str = "alexa-skill";
+pub const ALEXA_SECRET: &str = "secret-de-test";
+pub const ALEXA_REDIRECT: &str = "https://layla.amazon.com/api/skill/link/M2TEST";
+
+pub fn alexa_client() -> OAuthClient {
+    OAuthClient {
+        id: ALEXA_ID.into(),
+        secret: ALEXA_SECRET.into(),
+        name: "Alexa".into(),
+        redirect_uris: vec![
+            ALEXA_REDIRECT.into(),
+            "https://pitangui.amazon.com/api/skill/link/M2TEST".into(),
+        ],
+    }
+}
 
 pub fn web_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/web")
@@ -37,6 +54,7 @@ pub fn config(fake_base: &str, signup: SignupPolicy) -> Config {
         signup,
         fake_oauth: false,
         dev_web_origin: None,
+        oauth_clients: vec![alexa_client()],
     }
 }
 
@@ -88,6 +106,35 @@ impl TestApp {
         let fake = Fake::start().await;
         let app = app(AppState::new(db, make(&fake.base)), &web_dir());
         Self { app, fake }
+    }
+
+    /// Appel de serveur à serveur (Amazon qui échange un code) : formulaire, authentification Basic, ni cookie ni
+    /// `Origin`.
+    pub async fn form(
+        &self,
+        uri: &str,
+        fields: &[(&str, &str)],
+        basic: Option<(&str, &str)>,
+    ) -> Response {
+        use base64::Engine;
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded");
+        if let Some((user, password)) = basic {
+            let credentials =
+                base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"));
+            request = request.header(AUTHORIZATION, format!("Basic {credentials}"));
+        }
+        let body = serde_urlencoded::to_string(fields).unwrap();
+        read(
+            self.app
+                .clone()
+                .oneshot(request.body(Body::from(body)).unwrap())
+                .await
+                .unwrap(),
+        )
+        .await
     }
 
     pub fn browser(&self) -> Browser {

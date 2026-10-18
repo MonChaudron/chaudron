@@ -139,8 +139,8 @@ function Household({ id, me, onLeft }: { id: string; me: string; onLeft: () => P
 
           {owner ? (
             <Card>
-              <Title level={2}>Accès pour Claude</Title>
-              <Body tone="muted" size={16}>Un jeton qui laisse Claude publier les recettes du foyer.</Body>
+              <Title level={2}>Accès</Title>
+              <Body tone="muted" size={16}>Claude publie les recettes et les menus ; Alexa lit le menu et guide la cuisson.</Body>
               <LinkButton label="Gérer les accès" href="/foyer/acces" />
             </Card>
           ) : null}

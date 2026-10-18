@@ -1046,6 +1046,108 @@
         }
       }
     },
+    "/api/v1/households/{id}/links": {
+      "get": {
+        "tags": [
+          "liaison"
+        ],
+        "summary": "Applications liées au foyer (propriétaires).",
+        "operationId": "list_links",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkInfo"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/links/{link_id}": {
+      "delete": {
+        "tags": [
+          "liaison"
+        ],
+        "summary": "Retire une liaison et ses jetons (propriétaires). L'application devra être liée de nouveau.",
+        "operationId": "revoke_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/members": {
       "get": {
         "tags": [
@@ -2700,6 +2802,164 @@
         }
       }
     },
+    "/api/v1/oauth/authorize": {
+      "post": {
+        "tags": [
+          "liaison"
+        ],
+        "summary": "Autorise l'application sur un foyer du compte connecté (tout compte du foyer) : crée un code de 5 minutes.",
+        "operationId": "authorize",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthorizeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Authorized"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oauth/client": {
+      "get": {
+        "tags": [
+          "liaison"
+        ],
+        "summary": "Présente l'application qui demande l'accès (écran « Autoriser Alexa »).",
+        "operationId": "client_info",
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
+    "/api/v1/oauth/token": {
+      "post": {
+        "tags": [
+          "liaison"
+        ],
+        "summary": "Échange un code contre des jetons, ou renouvelle le jeton d'accès.",
+        "operationId": "token",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
     "/api/v1/openapi.json": {
       "get": {
         "tags": [
@@ -2729,6 +2989,35 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DefaultPortions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/token": {
+      "get": {
+        "tags": [
+          "liaison"
+        ],
+        "summary": "Foyer et droits du jeton appelant : la skill ne reçoit d'Amazon que le jeton. Jeton seulement (401 en session).",
+        "operationId": "token_info",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
                 }
               }
             }
@@ -2864,6 +3153,46 @@
           }
         }
       },
+      "AuthorizeInput": {
+        "type": "object",
+        "description": "« Autoriser » : le foyer choisi, et ce que l'application a envoyé.",
+        "required": [
+          "client_id",
+          "redirect_uri",
+          "household_id"
+        ],
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "redirect_uri": {
+            "type": "string"
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Rendu tel quel à l'application."
+          }
+        }
+      },
+      "Authorized": {
+        "type": "object",
+        "required": [
+          "redirect_to"
+        ],
+        "properties": {
+          "redirect_to": {
+            "type": "string",
+            "description": "Où envoyer le navigateur : l'adresse de retour, avec le code et `state`."
+          }
+        }
+      },
       "Block": {
         "type": "string",
         "description": "Bloc de la liste.",
@@ -2872,6 +3201,27 @@
           "breakfast_desserts",
           "special"
         ]
+      },
+      "ClientInfo": {
+        "type": "object",
+        "description": "Application qui demande l'accès.",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "« Alexa »."
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            },
+            "description": "Ce qu'elle pourra faire."
+          }
+        }
       },
       "Cooking": {
         "type": "object",
@@ -3862,6 +4212,48 @@
           }
         }
       },
+      "LinkInfo": {
+        "type": "object",
+        "description": "Application liée au foyer.",
+        "required": [
+          "id",
+          "client",
+          "user",
+          "scopes",
+          "created_at"
+        ],
+        "properties": {
+          "client": {
+            "type": "string",
+            "description": "« Alexa »."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          },
+          "user": {
+            "type": "string",
+            "description": "Le compte qui l'a autorisée."
+          }
+        }
+      },
       "LoggedIn": {
         "type": "object",
         "required": [
@@ -4421,6 +4813,22 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "OAuthError": {
+        "type": "object",
+        "description": "Erreur au format OAuth2 : `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`.",
+        "required": [
+          "error",
+          "error_description"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "error_description": {
+            "type": "string"
           }
         }
       },
@@ -5436,6 +5844,102 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "TokenInfo": {
+        "type": "object",
+        "description": "Ce que vaut le jeton appelant.",
+        "required": [
+          "household_id",
+          "scopes"
+        ],
+        "properties": {
+          "household_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          }
+        }
+      },
+      "TokenRequest": {
+        "type": "object",
+        "description": "Requête de jeton (RFC 6749 §4.1.3 et §6), en `application/x-www-form-urlencoded`. Le client s'identifie en HTTP\nBasic, ou par `client_id` et `client_secret`.",
+        "required": [
+          "grant_type"
+        ],
+        "properties": {
+          "client_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "client_secret": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "grant_type": {
+            "type": "string",
+            "description": "`authorization_code` ou `refresh_token`."
+          },
+          "redirect_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "refresh_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64",
+            "description": "En secondes."
+          },
+          "refresh_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Seulement à l'échange du code : il ne change pas ensuite."
+          },
+          "scope": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "description": "`Bearer`."
           }
         }
       },
