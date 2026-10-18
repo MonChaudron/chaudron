@@ -311,6 +311,38 @@ async fn refus(db: PgPool) {
     assert_eq!(links.as_array().unwrap().len(), 1, "{links}");
     assert_eq!(links[0]["user"], "bob");
 
+    // Bob retiré du foyer : sa liaison et ses jetons partent avec lui.
+    let response = app
+        .form(
+            TOKEN,
+            &[
+                ("grant_type", "authorization_code"),
+                ("code", &authorize(&mut bob, home).await),
+                ("redirect_uri", ALEXA_REDIRECT),
+            ],
+            Some((ALEXA_ID, ALEXA_SECRET)),
+        )
+        .await;
+    let access = response.json["access_token"].as_str().unwrap().to_owned();
+    let refresh = response.json["refresh_token"].as_str().unwrap().to_owned();
+    let bob_id = bob.me().await["id"].as_str().unwrap().to_owned();
+    let response = alice
+        .delete(&format!("/api/v1/households/{home}/users/{bob_id}"))
+        .await;
+    assert!(response.status.is_success(), "{}", response.text);
+    assert_eq!(
+        app.api_client(&access).get("/api/v1/token").await.status,
+        StatusCode::UNAUTHORIZED
+    );
+    let response = app
+        .form(
+            TOKEN,
+            &[("grant_type", "refresh_token"), ("refresh_token", &refresh)],
+            Some((ALEXA_ID, ALEXA_SECRET)),
+        )
+        .await;
+    assert_eq!(response.json["error"], "invalid_grant");
+
     // `/token` ne vaut que pour un jeton.
     assert_eq!(
         alice.get("/api/v1/token").await.status,
