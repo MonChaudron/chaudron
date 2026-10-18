@@ -1,0 +1,15 @@
+{
+  "name": "@chaudron/alexa",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Skill Alexa de Chaudron : le menu et les recettes du foyer, lus étape par étape sur l'Echo Show.",
+  "main": "index.js",
+  "engines": { "node": ">=16" },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ask-sdk-core": "^2.14.0",
+    "ask-sdk-model": "^1.86.0"
+  }
+}

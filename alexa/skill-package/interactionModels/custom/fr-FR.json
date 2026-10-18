@@ -1,0 +1,581 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "le chaudron",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": [
+            "aide",
+            "qu'est-ce que je peux dire"
+          ]
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": [
+            "stop",
+            "arrête",
+            "j'ai fini",
+            "c'est bon on arrête"
+          ]
+        },
+        {
+          "name": "AMAZON.PauseIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NextIntent",
+          "samples": [
+            "suivant",
+            "étape suivante",
+            "la suite",
+            "c'est fait",
+            "ensuite",
+            "et après",
+            "l'étape d'après",
+            "continue"
+          ]
+        },
+        {
+          "name": "AMAZON.PreviousIntent",
+          "samples": [
+            "précédent",
+            "étape précédente",
+            "reviens en arrière",
+            "l'étape d'avant",
+            "recule"
+          ]
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": [
+            "répète",
+            "tu peux répéter",
+            "redis",
+            "relis l'étape",
+            "relis"
+          ]
+        },
+        {
+          "name": "ListMenuIntent",
+          "samples": [
+            "le menu",
+            "le menu de la semaine",
+            "qu'est-ce qu'on mange cette semaine",
+            "on mange quoi cette semaine",
+            "les plats de la semaine",
+            "retour au menu",
+            "montre le menu",
+            "affiche le menu"
+          ]
+        },
+        {
+          "name": "ChooseRecipeIntent",
+          "slots": [
+            {
+              "name": "plat",
+              "type": "PLAT"
+            },
+            {
+              "name": "jour",
+              "type": "JOUR"
+            }
+          ],
+          "samples": [
+            "{plat}",
+            "ouvre {plat}",
+            "on fait {plat}",
+            "je fais {plat}",
+            "la recette {plat}",
+            "montre {plat}",
+            "{jour}",
+            "celle de {jour}",
+            "la recette de {jour}",
+            "le plat de {jour}",
+            "le repas de {jour}",
+            "qu'est-ce qu'on mange {jour}",
+            "on mange quoi {jour}",
+            "c'est quoi {jour}",
+            "le menu de {jour}"
+          ]
+        },
+        {
+          "name": "StartCookingIntent",
+          "samples": [
+            "on commence",
+            "c'est parti",
+            "on y va",
+            "commence",
+            "lance la recette",
+            "première étape",
+            "on démarre"
+          ]
+        },
+        {
+          "name": "GoToStepIntent",
+          "slots": [
+            {
+              "name": "numero",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "étape {numero}",
+            "l'étape {numero}",
+            "va à l'étape {numero}",
+            "aller à l'étape {numero}",
+            "reprends à l'étape {numero}"
+          ]
+        },
+        {
+          "name": "IngredientsIntent",
+          "samples": [
+            "les ingrédients",
+            "liste des ingrédients",
+            "qu'est-ce qu'il faut",
+            "il faut quoi",
+            "donne-moi les ingrédients",
+            "les quantités"
+          ]
+        },
+        {
+          "name": "ServeIntent",
+          "samples": [
+            "comment je sers",
+            "le service",
+            "les portions",
+            "comment on sert",
+            "pour les ados",
+            "pour les adultes",
+            "c'est quoi les parts"
+          ]
+        },
+        {
+          "name": "MusicIntent",
+          "slots": [
+            {
+              "name": "station",
+              "type": "RADIO"
+            }
+          ],
+          "samples": [
+            "mets la radio",
+            "mets de la musique",
+            "mets un peu de musique",
+            "joue de la musique",
+            "lance la musique",
+            "lance la radio",
+            "remets la musique",
+            "reprends la musique",
+            "coupe la musique",
+            "arrête la musique",
+            "stop la musique",
+            "coupe la radio",
+            "arrête la radio",
+            "musique suivante",
+            "chanson suivante",
+            "change de musique",
+            "change de chanson",
+            "mets {station}",
+            "mets la radio {station}",
+            "joue {station}",
+            "lance {station}",
+            "mets la station {station}"
+          ]
+        },
+        {
+          "name": "MusicSearchIntent",
+          "slots": [
+            {
+              "name": "recherche",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "mets la playlist {recherche}",
+            "joue la playlist {recherche}",
+            "lance la playlist {recherche}",
+            "mets la chanson {recherche}",
+            "joue la chanson {recherche}",
+            "mets l'album {recherche}"
+          ]
+        },
+        {
+          "name": "GuidedModeIntent",
+          "samples": [
+            "détaille",
+            "en détail",
+            "mode pas à pas",
+            "pas à pas",
+            "explique-moi",
+            "plus lentement",
+            "je ne sais pas faire",
+            "comment on fait"
+          ]
+        },
+        {
+          "name": "FastModeIntent",
+          "samples": [
+            "accélère",
+            "mode rapide",
+            "plus vite",
+            "en rapide",
+            "je sais faire",
+            "passe à l'étape d'après en rapide"
+          ]
+        },
+        {
+          "name": "ChangeVariantIntent",
+          "slots": [
+            {
+              "name": "appareil",
+              "type": "APPAREIL"
+            }
+          ],
+          "samples": [
+            "je n'ai pas le {appareil}",
+            "je n'ai pas de {appareil}",
+            "sans le {appareil}",
+            "sans {appareil}",
+            "pas de {appareil}",
+            "le {appareil} est pris",
+            "une autre façon",
+            "une autre variante",
+            "autrement",
+            "change de variante"
+          ]
+        },
+        {
+          "name": "StartTimerIntent",
+          "samples": [
+            "lance le minuteur",
+            "mets le minuteur",
+            "démarre le minuteur",
+            "le minuteur",
+            "minuteur"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "PLAT",
+          "values": [
+            {
+              "id": "inconnu",
+              "name": {
+                "value": "plat du menu"
+              }
+            }
+          ]
+        },
+        {
+          "name": "JOUR",
+          "values": [
+            {
+              "id": "dimanche",
+              "name": {
+                "value": "dimanche",
+                "synonyms": [
+                  "dimanche soir"
+                ]
+              }
+            },
+            {
+              "id": "lundi",
+              "name": {
+                "value": "lundi",
+                "synonyms": [
+                  "lundi soir"
+                ]
+              }
+            },
+            {
+              "id": "mardi",
+              "name": {
+                "value": "mardi",
+                "synonyms": [
+                  "mardi soir"
+                ]
+              }
+            },
+            {
+              "id": "mercredi",
+              "name": {
+                "value": "mercredi",
+                "synonyms": [
+                  "mercredi soir"
+                ]
+              }
+            },
+            {
+              "id": "jeudi",
+              "name": {
+                "value": "jeudi",
+                "synonyms": [
+                  "jeudi soir"
+                ]
+              }
+            },
+            {
+              "id": "vendredi",
+              "name": {
+                "value": "vendredi",
+                "synonyms": [
+                  "vendredi soir"
+                ]
+              }
+            },
+            {
+              "id": "ce_soir",
+              "name": {
+                "value": "ce soir",
+                "synonyms": [
+                  "aujourd'hui",
+                  "pour ce soir"
+                ]
+              }
+            },
+            {
+              "id": "demain",
+              "name": {
+                "value": "demain",
+                "synonyms": [
+                  "demain soir"
+                ]
+              }
+            },
+            {
+              "id": "hier",
+              "name": {
+                "value": "hier",
+                "synonyms": [
+                  "hier soir"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "RADIO",
+          "values": [
+            {
+              "id": "france_inter",
+              "name": {
+                "value": "France Inter"
+              }
+            },
+            {
+              "id": "fip",
+              "name": {
+                "value": "FIP"
+              }
+            },
+            {
+              "id": "france_info",
+              "name": {
+                "value": "France Info"
+              }
+            },
+            {
+              "id": "france_culture",
+              "name": {
+                "value": "France Culture"
+              }
+            },
+            {
+              "id": "france_musique",
+              "name": {
+                "value": "France Musique"
+              }
+            },
+            {
+              "id": "rtl",
+              "name": {
+                "value": "RTL"
+              }
+            },
+            {
+              "id": "rtl2",
+              "name": {
+                "value": "RTL2"
+              }
+            },
+            {
+              "id": "europe_1",
+              "name": {
+                "value": "Europe 1"
+              }
+            },
+            {
+              "id": "europe_2",
+              "name": {
+                "value": "Europe 2"
+              }
+            },
+            {
+              "id": "nrj",
+              "name": {
+                "value": "NRJ"
+              }
+            },
+            {
+              "id": "nostalgie",
+              "name": {
+                "value": "Nostalgie"
+              }
+            },
+            {
+              "id": "cherie_fm",
+              "name": {
+                "value": "Chérie FM"
+              }
+            },
+            {
+              "id": "rfm",
+              "name": {
+                "value": "RFM"
+              }
+            },
+            {
+              "id": "radio_nova",
+              "name": {
+                "value": "Radio Nova"
+              }
+            },
+            {
+              "id": "tsf_jazz",
+              "name": {
+                "value": "TSF Jazz"
+              }
+            },
+            {
+              "id": "skyrock",
+              "name": {
+                "value": "Skyrock"
+              }
+            },
+            {
+              "id": "fun_radio",
+              "name": {
+                "value": "Fun Radio"
+              }
+            },
+            {
+              "id": "radio_classique",
+              "name": {
+                "value": "Radio Classique"
+              }
+            },
+            {
+              "id": "rire_et_chansons",
+              "name": {
+                "value": "Rire et Chansons"
+              }
+            }
+          ]
+        },
+        {
+          "name": "APPAREIL",
+          "values": [
+            {
+              "id": "cookeo_6l",
+              "name": {
+                "value": "cookeo",
+                "synonyms": [
+                  "multicuiseur",
+                  "le cookeo"
+                ]
+              }
+            },
+            {
+              "id": "thermomix_tm6",
+              "name": {
+                "value": "thermomix",
+                "synonyms": [
+                  "robot",
+                  "le thermomix",
+                  "robot cuiseur"
+                ]
+              }
+            },
+            {
+              "id": "oven",
+              "name": {
+                "value": "four",
+                "synonyms": [
+                  "le four"
+                ]
+              }
+            },
+            {
+              "id": "hob",
+              "name": {
+                "value": "plaque",
+                "synonyms": [
+                  "plaques",
+                  "feu",
+                  "gaz",
+                  "les plaques",
+                  "la plaque"
+                ]
+              }
+            },
+            {
+              "id": "pressure_cooker",
+              "name": {
+                "value": "autocuiseur",
+                "synonyms": [
+                  "cocotte-minute",
+                  "cocotte minute",
+                  "la cocotte-minute"
+                ]
+              }
+            },
+            {
+              "id": "airfryer",
+              "name": {
+                "value": "airfryer",
+                "synonyms": [
+                  "friteuse sans huile",
+                  "air fryer"
+                ]
+              }
+            },
+            {
+              "id": "blender",
+              "name": {
+                "value": "blender",
+                "synonyms": [
+                  "mixeur",
+                  "le blender"
+                ]
+              }
+            },
+            {
+              "id": "microwave",
+              "name": {
+                "value": "micro-ondes",
+                "synonyms": [
+                  "micro ondes",
+                  "le micro-ondes"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

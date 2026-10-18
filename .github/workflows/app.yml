@@ -2,10 +2,10 @@ name: app
 
 on:
   pull_request:
-    paths: ["apps/**", "packages/**", "package.json", "package-lock.json", ".github/workflows/app.yml"]
+    paths: ["apps/**", "packages/**", "alexa/**", "package.json", "package-lock.json", ".github/workflows/app.yml"]
   push:
     branches: [main]
-    paths: ["apps/**", "packages/**", "package.json", "package-lock.json", ".github/workflows/app.yml"]
+    paths: ["apps/**", "packages/**", "alexa/**", "package.json", "package-lock.json", ".github/workflows/app.yml"]
 
 permissions:
   contents: read
