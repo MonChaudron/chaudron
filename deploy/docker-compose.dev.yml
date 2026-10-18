@@ -11,7 +11,7 @@ services:
       # Une adresse publique en https (tunnel vers le poste de dev) se met dans .env, avec AUTH_FAKE=0.
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${CHAUDRON_PORT:-28471}}
       # Connexion factice (sans mot de passe) en plus des vrais fournisseurs s'ils sont dans .env.
-      # Jamais sur un serveur joignable de dehors.
+      # Refusee si PUBLIC_URL n est pas localhost : le serveur ne demarre pas.
       AUTH_FAKE: ${AUTH_FAKE:-1}
       # Appli servie par Expo (npm run dev, sur :8081) : DEV_WEB_ORIGIN=http://localhost:8081 scripts/dev.sh up -d
       # Vide : l'appli construite est servie par le serveur, sur :28471.
