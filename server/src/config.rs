@@ -101,6 +101,11 @@ impl Config {
         }
 
         let fake_oauth = var("AUTH_FAKE").is_some_and(|v| v == "1" || v == "true");
+        if fake_oauth && !is_local(&public_url) {
+            return Err(format!(
+                "AUTH_FAKE refusé avec PUBLIC_URL={public_url} : la connexion factice ne vaut que sur localhost"
+            ));
+        }
         if fake_oauth {
             // Le navigateur passe par l'URL publique ; le serveur se parle à lui-même en direct.
             providers.push(Provider::fake(
@@ -193,6 +198,17 @@ impl Config {
     }
 }
 
+/// Adresse joignable seulement depuis la machine : `http://localhost` ou `http://127.0.0.1`, avec ou sans port.
+fn is_local(url: &str) -> bool {
+    ["http://localhost", "http://127.0.0.1"]
+        .iter()
+        .any(|prefix| {
+            url.strip_prefix(prefix).is_some_and(|rest| {
+                rest.is_empty() || rest.starts_with(':') || rest.starts_with('/')
+            })
+        })
+}
+
 fn var(name: &str) -> Option<String> {
     env::var(name)
         .ok()
@@ -203,6 +219,15 @@ fn var(name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn connexion_factice_en_local_seulement() {
+        assert!(is_local("http://localhost:28471"));
+        assert!(is_local("http://127.0.0.1"));
+        assert!(!is_local("https://chaudron-dev.bonvallet.eu"));
+        assert!(!is_local("http://localhost.evil.example"));
+        assert!(!is_local("http://192.168.68.110:28471"));
+    }
 
     #[test]
     fn politique_d_inscription() {
