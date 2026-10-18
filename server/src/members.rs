@@ -18,7 +18,7 @@ use crate::{
     auth::CurrentUser,
     error::{ApiError, ApiResult, ErrorBody},
     households::role_in,
-    types::{Diet, ExclusionKind, Meal, MemberKind},
+    types::{Diet, ExclusionKind, Meal, MemberKind, PortionRole},
     validate,
 };
 
@@ -55,6 +55,17 @@ impl Portions {
                 starch: 1.0,
                 ..Self::uniform(0.6)
             },
+        }
+    }
+
+    /// Multiplicateur d'un rôle d'ingrédient.
+    pub fn for_role(&self, role: PortionRole) -> f32 {
+        match role {
+            PortionRole::Protein => self.protein,
+            PortionRole::Starch => self.starch,
+            PortionRole::Veg => self.veg,
+            PortionRole::Fat => self.fat,
+            PortionRole::Other => self.other,
         }
     }
 

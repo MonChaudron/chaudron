@@ -25,7 +25,8 @@ pub fn router() -> Router<AppState> {
 pub struct Event {
     #[serde(skip)]
     pub household: Uuid,
-    /// `shopping` : une liste de courses a changé ; `menu` : un menu a changé (et sa liste avec).
+    /// `shopping` : une liste de courses a changé ; `menu` : un menu a changé (et sa liste avec) ; `cooking` : la
+    /// cuisson en cours a commencé, changé de place ou s'est terminée.
     #[serde(skip)]
     pub kind: &'static str,
     pub week_start: Option<Day>,
@@ -56,8 +57,8 @@ impl AppState {
     }
 }
 
-/// Flux SSE : `event: shopping` ou `event: menu`, données `{"week_start": …, "cursor": …}` ; battement toutes les
-/// 30 s (Cloudflare coupe une connexion muette au bout de 100 s). `event: resync` : des événements ont été perdus,
+/// Flux SSE : `event: shopping`, `event: menu` ou `event: cooking`, données `{"week_start": …, "cursor": …}` ;
+/// battement toutes les 30 s (Cloudflare coupe une connexion muette au bout de 100 s). `event: resync` : des événements ont été perdus,
 /// tout relire.
 #[utoipa::path(
     get,

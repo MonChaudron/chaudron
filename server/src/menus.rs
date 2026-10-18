@@ -1164,6 +1164,50 @@ pub async fn read(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
     compute(db, household_id, menu).await
 }
 
+/// Le créneau d'un repas qui sert cette recette (le menu le plus récent s'il y en a deux) : pour la cuisson en cours,
+/// qui ne garde pas l'identifiant du créneau (republier un menu recrée ses créneaux).
+pub async fn slot_for(
+    db: &PgPool,
+    household_id: Uuid,
+    date: Day,
+    meal: Meal,
+    recipe_id: Uuid,
+) -> ApiResult<Option<MenuSlot>> {
+    let menu: Option<MenuRow> = sqlx::query_as(
+        "SELECT m.id, m.week_start, m.title, m.notes FROM menus m
+         WHERE m.household_id = $1 AND EXISTS (
+             SELECT 1 FROM menu_slots s WHERE s.menu_id = m.id AND s.date = $2 AND s.meal = $3 AND s.recipe_id = $4)
+         ORDER BY m.week_start DESC LIMIT 1",
+    )
+    .bind(household_id)
+    .bind(date.0)
+    .bind(meal.as_str())
+    .bind(recipe_id)
+    .fetch_optional(db)
+    .await?;
+    let Some(menu) = menu else { return Ok(None) };
+    let rows: Vec<SlotRow> = slot_rows(db, &[menu.id])
+        .await?
+        .into_iter()
+        .filter(|r| r.day() == date && r.meal == meal && r.recipe_id == recipe_id)
+        .collect();
+    let ctx = context(db, household_id, &[recipe_id]).await?;
+    Ok(rows
+        .first()
+        .map(|row| slot_view(row, Day(menu.week_start), &ctx)))
+}
+
+/// Portions d'un repas hors menu : les membres présents, avec leur barème.
+pub async fn presence_scale(
+    db: &PgPool,
+    household_id: Uuid,
+    date: Day,
+    meal: Meal,
+) -> ApiResult<(i32, Portions)> {
+    let members = members::load(db, household_id, None).await?;
+    Ok(part(&present(&members, date, meal), None))
+}
+
 // Écriture
 
 fn in_span(week_start: Day, day: Day) -> ApiResult<()> {

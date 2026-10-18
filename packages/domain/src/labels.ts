@@ -73,6 +73,7 @@ export const scopes = {
   read: 'Lire les recettes',
   'recipes:write': 'Publier des recettes',
   'menus:write': 'Publier des menus',
+  'cooking:write': 'Avancer dans la cuisson',
 } as const;
 
 /** Unités, pour la saisie. */
