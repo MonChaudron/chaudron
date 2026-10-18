@@ -141,5 +141,7 @@ text_enum! {
         RecipesWrite = "recipes:write",
         /// Publier des menus (M3).
         MenusWrite = "menus:write",
+        /// Avancer dans la cuisson en cours (la skill Alexa, M4).
+        CookingWrite = "cooking:write",
     }
 }

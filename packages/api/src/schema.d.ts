@@ -181,6 +181,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/cooking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** La cuisson en cours ; 204 s'il n'y en a pas (ou plus : 6 h sans nouvelles). */
+        get: operations["read_cooking"];
+        /**
+         * Commence la cuisson ou change de place (la dernière écriture gagne). Même recette et même créneau : la même
+         *     cuisson continue.
+         */
+        put: operations["put_cooking"];
+        post?: never;
+        /** Termine la cuisson en cours (rien à faire s'il n'y en a pas). */
+        delete: operations["end_cooking"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/equipment": {
         parameters: {
             query?: never;
@@ -206,8 +228,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Flux SSE : `event: shopping` ou `event: menu`, données `{"week_start": …, "cursor": …}` ; battement toutes les
-         *     30 s (Cloudflare coupe une connexion muette au bout de 100 s). `event: resync` : des événements ont été perdus,
+         * Flux SSE : `event: shopping`, `event: menu` ou `event: cooking`, données `{"week_start": …, "cursor": …}` ;
+         *     battement toutes les 30 s (Cloudflare coupe une connexion muette au bout de 100 s). `event: resync` : des événements ont été perdus,
          *     tout relire.
          */
         get: operations["events"];
@@ -685,6 +707,89 @@ export interface components {
          * @enum {string}
          */
         Block: "recipes" | "breakfast_desserts" | "special";
+        /** @description Cuisson en cours. */
+        Cooking: {
+            current: components["schemas"]["CookingStep"];
+            /** Format: date */
+            date?: string | null;
+            ingredients: components["schemas"]["CookingLine"][];
+            meal?: components["schemas"]["Meal"] | null;
+            mode: components["schemas"]["CookingMode"];
+            /** Format: int32 */
+            phase: number;
+            /** Format: int32 */
+            phase_count: number;
+            recipe: components["schemas"]["Recipe"];
+            /**
+             * Format: int32
+             * @description Portions : celles du créneau, sinon les présents au repas (au dîner du jour sans créneau).
+             */
+            servings: number;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: int32 */
+            step?: number | null;
+            /**
+             * Format: int32
+             * @description Gestes de la phase en cours (0 : la phase n'en a pas).
+             */
+            step_count: number;
+            /** Format: date-time */
+            updated_at: string;
+            variant: string;
+        };
+        /** @description Où on en est. Les positions comptent à partir de 0 ; au-delà de la fin, la dernière. */
+        CookingInput: {
+            /**
+             * Format: date
+             * @description Jour du créneau du menu, avec `meal`.
+             */
+            date?: string | null;
+            meal?: components["schemas"]["Meal"] | null;
+            mode: components["schemas"]["CookingMode"];
+            /** Format: int32 */
+            phase: number;
+            /** @description Slug de la recette. */
+            recipe: string;
+            /**
+             * Format: int32
+             * @description Geste de la phase, en mode pas à pas ; ignoré en mode rapide et sur une phase sans gestes.
+             */
+            step?: number | null;
+            /** @description Variante ; par défaut celle du créneau, sinon la variante par défaut de la recette. */
+            variant?: string | null;
+        };
+        /** @description Ingrédient, en quantité pour les portions de la cuisson. */
+        CookingLine: {
+            /** @description Code de l'ingrédient. */
+            ingredient: string;
+            name: string;
+            note?: string | null;
+            optional: boolean;
+            /**
+             * Format: float
+             * @description Nulle : « au goût ».
+             */
+            qty?: number | null;
+            state: components["schemas"]["IngredientState"];
+            unit: components["schemas"]["Unit"];
+        };
+        /**
+         * @description `fast` : une étape par phase ; `guided` : un écran par geste.
+         * @enum {string}
+         */
+        CookingMode: "fast" | "guided";
+        /** @description L'écran à lire : la phase en mode rapide, le geste en pas à pas. */
+        CookingStep: {
+            /** @description Texte lu par Alexa, s'il diffère. */
+            spoken_text?: string | null;
+            text: string;
+            /** Format: int32 */
+            timer_s?: number | null;
+            /** @description Titre de la phase. */
+            title: string;
+            video_url?: string | null;
+        };
         /** @description Jeton créé : sa valeur n'est montrée qu'ici. */
         CreatedApiToken: components["schemas"]["ApiTokenInfo"] & {
             /** @description À envoyer en `Authorization: Bearer …`. */
@@ -1307,7 +1412,7 @@ export interface components {
          * @description Droit d'un jeton d'API.
          * @enum {string}
          */
-        Scope: "read" | "recipes:write" | "menus:write";
+        Scope: "read" | "recipes:write" | "menus:write" | "cooking:write";
         /** @description Article de la liste. */
         ShoppingItem: {
             aisle: components["schemas"]["Aisle"];
@@ -1941,6 +2046,126 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_cooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cooking"];
+                };
+            };
+            /** @description Pas de cuisson en cours */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_cooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CookingInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cooking"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    end_cooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

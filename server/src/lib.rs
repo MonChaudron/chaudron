@@ -4,6 +4,7 @@ pub mod auth;
 pub mod catalog;
 pub mod ciqual;
 pub mod config;
+pub mod cooking;
 pub mod crypto;
 pub mod error;
 pub mod events;
@@ -127,6 +128,9 @@ impl AppState {
         shopping::read_list,
         shopping::apply_ops,
         shopping::list_ops,
+        cooking::read_cooking,
+        cooking::put_cooking,
+        cooking::end_cooking,
         events::events,
         tokens::list_tokens,
         tokens::create_token,
@@ -220,6 +224,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(recipes::router())
         .merge(menus::router())
         .merge(shopping::router())
+        .merge(cooking::router())
         .merge(events::router())
         .merge(tokens::router())
         .route("/openapi.json", get(openapi))

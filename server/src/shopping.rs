@@ -302,13 +302,7 @@ async fn compute(
                 if line.per_batch {
                     q
                 } else {
-                    q * match line.role {
-                        PortionRole::Protein => slot.scale.protein,
-                        PortionRole::Starch => slot.scale.starch,
-                        PortionRole::Veg => slot.scale.veg,
-                        PortionRole::Fat => slot.scale.fat,
-                        PortionRole::Other => slot.scale.other,
-                    }
+                    q * slot.scale.for_role(line.role)
                 }
             });
             let i = *index.entry(key.clone()).or_insert_with(|| {
