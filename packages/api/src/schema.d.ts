@@ -296,6 +296,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Applications liées au foyer (propriétaires). */
+        get: operations["list_links"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retire une liaison et ses jetons (propriétaires). L'application devra être liée de nouveau. */
+        delete: operations["revoke_link"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/members": {
         parameters: {
             query?: never;
@@ -622,6 +656,57 @@ export interface paths {
         patch: operations["update_me"];
         trace?: never;
     };
+    "/api/v1/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Autorise l'application sur un foyer du compte connecté (tout compte du foyer) : crée un code de 5 minutes. */
+        post: operations["authorize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/oauth/client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Présente l'application qui demande l'accès (écran « Autoriser Alexa »). */
+        get: operations["client_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Échange un code contre des jetons, ou renouvelle le jeton d'accès. */
+        post: operations["token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/openapi.json": {
         parameters: {
             query?: never;
@@ -647,6 +732,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["defaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Foyer et droits du jeton appelant : la skill ne reçoit d'Amazon que le jeton. Jeton seulement (401 en session). */
+        get: operations["token_info"];
         put?: never;
         post?: never;
         delete?: never;
@@ -702,11 +804,31 @@ export interface components {
             name: string;
             scopes: components["schemas"]["Scope"][];
         };
+        /** @description « Autoriser » : le foyer choisi, et ce que l'application a envoyé. */
+        AuthorizeInput: {
+            client_id: string;
+            /** Format: uuid */
+            household_id: string;
+            redirect_uri: string;
+            /** @description Rendu tel quel à l'application. */
+            state?: string | null;
+        };
+        Authorized: {
+            /** @description Où envoyer le navigateur : l'adresse de retour, avec le code et `state`. */
+            redirect_to: string;
+        };
         /**
          * @description Bloc de la liste.
          * @enum {string}
          */
         Block: "recipes" | "breakfast_desserts" | "special";
+        /** @description Application qui demande l'accès. */
+        ClientInfo: {
+            /** @description « Alexa ». */
+            name: string;
+            /** @description Ce qu'elle pourra faire. */
+            scopes: components["schemas"]["Scope"][];
+        };
         /** @description Cuisson en cours. */
         Cooking: {
             current: components["schemas"]["CookingStep"];
@@ -1048,6 +1170,20 @@ export interface components {
             state?: components["schemas"]["IngredientState"] | null;
             unit: components["schemas"]["InputUnit"];
         };
+        /** @description Application liée au foyer. */
+        LinkInfo: {
+            /** @description « Alexa ». */
+            client: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            scopes: components["schemas"]["Scope"][];
+            /** @description Le compte qui l'a autorisée. */
+            user: string;
+        };
         LoggedIn: {
             /** @description Page de l'appli où aller ensuite. */
             return_to: string;
@@ -1247,6 +1383,11 @@ export interface components {
             name: string;
             /** Format: uuid */
             user_id?: string | null;
+        };
+        /** @description Erreur au format OAuth2 : `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`. */
+        OAuthError: {
+            error: string;
+            error_description: string;
         };
         /** @description Jeton reçu de Google One Tap. */
         OneTapLogin: {
@@ -1577,6 +1718,38 @@ export interface components {
         ThawItem: {
             ingredient: string;
             name: string;
+        };
+        /** @description Ce que vaut le jeton appelant. */
+        TokenInfo: {
+            /** Format: uuid */
+            household_id: string;
+            scopes: components["schemas"]["Scope"][];
+        };
+        /**
+         * @description Requête de jeton (RFC 6749 §4.1.3 et §6), en `application/x-www-form-urlencoded`. Le client s'identifie en HTTP
+         *     Basic, ou par `client_id` et `client_secret`.
+         */
+        TokenRequest: {
+            client_id?: string | null;
+            client_secret?: string | null;
+            code?: string | null;
+            /** @description `authorization_code` ou `refresh_token`. */
+            grant_type: string;
+            redirect_uri?: string | null;
+            refresh_token?: string | null;
+        };
+        TokenResponse: {
+            access_token: string;
+            /**
+             * Format: int64
+             * @description En secondes.
+             */
+            expires_in: number;
+            /** @description Seulement à l'échange du code : il ne change pas ensuite. */
+            refresh_token?: string | null;
+            scope: string;
+            /** @description `Bearer`. */
+            token_type: string;
         };
         /**
          * @description Unité normalisée.
@@ -2413,6 +2586,79 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Annulée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_links: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkInfo"][];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    revoke_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -3596,6 +3842,122 @@ export interface operations {
             };
         };
     };
+    authorize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizeInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Authorized"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    client_info: {
+        parameters: {
+            query: {
+                client_id: string;
+                redirect_uri: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientInfo"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["TokenRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthError"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthError"];
+                };
+            };
+        };
+    };
     openapi: {
         parameters: {
             query?: never;
@@ -3629,6 +3991,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DefaultPortions"];
+                };
+            };
+        };
+    };
+    token_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenInfo"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

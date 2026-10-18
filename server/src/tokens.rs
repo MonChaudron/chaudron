@@ -90,7 +90,7 @@ pub async fn list_tokens(
     require_owner(&state.db, id, user_id).await?;
     let rows: Vec<TokenRow> = sqlx::query_as(
         "SELECT id, name, scopes, created_at, last_used_at FROM api_tokens
-         WHERE household_id = $1 ORDER BY created_at",
+         WHERE household_id = $1 AND grant_id IS NULL ORDER BY created_at",
     )
     .bind(id)
     .fetch_all(&state.db)
@@ -180,11 +180,13 @@ pub async fn revoke_token(
     Path((id, token_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<StatusCode> {
     require_owner(&state.db, id, user_id).await?;
-    let deleted = sqlx::query("DELETE FROM api_tokens WHERE id = $1 AND household_id = $2")
-        .bind(token_id)
-        .bind(id)
-        .execute(&state.db)
-        .await?;
+    let deleted = sqlx::query(
+        "DELETE FROM api_tokens WHERE id = $1 AND household_id = $2 AND grant_id IS NULL",
+    )
+    .bind(token_id)
+    .bind(id)
+    .execute(&state.db)
+    .await?;
     if deleted.rows_affected() == 0 {
         return Err(ApiError::not_found());
     }

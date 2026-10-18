@@ -43,6 +43,17 @@ impl SignupPolicy {
     }
 }
 
+/// Client autorisé à demander un jeton au nom d'un foyer (la skill Alexa), par le flux du code d'autorisation.
+#[derive(Clone, Debug)]
+pub struct OAuthClient {
+    pub id: String,
+    pub secret: String,
+    /// Nom affiché sur l'écran d'autorisation et dans « Accès ».
+    pub name: String,
+    /// Adresses de retour acceptées, comparées à l'identique.
+    pub redirect_uris: Vec<String>,
+}
+
 pub struct Config {
     /// URL publique, sans `/` final (ex. `https://chaudron.bonvallet.eu`). Sert aux URL de retour OAuth,
     /// aux liens d'invitation, au contrôle de l'en-tête `Origin` et aux cookies `Secure`.
@@ -55,6 +66,8 @@ pub struct Config {
     /// Origine du serveur de dev de l'appli (`http://localhost:8081`) : CORS avec cookies, écritures acceptées,
     /// retour après connexion. Dev seulement.
     pub dev_web_origin: Option<String>,
+    /// Clients OAuth : la skill Alexa (`ALEXA_CLIENT_ID`, `ALEXA_CLIENT_SECRET`, `ALEXA_REDIRECT_URIS`).
+    pub oauth_clients: Vec<OAuthClient>,
 }
 
 impl Config {
@@ -104,12 +117,44 @@ impl Config {
             return Err("DEV_WEB_ORIGIN doit commencer par http:// ou https://".into());
         }
 
+        let mut oauth_clients = Vec::new();
+        match (
+            var("ALEXA_CLIENT_ID"),
+            var("ALEXA_CLIENT_SECRET"),
+            var("ALEXA_REDIRECT_URIS"),
+        ) {
+            (Some(id), Some(secret), Some(uris)) => {
+                let redirect_uris: Vec<String> = uris
+                    .split(',')
+                    .map(|u| u.trim().to_owned())
+                    .filter(|u| !u.is_empty())
+                    .collect();
+                if redirect_uris.iter().any(|u| !u.starts_with("https://")) {
+                    return Err("ALEXA_REDIRECT_URIS : des adresses https:// seulement".into());
+                }
+                oauth_clients.push(OAuthClient {
+                    id,
+                    secret,
+                    name: "Alexa".into(),
+                    redirect_uris,
+                });
+            }
+            (None, None, None) => {}
+            _ => {
+                return Err(
+                    "ALEXA_CLIENT_ID, ALEXA_CLIENT_SECRET et ALEXA_REDIRECT_URIS vont ensemble"
+                        .into(),
+                );
+            }
+        }
+
         Ok(Self {
             public_url,
             providers,
             signup: SignupPolicy::parse(&env::var("SIGNUP_ALLOWED_EMAILS").unwrap_or_default()),
             fake_oauth,
             dev_web_origin,
+            oauth_clients,
         })
     }
 
@@ -129,6 +174,10 @@ impl Config {
     /// Adresse d'une page de l'appli : relative, ou sur le serveur de dev de l'appli s'il est déclaré.
     pub fn web_url(&self, path: &str) -> String {
         format!("{}{path}", self.dev_web_origin.as_deref().unwrap_or(""))
+    }
+
+    pub fn oauth_client(&self, id: &str) -> Option<&OAuthClient> {
+        self.oauth_clients.iter().find(|c| c.id == id)
     }
 
     pub fn provider(&self, id: &str) -> Option<&Provider> {

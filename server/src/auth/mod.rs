@@ -190,7 +190,9 @@ async fn bearer_token(db: &PgPool, headers: &HeaderMap) -> Result<Option<ApiToke
         return Ok(None);
     };
     let row: Option<(Uuid, Vec<String>)> = sqlx::query_as(
-        "UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1 RETURNING household_id, scopes",
+        "UPDATE api_tokens SET last_used_at = now()
+         WHERE token_hash = $1 AND (expires_at IS NULL OR expires_at > now())
+         RETURNING household_id, scopes",
     )
     .bind(sha256(token.trim().as_bytes()))
     .fetch_optional(db)

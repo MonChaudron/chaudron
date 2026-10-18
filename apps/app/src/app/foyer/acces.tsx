@@ -1,4 +1,4 @@
-import { type ApiTokenInfo, errorMessage, type Scope } from '@chaudron/api';
+import { type ApiTokenInfo, errorMessage, type LinkInfo, type Scope } from '@chaudron/api';
 import { scopes as scopeLabels, space } from '@chaudron/domain';
 import { Redirect, Stack as Router } from 'expo-router';
 import { useState } from 'react';
@@ -12,7 +12,10 @@ import { Back, Body, Button, Card, Columns, ErrorText, Field, ListRow, Loading, 
 /** Les droits proposés : les menus arrivent au M3. */
 const offered: Scope[] = ['read', 'recipes:write'];
 
-/** Jetons d'API du foyer, pour que Claude (ou un script) publie des recettes. Propriétaires seulement. */
+/**
+ * Ce qui entre dans le foyer sans se connecter : les jetons d'API (Claude, un script) et les applications liées
+ * (Alexa). Propriétaires seulement.
+ */
 export default function Access() {
   const { me } = useSession();
   const home = me?.households[0];
@@ -31,6 +34,7 @@ export default function Access() {
 function Tokens({ householdId }: { householdId: string }) {
   const path = { params: { path: { id: householdId } } };
   const tokens = useLoad(() => api.GET('/api/v1/households/{id}/tokens', path), [householdId]);
+  const links = useLoad(() => api.GET('/api/v1/households/{id}/links', path), [householdId]);
   const [created, setCreated] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const address = apiBase || (Platform.OS === 'web' ? window.location.origin : '');
@@ -43,14 +47,23 @@ function Tokens({ householdId }: { householdId: string }) {
     await tokens.reload();
   };
 
+  const unlink = async (link: LinkInfo) => {
+    const { response, error: failure } = await api.DELETE('/api/v1/households/{id}/links/{link_id}', {
+      params: { path: { id: householdId, link_id: link.id } },
+    });
+    setError(response.ok ? null : errorMessage(failure));
+    await links.reload();
+  };
+
   return (
     <Screen>
-      <Router.Screen options={{ title: 'Accès pour Claude · Chaudron' }} />
+      <Router.Screen options={{ title: 'Accès · Chaudron' }} />
       <Back href="/foyer" label="Le foyer" />
-      <Title>Accès pour Claude</Title>
+      <Title>Accès</Title>
       <Body tone="muted" style={{ maxWidth: 720 }}>
-        Un jeton d’accès laisse Claude, ou un script, publier les recettes du foyer sans se connecter. Il ne vaut que pour
-        ce foyer ; tu peux le retirer à tout moment.
+        Un jeton d’accès laisse Claude, ou un script, publier les recettes du foyer sans se connecter ; Alexa se lie
+        depuis son appli, avec ton compte Chaudron. Chaque accès ne vaut que pour ce foyer, et tu peux le retirer à tout
+        moment.
       </Body>
 
       <Columns weights={[1, 1]}>
@@ -75,29 +88,58 @@ function Tokens({ householdId }: { householdId: string }) {
           )}
         </Stack>
 
-        <Card>
-          <Title level={2}>Jetons du foyer</Title>
-          <ErrorText>{error ?? tokens.error}</ErrorText>
-          {tokens.data === undefined ? <Loading /> : null}
-          {tokens.data?.length === 0 ? <Body tone="muted" size={16}>Aucun jeton pour l’instant.</Body> : null}
-          <View>
-            {tokens.data?.map((token, i) => (
-              <View key={token.id} style={{ gap: space[1] }}>
-                <ListRow
-                  title={token.name}
-                  detail={[
-                    token.scopes.map((s) => scopeLabels[s]).join(', '),
-                    token.last_used_at ? `servi le ${formatDate(token.last_used_at)}` : 'jamais servi',
-                  ].join(' — ')}
-                  last
-                />
-                <Row style={{ paddingBottom: i === (tokens.data?.length ?? 0) - 1 ? 0 : space[3] }}>
-                  <Button kind="quiet" label="Retirer ce jeton" onPress={() => revoke(token)} />
-                </Row>
-              </View>
-            ))}
-          </View>
-        </Card>
+        <Stack gap={space[5]}>
+          <Card>
+            <Title level={2}>Jetons du foyer</Title>
+            <ErrorText>{error ?? tokens.error}</ErrorText>
+            {tokens.data === undefined ? <Loading /> : null}
+            {tokens.data?.length === 0 ? <Body tone="muted" size={16}>Aucun jeton pour l’instant.</Body> : null}
+            <View>
+              {tokens.data?.map((token, i) => (
+                <View key={token.id} style={{ gap: space[1] }}>
+                  <ListRow
+                    title={token.name}
+                    detail={[
+                      token.scopes.map((s) => scopeLabels[s]).join(', '),
+                      token.last_used_at ? `servi le ${formatDate(token.last_used_at)}` : 'jamais servi',
+                    ].join(' — ')}
+                    last
+                  />
+                  <Row style={{ paddingBottom: i === (tokens.data?.length ?? 0) - 1 ? 0 : space[3] }}>
+                    <Button kind="quiet" label="Retirer ce jeton" onPress={() => revoke(token)} />
+                  </Row>
+                </View>
+              ))}
+            </View>
+          </Card>
+          <Card>
+            <Title level={2}>Applications liées</Title>
+            <ErrorText>{links.error}</ErrorText>
+            {links.data === undefined && !links.error ? <Loading /> : null}
+            {links.data?.length === 0 ? (
+              <Body tone="muted" size={16}>
+                Aucune. Pour Alexa : dans l’appli Alexa, active la skill « Chaudron » et lie ton compte.
+              </Body>
+            ) : null}
+            <View>
+              {links.data?.map((link, i) => (
+                <View key={link.id} style={{ gap: space[1] }}>
+                  <ListRow
+                    title={link.client}
+                    detail={[
+                      `liée par ${link.user}`,
+                      link.last_used_at ? `servie le ${formatDate(link.last_used_at)}` : 'jamais servie',
+                    ].join(' — ')}
+                    last
+                  />
+                  <Row style={{ paddingBottom: i === (links.data?.length ?? 0) - 1 ? 0 : space[3] }}>
+                    <Button kind="quiet" label="Retirer cette liaison" onPress={() => unlink(link)} />
+                  </Row>
+                </View>
+              ))}
+            </View>
+          </Card>
+        </Stack>
       </Columns>
     </Screen>
   );

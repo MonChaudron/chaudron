@@ -13,15 +13,24 @@ const labels: Record<string, string> = {
 };
 
 /**
- * Boutons de connexion des fournisseurs configurés. Avec `invite`, la connexion fait entrer dans le foyer.
+ * Boutons de connexion des fournisseurs configurés. Avec `invite`, la connexion fait entrer dans le foyer ; avec
+ * `returnTo`, elle revient sur cette page de l'appli.
  * `initialError` : erreur d'une connexion précédente (redirection), remplacée par celle de One Tap s'il y en a une.
  */
-export function LoginOptions({ invite, initialError }: { invite?: string; initialError?: string | null }) {
+export function LoginOptions({
+  invite,
+  returnTo,
+  initialError,
+}: {
+  invite?: string;
+  returnTo?: string;
+  initialError?: string | null;
+}) {
   const { providers, refresh } = useSession();
   const router = useRouter();
   const [oneTapError, setError] = useState<string | null>(null);
   const error = oneTapError ?? initialError ?? null;
-  const go = (provider: string) => globalThis.location?.assign(loginUrl(provider, { invite }));
+  const go = (provider: string) => globalThis.location?.assign(loginUrl(provider, { invite, returnTo }));
 
   return (
     <Stack>
@@ -33,9 +42,9 @@ export function LoginOptions({ invite, initialError }: { invite?: string; initia
             clientId={provider.client_id}
             invite={invite}
             onError={setError}
-            onLoggedIn={async (returnTo) => {
+            onLoggedIn={async (serverReturn) => {
               await refresh();
-              router.replace(returnTo as never);
+              router.replace((returnTo ?? serverReturn) as never);
             }}
           />
         ) : (

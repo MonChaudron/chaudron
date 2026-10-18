@@ -13,6 +13,7 @@ pub mod http;
 pub mod ingredients;
 pub mod members;
 pub mod menus;
+pub mod oauth;
 pub mod recipes;
 pub mod shopping;
 pub mod text;
@@ -132,6 +133,12 @@ impl AppState {
         cooking::put_cooking,
         cooking::end_cooking,
         events::events,
+        oauth::client_info,
+        oauth::authorize,
+        oauth::token,
+        oauth::token_info,
+        oauth::list_links,
+        oauth::revoke_link,
         tokens::list_tokens,
         tokens::create_token,
         tokens::revoke_token,
@@ -227,6 +234,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(cooking::router())
         .merge(events::router())
         .merge(tokens::router())
+        .merge(oauth::router())
         .route("/openapi.json", get(openapi))
         .layer(middleware::from_fn_with_state(
             state.clone(),

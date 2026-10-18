@@ -70,7 +70,7 @@ export const ingredientStates = {
 
 /** Droits d'un jeton d'API. */
 export const scopes = {
-  read: 'Lire les recettes',
+  read: 'Lire les recettes et les menus',
   'recipes:write': 'Publier des recettes',
   'menus:write': 'Publier des menus',
   'cooking:write': 'Avancer dans la cuisson',
