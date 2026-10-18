@@ -1,0 +1,408 @@
+{
+  "type": "APL",
+  "version": "1.8",
+  "theme": "dark",
+  "settings": {
+    "idleTimeout": 1800000
+  },
+  "layouts": {
+    "Bouton": {
+      "parameters": [
+        "label",
+        "action",
+        {
+          "name": "arg",
+          "default": ""
+        },
+        {
+          "name": "fond",
+          "default": "#C9F23F"
+        },
+        {
+          "name": "encre",
+          "default": "#11140A"
+        }
+      ],
+      "items": [
+        {
+          "type": "TouchWrapper",
+          "onPress": {
+            "type": "SendEvent",
+            "arguments": [
+              "${action}",
+              "${arg}"
+            ]
+          },
+          "item": {
+            "type": "Frame",
+            "backgroundColor": "${fond}",
+            "borderRadius": 12,
+            "paddingLeft": 28,
+            "paddingRight": 28,
+            "paddingTop": 14,
+            "paddingBottom": 14,
+            "item": {
+              "type": "Text",
+              "text": "${label}",
+              "fontSize": 28,
+              "color": "${encre}",
+              "fontWeight": "bold",
+              "textAlign": "center"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "mainTemplate": {
+    "parameters": [
+      "donnees"
+    ],
+    "item": {
+      "type": "Frame",
+      "width": "100vw",
+      "height": "100vh",
+      "backgroundColor": "#11140A",
+      "item": {
+        "type": "Container",
+        "width": "100%",
+        "height": "100%",
+        "items": [
+          {
+            "when": "${donnees.d.vue == 'menu'}",
+            "type": "Container",
+            "width": "100%",
+            "height": "100%",
+            "paddingLeft": 48,
+            "paddingRight": 48,
+            "paddingTop": 32,
+            "paddingBottom": 24,
+            "items": [
+              {
+                "type": "Text",
+                "text": "${donnees.d.titre}",
+                "fontSize": 44,
+                "fontWeight": "900",
+                "color": "#EEF3DC"
+              },
+              {
+                "type": "Text",
+                "text": "${donnees.d.periode}",
+                "fontSize": 22,
+                "color": "#DAF76C",
+                "paddingBottom": 16
+              },
+              {
+                "type": "Sequence",
+                "grow": 1,
+                "width": "100%",
+                "data": "${donnees.d.items}",
+                "item": {
+                  "type": "TouchWrapper",
+                  "spacing": 8,
+                  "onPress": {
+                    "type": "SendEvent",
+                    "arguments": [
+                      "recette",
+                      "${data.id}"
+                    ]
+                  },
+                  "item": {
+                    "type": "Frame",
+                    "backgroundColor": "${data.ceSoir ? '#313D10' : '#1C2111'}",
+                    "borderRadius": 10,
+                    "paddingLeft": 16,
+                    "paddingRight": 20,
+                    "paddingTop": 10,
+                    "paddingBottom": 10,
+                    "item": {
+                      "type": "Container",
+                      "direction": "row",
+                      "alignItems": "center",
+                      "items": [
+                        {
+                          "type": "Text",
+                          "text": "${data.jour}",
+                          "width": 160,
+                          "fontSize": 28,
+                          "fontWeight": "bold",
+                          "color": "${data.ceSoir ? '#C9F23F' : '#DAF76C'}",
+                          "spacing": 20
+                        },
+                        {
+                          "type": "Container",
+                          "grow": 1,
+                          "shrink": 1,
+                          "items": [
+                            {
+                              "type": "Text",
+                              "text": "${data.titre}",
+                              "fontSize": 26,
+                              "color": "#EEF3DC",
+                              "maxLines": 1
+                            },
+                            {
+                              "type": "Text",
+                              "text": "${data.meta}",
+                              "fontSize": 20,
+                              "color": "#AEB78F"
+                            }
+                          ],
+                          "width": 0
+                        }
+                      ],
+                      "width": "100%"
+                    },
+                    "width": "100%"
+                  },
+                  "width": "100%"
+                }
+              }
+            ]
+          },
+          {
+            "when": "${donnees.d.vue == 'recette'}",
+            "type": "Container",
+            "direction": "row",
+            "width": "100%",
+            "height": "100%",
+            "items": [
+              {
+                "type": "Container",
+                "width": "58%",
+                "height": "100%",
+                "paddingLeft": 48,
+                "paddingRight": 32,
+                "paddingTop": 32,
+                "paddingBottom": 24,
+                "items": [
+                  {
+                    "type": "Text",
+                    "text": "${donnees.d.jour}",
+                    "fontSize": 24,
+                    "color": "#DAF76C",
+                    "fontWeight": "bold"
+                  },
+                  {
+                    "type": "Text",
+                    "text": "${donnees.d.titre}",
+                    "fontSize": 38,
+                    "fontWeight": "900",
+                    "color": "#EEF3DC",
+                    "maxLines": 3
+                  },
+                  {
+                    "type": "Text",
+                    "text": "${donnees.d.meta}",
+                    "fontSize": 22,
+                    "color": "#AEB78F",
+                    "paddingBottom": 16
+                  },
+                  {
+                    "type": "Sequence",
+                    "grow": 1,
+                    "width": "100%",
+                    "data": "${donnees.d.ingredients}",
+                    "item": {
+                      "type": "Container",
+                      "direction": "row",
+                      "paddingTop": 6,
+                      "paddingBottom": 6,
+                      "items": [
+                        {
+                          "type": "Text",
+                          "text": "${data.nom}",
+                          "grow": 1,
+                          "shrink": 1,
+                          "fontSize": 26,
+                          "color": "#EEF3DC"
+                        },
+                        {
+                          "type": "Text",
+                          "text": "${data.qte}",
+                          "fontSize": 26,
+                          "fontWeight": "bold",
+                          "color": "#C9F23F",
+                          "paddingLeft": 16
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "Container",
+                "width": "42%",
+                "height": "100%",
+                "paddingLeft": 36,
+                "paddingRight": 36,
+                "paddingTop": 32,
+                "items": [
+                  {
+                    "type": "Text",
+                    "text": "Dis :",
+                    "fontSize": 24,
+                    "color": "#AEB78F",
+                    "spacing": 0
+                  },
+                  {
+                    "type": "Text",
+                    "text": "« Alexa, on commence »<br>« Alexa, les ingrédients »<br>« Alexa, comment je sers »<br>« Alexa, le menu »",
+                    "fontSize": 28,
+                    "color": "#EEF3DC",
+                    "lineHeight": 1.5,
+                    "paddingBottom": 32
+                  },
+                  {
+                    "type": "Container",
+                    "direction": "row",
+                    "items": [
+                      {
+                        "type": "Bouton",
+                        "label": "Commencer",
+                        "action": "commencer"
+                      },
+                      {
+                        "type": "Bouton",
+                        "label": "Menu",
+                        "action": "menu",
+                        "fond": "#1C2111",
+                        "spacing": 16,
+                        "encre": "#EEF3DC"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "when": "${donnees.d.vue == 'etape'}",
+            "type": "Container",
+            "direction": "row",
+            "width": "100%",
+            "height": "100%",
+            "items": [
+              {
+                "type": "Container",
+                "width": "70%",
+                "height": "100%",
+                "paddingLeft": 48,
+                "paddingRight": 36,
+                "paddingTop": 28,
+                "paddingBottom": 24,
+                "items": [
+                  {
+                    "type": "Text",
+                    "text": "${donnees.d.titre}",
+                    "fontSize": 20,
+                    "color": "#AEB78F",
+                    "maxLines": 1
+                  },
+                  {
+                    "type": "Text",
+                    "text": "${donnees.d.position}",
+                    "fontSize": 30,
+                    "fontWeight": "bold",
+                    "color": "#C9F23F",
+                    "paddingBottom": 12
+                  },
+                  {
+                    "type": "Container",
+                    "direction": "row",
+                    "paddingBottom": 8,
+                    "items": [
+                      {
+                        "type": "Text",
+                        "text": "${donnees.d.mode}",
+                        "fontSize": 22,
+                        "color": "#AEB78F"
+                      },
+                      {
+                        "type": "Text",
+                        "when": "${donnees.d.minuteur != ''}",
+                        "text": "${donnees.d.minuteur}",
+                        "fontSize": 22,
+                        "fontWeight": "bold",
+                        "color": "#DAF76C",
+                        "spacing": 24
+                      }
+                    ]
+                  },
+                  {
+                    "type": "ScrollView",
+                    "grow": 1,
+                    "shrink": 1,
+                    "width": "100%",
+                    "item": {
+                      "type": "Text",
+                      "text": "${donnees.d.texte}",
+                      "fontSize": 42,
+                      "lineHeight": 1.3,
+                      "color": "#EEF3DC"
+                    }
+                  },
+                  {
+                    "type": "Container",
+                    "direction": "row",
+                    "paddingTop": 16,
+                    "items": [
+                      {
+                        "type": "Bouton",
+                        "label": "◀ Précédente",
+                        "action": "precedent",
+                        "fond": "#1C2111",
+                        "encre": "#EEF3DC"
+                      },
+                      {
+                        "type": "Bouton",
+                        "label": "Suivante ▶",
+                        "action": "suivant",
+                        "spacing": 16
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "Sequence",
+                "id": "liste",
+                "width": "30%",
+                "height": "100%",
+                "paddingTop": 24,
+                "paddingBottom": 24,
+                "data": "${donnees.d.etapes}",
+                "item": {
+                  "type": "TouchWrapper",
+                  "onPress": {
+                    "type": "SendEvent",
+                    "arguments": [
+                      "etape",
+                      "${data.n}"
+                    ]
+                  },
+                  "item": {
+                    "type": "Frame",
+                    "backgroundColor": "${data.active ? '#313D10' : '#1C2111'}",
+                    "paddingLeft": 20,
+                    "paddingRight": 16,
+                    "paddingTop": 14,
+                    "paddingBottom": 14,
+                    "item": {
+                      "type": "Text",
+                      "text": "${data.n}. ${data.court}",
+                      "fontSize": 24,
+                      "fontWeight": "${data.active ? 'bold' : 'normal'}",
+                      "color": "${data.active ? '#DAF76C' : (data.fait ? '#5E6648' : '#EEF3DC')}"
+                    }
+                  }
+                },
+                "backgroundColor": "#1C2111"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

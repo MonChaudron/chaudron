@@ -13,6 +13,7 @@ COPY package.json package-lock.json ./
 COPY apps/app/package.json apps/app/
 COPY packages/api/package.json packages/api/
 COPY packages/domain/package.json packages/domain/
+COPY alexa/lambda/package.json alexa/lambda/
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 COPY apps apps
 COPY packages packages
