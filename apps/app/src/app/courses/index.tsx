@@ -1,8 +1,8 @@
 import type { Aisle, Block, MenuSummary, ShoppingItem } from '@chaudron/api';
-import { aisles, applyPending, currentMenu, dateText, type PendingOp, formatQuantity, ingredientStates, shortDateText, space, todayIso } from '@chaudron/domain';
+import { aisles, applyPending, currentMenu, dateText, type PendingOp, formatQuantity, ingredientStates, joinNames, shortDateText, space, splitTitle, todayIso } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { type ReactNode, useState } from 'react';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { api } from '../../lib/api';
 import { newId, useHouseholdEvents } from '../../lib/events';
@@ -10,8 +10,9 @@ import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useShoppingQueue } from '../../lib/queue';
 import { useCached } from '../../lib/useCached';
-import { Body, Button, Card, Columns, ErrorText, Field, Loading, Pill, Row, Screen, Stack, Title } from '../../ui';
-import { TextAction } from '../../ui/menu';
+import { Body, Button, Card, Columns, ErrorText, Field, Loading, Pill, Progress, Row, Screen, Stack, Title } from '../../ui';
+import { Icon } from '../../ui/icons';
+import { NoticeLine, TextAction } from '../../ui/menu';
 
 export default function Shopping() {
   const { me } = useSession();
@@ -116,8 +117,14 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
       <Stack gap={space[3]}>
         <Title>Courses</Title>
         <Body tone="muted" size={16}>
-          {`${title?.title || 'Menu'}${title?.first_date && title.last_date ? `, du ${shortDateText(title.first_date)} au ${shortDateText(title.last_date)}` : ''} · ${done} sur ${recipes.length} pris`}
+          {`${title?.title || 'Menu'}${title?.first_date && title.last_date ? `, du ${shortDateText(title.first_date)} au ${shortDateText(title.last_date)}` : ''}`}
         </Body>
+        {recipes.length ? (
+          <Stack gap={space[2]}>
+            <Progress value={done / recipes.length} label={`${done} sur ${recipes.length} pris`} />
+            <Body size={15}>{done === recipes.length ? 'Tout est pris.' : `${done} sur ${recipes.length} pris, ${recipes.length - done} à prendre`}</Body>
+          </Stack>
+        ) : null}
         {menus.length > 1 ? (
           <Row gap={space[2]}>
             {menus.map((m) => (
@@ -139,7 +146,9 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
         <Stack gap={space[5]}>
           {[...byAisle].map(([aisle, items]) => (
             <Card key={aisle} style={{ gap: space[2] }}>
-              <Title level={2}>{aisles[aisle]}</Title>
+              <Sticky>
+                <Title level={2}>{aisles[aisle]}</Title>
+              </Sticky>
               {items.map((item, i) => (
                 <ItemRow key={item.key} item={item} last={i === items.length - 1} onToggle={() => toggle(item)} />
               ))}
@@ -170,7 +179,7 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
 function ItemRow({ item, last, onToggle, onRemove }: { item: ShoppingItem; last: boolean; onToggle: () => void; onRemove?: () => void }) {
   const { palette, fonts, weights, radius } = useTheme();
   const state = item.state === 'frozen' || item.state === 'canned' || item.state === 'cooked' ? ingredientStates[item.state].toLowerCase() : null;
-  const detail = [state, item.optional ? 'facultatif' : null, item.recipes.join(', ') || null].filter(Boolean).join(' · ');
+  const detail = [state, item.optional ? 'facultatif' : null, recipesText(item.recipes)].filter(Boolean).join(' · ');
   const qty = item.unit ? formatQuantity(item.qty, item.unit) : item.qty != null ? String(item.qty) : '';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2], borderBottomWidth: last ? 0 : 1, borderBottomColor: palette.line }}>
@@ -181,8 +190,8 @@ function ItemRow({ item, last, onToggle, onRemove }: { item: ShoppingItem; last:
         accessibilityLabel={item.label}
         style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 52 }}
       >
-        <View style={{ width: 28, height: 28, borderRadius: radius.tag / 3, borderWidth: 2, borderColor: item.checked ? palette.actionBorder : palette.muted, backgroundColor: item.checked ? palette.action : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-          {item.checked ? <Text style={{ color: palette.onAction, fontSize: 18, lineHeight: 20, fontWeight: weights.strong }}>✓</Text> : null}
+        <View style={{ width: 28, height: 28, borderRadius: Math.min(14, radius.tag), borderWidth: 2, borderColor: item.checked ? palette.actionBorder : palette.muted, backgroundColor: item.checked ? palette.action : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+          {item.checked ? <Icon name="check" size={18} color={palette.onAction} strokeWidth={3} /> : null}
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
@@ -191,12 +200,12 @@ function ItemRow({ item, last, onToggle, onRemove }: { item: ShoppingItem; last:
           </View>
           {detail ? <Body tone="muted" size={14}>{detail}</Body> : null}
           {item.checked && item.checked_by ? <Body tone="muted" size={14}>{`Pris par ${item.checked_by}`}</Body> : null}
-          {item.grown && item.unit ? <Body tone="alert" size={14}>{`Le menu a changé : ${formatQuantity(item.grown, item.unit)} de plus à prendre.`}</Body> : null}
+          {item.grown && item.unit ? <NoticeLine notice={{ tone: 'warn', icon: 'info', text: `Le menu a changé : ${formatQuantity(item.grown, item.unit)} de plus à prendre` }} /> : null}
           {item.freeze.map((hint) =>
             hint.frozen ? (
-              <Body key={hint.date} tone="muted" size={14}>{`Congelé pour ${dateText(hint.date)} (${hint.recipe}).`}</Body>
+              <Body key={hint.date} tone="muted" size={14}>{`Congelé pour ${dateText(hint.date)} (${splitTitle(hint.recipe).main}).`}</Body>
             ) : (
-              <Body key={hint.date} tone="alert" size={14}>{`À congeler en rentrant : la part de ${dateText(hint.date)} (${hint.recipe}).`}</Body>
+              <NoticeLine key={hint.date} notice={{ tone: 'warn', icon: 'fresh', text: `À congeler en rentrant : la part de ${dateText(hint.date)}` }} />
             ),
           )}
         </View>
@@ -204,6 +213,21 @@ function ItemRow({ item, last, onToggle, onRemove }: { item: ShoppingItem; last:
       {onRemove ? <Button kind="quiet" label="Retirer" accessibilityLabel={`Retirer ${item.label}`} onPress={onRemove} /> : null}
     </View>
   );
+}
+
+/** Les recettes d'un article, en bref : « Wok de bœuf et Blanquette de dinde », « Wok de bœuf et 2 autres ». */
+function recipesText(recipes: string[]): string | null {
+  const names = recipes.map((r) => splitTitle(r).main);
+  if (!names.length) return null;
+  if (names.length <= 2) return joinNames(names);
+  return `${names[0]} et ${names.length - 1} autres`;
+}
+
+/** Web : le titre du rayon reste en haut de l'écran pendant qu'on fait défiler ses articles. */
+function Sticky({ children }: { children: ReactNode }) {
+  const { palette } = useTheme();
+  if (Platform.OS !== 'web') return <>{children}</>;
+  return <View style={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: palette.card, paddingVertical: space[1] } as never}>{children}</View>;
 }
 
 /** Un bloc d'ajouts à la main (petits-déjeuners et desserts, autre). */

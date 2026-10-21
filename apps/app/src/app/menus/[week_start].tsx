@@ -8,7 +8,7 @@ import { View } from 'react-native';
 import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
-import { Back, Body, Button, Card, Choice, Columns, ErrorText, Field, ListRow, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { Back, Body, Button, Card, Choice, Clamped, Columns, ErrorText, Field, ListRow, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
 import { mealLabels, type MoveRequest, MovePanel, SlotSummary, TextAction, Warnings, warningsOf } from '../../ui/menu';
 
 export default function MenuScreen() {
@@ -197,7 +197,7 @@ function Overview({ householdId, menu, today, busy, error, setBusy, setError, on
     <>
       <Stack gap={space[3]}>
         <Title>{menu.title || `Menu du ${dateText(menu.week_start)}`}</Title>
-        {menu.notes ? <Body tone="muted" style={{ maxWidth: 720 }}>{menu.notes}</Body> : null}
+        {menu.notes ? <Clamped text={menu.notes} /> : null}
         <Row>
           <Button kind="primary" label="Modifier" onPress={onEdit} />
         </Row>
@@ -218,7 +218,8 @@ function Overview({ householdId, menu, today, busy, error, setBusy, setError, on
                     <SlotSummary
                       slot={slot}
                       warnings={warningsOf(menu.warnings, slot.id).filter((w) => w.date === slot.date)}
-                      actions={panel === slot.id ? null : <TextAction label="Déplacer…" onPress={() => setPanel(slot.id)} />}
+                      onMore={() => setPanel(panel === slot.id ? null : slot.id)}
+                      moreOpen={panel === slot.id}
                     />
                     {panel === slot.id ? (
                       <MovePanel

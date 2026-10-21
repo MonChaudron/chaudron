@@ -10,11 +10,13 @@ import {
   scaleLine,
   scaleWith,
   seasonText,
-  servingsText,
+  servingsLabel,
   slotEaters,
   space,
+  splitTitle,
   todayIso,
   variantDelta,
+  vignetteOf,
 } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -24,7 +26,7 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useCached } from '../../lib/useCached';
-import { Back, Body, Card, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { Back, Body, Card, Clamped, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 
 export default function RecipeScreen() {
@@ -44,6 +46,7 @@ export default function RecipeScreen() {
 
 /** Ouverte depuis un créneau (`?slot=…&menu=…`) : la variante prévue, les quantités et les avertissements du créneau. */
 function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: string; slug: string; slotId?: string; weekStart?: string }) {
+  const wide = useWide();
   const recipe = useCached(`recipe:${householdId}:${slug}`, () =>
     api.GET('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } }),
   );
@@ -71,6 +74,8 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
   // Sans choix, la première variante que le foyer peut faire avec son matériel.
   const doable = data.variants.find((v) => v.missing_equipment.length === 0) ?? base;
   const variant = data.variants.find((v) => v.id === chosen) ?? data.variants.find((v) => v.label === slot?.variant.label) ?? doable;
+  const look = vignetteOf(data.slug, variant.equipment);
+  const name = splitTitle(data.title);
 
   return (
     <Screen>
@@ -79,9 +84,13 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
         {back}
         <LinkButton kind="quiet" label="Modifier" href={`/recettes/modifier?slug=${data.slug}`} />
       </Row>
+      <Vignette hue={look.hue} pictogram={look.pictogram} height={wide ? 180 : 128} />
       <Stack gap={space[3]}>
-        <Title>{data.title}</Title>
-        {data.description ? <Body tone="muted" style={{ maxWidth: 720 }}>{data.description}</Body> : null}
+        <Stack gap={space[1]}>
+          <Title>{name.main}</Title>
+          {name.rest ? <Body tone="muted" size={wide ? 20 : 18}>{name.rest}</Body> : null}
+        </Stack>
+        {data.description ? <Clamped text={data.description} /> : null}
         <Meta recipe={data} />
       </Stack>
       {slot ? <Planned slot={slot} warnings={slotWarnings} /> : null}
@@ -165,6 +174,7 @@ function Planned({ slot, warnings }: { slot: MenuSlot; warnings: Warning[] }) {
   return (
     <Card>
       <Title level={2}>{`${dayLabel(slot.date, todayIso())} ${mealLabels[slot.meal]}`}</Title>
+      <Body tone="muted" size={16}>{servingsLabel(slot)}</Body>
       <SlotBadges slot={slot} />
       {slot.note ? <Body size={16}>{slot.note}</Body> : null}
       <Warnings warnings={warnings} />
@@ -180,7 +190,7 @@ function Ingredients({ lines, members, slot }: { lines: RecipeLine[]; members?: 
   const [detail, setDetail] = useState(false);
   const eaters: Eater[] = slot ? slotEaters(slot) : (members ?? []).map((m) => ({ name: m.name, portions: m.portions }));
   const who = slot
-    ? `Pour ${servingsText(slot)} portions${eaters.length ? ` : ${eaters.map((e) => e.name).join(', ')}` : ''}.`
+    ? `Pour ${servingsLabel(slot)}${eaters.length ? ` : ${eaters.map((e) => e.name).join(', ')}` : ''}.`
     : eaters.length
       ? `Pour le foyer : ${eaters.map((e) => e.name).join(', ')}.`
       : 'Pour une portion standard : ajoute les membres du foyer pour avoir les quantités de chacun.';
