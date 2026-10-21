@@ -44,6 +44,7 @@ const OAUTH_COOKIE_SECONDS: i64 = 600;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/providers", get(list_providers))
+        .route("/auth/signup", get(signup_status))
         .route("/auth/{provider}/login", get(login))
         .route("/auth/{provider}/callback", get(callback))
         .route("/auth/google/one-tap", post(one_tap_login))
@@ -326,6 +327,47 @@ async fn list_providers(State(state): State<AppState>) -> Json<Vec<ProviderInfo>
             })
             .collect(),
     )
+}
+
+/// Qui peut créer un compte sur l'instance (les invitations marchent toujours).
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Signup {
+    /// Aucun compte encore : le premier est libre (il crée l'instance).
+    First,
+    /// Tout le monde (`SIGNUP_ALLOWED_EMAILS=*`).
+    Open,
+    /// Quelques adresses seulement : les autres entrent par invitation.
+    Allowlist,
+    /// Sur invitation seulement.
+    Invite,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct SignupInfo {
+    pub signup: Signup,
+}
+
+/// Qui peut créer un compte : la page d'accueil propose « créer un foyer » ou seulement « j'ai une invitation ».
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/signup",
+    tag = "connexion",
+    security(()),
+    responses((status = 200, body = SignupInfo))
+)]
+async fn signup_status(State(state): State<AppState>) -> ApiResult<Json<SignupInfo>> {
+    let signup = match &state.config.signup {
+        SignupPolicy::Open => Signup::Open,
+        SignupPolicy::Emails(_) => Signup::Allowlist,
+        SignupPolicy::Closed => {
+            let first: bool = sqlx::query_scalar("SELECT NOT EXISTS (SELECT 1 FROM users)")
+                .fetch_one(&state.db)
+                .await?;
+            if first { Signup::First } else { Signup::Invite }
+        }
+    };
+    Ok(Json(SignupInfo { signup }))
 }
 
 #[derive(Deserialize, IntoParams)]

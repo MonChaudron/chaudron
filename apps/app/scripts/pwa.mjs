@@ -16,7 +16,8 @@ function walk(dir) {
 
 const files = walk(dist)
   .map((file) => path.relative(dist, file).split(path.sep).join('/'))
-  .filter((file) => !skip.has(file) && !file.endsWith('.map'))
+  // La page d'accueil hors connexion (ardoise, craie) n'a pas à être gardée hors ligne.
+  .filter((file) => !skip.has(file) && !file.endsWith('.map') && !file.startsWith('accueil/') && !file.includes('caveat'))
   .sort();
 const hash = createHash('sha256');
 for (const file of [...files, 'index.html']) {

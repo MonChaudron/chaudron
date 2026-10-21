@@ -124,6 +124,29 @@
         ]
       }
     },
+    "/api/v1/auth/signup": {
+      "get": {
+        "tags": [
+          "connexion"
+        ],
+        "summary": "Qui peut créer un compte : la page d'accueil propose « créer un foyer » ou seulement « j'ai une invitation ».",
+        "operationId": "signup_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupInfo"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ]
+      }
+    },
     "/api/v1/auth/{provider}/callback": {
       "get": {
         "tags": [
@@ -5581,6 +5604,27 @@
           "week_start": {
             "type": "string",
             "format": "date"
+          }
+        }
+      },
+      "Signup": {
+        "type": "string",
+        "description": "Qui peut créer un compte sur l'instance (les invitations marchent toujours).",
+        "enum": [
+          "first",
+          "open",
+          "allowlist",
+          "invite"
+        ]
+      },
+      "SignupInfo": {
+        "type": "object",
+        "required": [
+          "signup"
+        ],
+        "properties": {
+          "signup": {
+            "$ref": "#/components/schemas/Signup"
           }
         }
       },
