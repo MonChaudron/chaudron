@@ -1,14 +1,14 @@
 import type { RecipeSummary } from '@chaudron/api';
-import { equipment as equipmentLabels, formatDuration, label, space } from '@chaudron/domain';
+import { equipment as equipmentLabels, formatDuration, label, space, vignetteOf } from '@chaudron/domain';
 import { Redirect, Stack as Router, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useLoad } from '../../lib/useLoad';
-import { Body, Card, ErrorText, Field, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide } from '../../ui';
+import { Body, Card, DishName, ErrorText, Field, LinkButton, Loading, Pill, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 
 /** Au plus 15 min actives : un soir express. */
 const EXPRESS_MIN = 15;
@@ -57,8 +57,8 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
   return (
     <Screen>
       <Router.Screen options={{ title: 'Recettes · Chaudron' }} />
-      <View style={wide ? { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: space[4] } : { gap: space[3] }}>
-        <Stack gap={space[2]}>
+      <View style={{ flexDirection: 'row', alignItems: wide ? 'flex-end' : 'flex-start', justifyContent: 'space-between', gap: space[4] }}>
+        <Stack gap={space[2]} style={{ flex: 1 }}>
           <Title>Recettes</Title>
           {all.data?.length ? (
             <Body tone="muted" size={16}>
@@ -66,7 +66,7 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
             </Body>
           ) : null}
         </Stack>
-        {!empty ? <LinkButton label="Nouvelle recette" href="/recettes/modifier" /> : null}
+        {!empty ? <LinkButton label={wide ? 'Nouvelle recette' : 'Nouvelle'} href="/recettes/modifier" /> : null}
       </View>
 
       {empty ? (
@@ -81,24 +81,26 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
         </Card>
       ) : (
         <>
-          <View style={wide ? { flexDirection: 'row', gap: space[4], alignItems: 'flex-end' } : { gap: space[3] }}>
-            <View style={wide ? { width: 420 } : undefined}>
-              <Field label="Chercher" placeholder="Un plat, un ingrédient : chili, lentilles…" value={query} onChangeText={setQuery} autoCorrect={false} />
+          <Stack gap={space[3]}>
+            <View style={wide ? { maxWidth: 520 } : undefined}>
+              <Field label="Chercher" hideLabel placeholder="Chercher un plat, un ingrédient : chili, lentilles…" value={query} onChangeText={setQuery} autoCorrect={false} />
             </View>
+            {/* Les étiquettes sur une ligne qui défile : la première recette reste à l'écran. */}
             {tags.length ? (
-              <Row style={wide ? { flex: 1, paddingBottom: 4 } : undefined}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: wide ? 0 : -space[4] }} contentContainerStyle={{ gap: space[2], paddingHorizontal: wide ? 0 : space[4] }}>
+                <Pill label="Toutes" role="radio" selected={tag === null} onPress={() => setTag(null)} />
                 {tags.map((t) => (
-                  <Pill key={t} label={t} selected={tag === t} onPress={() => setTag(tag === t ? null : t)} />
+                  <Pill key={t} role="radio" label={t} selected={tag === t} onPress={() => setTag(tag === t ? null : t)} />
                 ))}
-              </Row>
+              </ScrollView>
             ) : null}
-          </View>
+          </Stack>
           <ErrorText>{filtered.error ?? all.error}</ErrorText>
           {list === undefined ? <Loading /> : null}
           {list?.length === 0 ? (
             <Body tone="muted">Rien ne correspond à « {search || tag} ». Essaie un ingrédient, ou retire l’étiquette.</Body>
           ) : null}
-          <View style={wide ? { flexDirection: 'row', flexWrap: 'wrap', gap: space[4] } : { gap: space[3] }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: wide ? space[4] : space[3] }}>
             {list?.map((recipe) => <RecipeTile key={recipe.slug} recipe={recipe} wide={wide} />)}
           </View>
         </>
@@ -107,53 +109,48 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
   );
 }
 
+/**
+ * Une recette de la liste : sa vignette, son nom, le temps actif et l'appareil. Deux par ligne sur téléphone, en
+ * grille sur bureau. Les étiquettes restent dans les filtres.
+ */
 function RecipeTile({ recipe, wide }: { recipe: RecipeSummary; wide: boolean }) {
   const router = useRouter();
-  const { palette, radius, fonts, weights } = useTheme();
+  const { palette, radius, fonts } = useTheme();
   const variant = recipe.default_variant;
   const express = variant.active_min <= EXPRESS_MIN;
-  const tools = variant.equipment.map((code) => label(equipmentLabels, `equipment.${code}`)).join(', ');
+  const tool = variant.equipment.map((code) => label(equipmentLabels, `equipment.${code}`))[0] ?? variant.label;
   const others = recipe.variant_count - 1;
+  const look = vignetteOf(recipe.slug, variant.equipment);
   return (
     <Pressable
       onPress={() => router.push(`/recettes/${recipe.slug}`)}
       accessibilityRole="link"
       accessibilityLabel={recipe.title}
-      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
-        flexGrow: 1,
-        flexBasis: wide ? 300 : undefined,
-        maxWidth: wide ? 420 : undefined,
-        padding: space[5],
-        gap: space[3],
-        borderRadius: radius.card,
-        borderWidth: 1.5,
-        borderColor: hovered ? palette.muted : 'transparent',
-        backgroundColor: palette.card,
-        opacity: pressed ? 0.85 : 1,
-      })}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) =>
+        ({
+          width: wide ? undefined : `calc(50% - ${space[3] / 2}px)`,
+          flexGrow: wide ? 1 : 0,
+          flexBasis: wide ? 220 : undefined,
+          maxWidth: wide ? 300 : undefined,
+          padding: space[2],
+          paddingBottom: space[3],
+          gap: space[3],
+          borderRadius: radius.card,
+          backgroundColor: palette.card,
+          borderWidth: 1.5,
+          borderColor: hovered ? palette.line : 'transparent',
+          opacity: pressed ? 0.85 : 1,
+        }) as never
+      }
     >
-      <Text style={{ fontFamily: fonts.title, fontWeight: weights.title, fontSize: 21, lineHeight: 27, color: palette.text }}>{recipe.title}</Text>
-      {/* Le temps d'abord : c'est lui qui décide du soir. */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
-        <Text style={{ fontFamily: fonts.title, fontWeight: weights.title, fontSize: 28, color: palette.text }}>{formatDuration(variant.active_min)}</Text>
-        <Body tone="muted" size={15}>
-          actives, {formatDuration(variant.total_min)} en tout
-        </Body>
+      <Vignette hue={look.hue} pictogram={look.pictogram} height={wide ? 112 : 92} />
+      <View style={{ gap: space[2], paddingHorizontal: space[2], flex: 1 }}>
+        <DishName title={recipe.title} size={16} lines={3} />
+        <Text style={{ fontFamily: fonts.text, fontSize: 14, color: palette.muted }}>
+          {`${formatDuration(variant.active_min)} · ${tool}${others > 0 ? ` · +${others}` : ''}`}
+        </Text>
+        {express ? <Tag tone="strong" icon="bolt">Express</Tag> : null}
       </View>
-      <Body tone="muted" size={15}>
-        {tools || variant.label}
-        {others > 0 ? ` — ou ${others} autre${others > 1 ? 's' : ''} façon${others > 1 ? 's' : ''}` : ''}
-      </Body>
-      {express || recipe.tags.length ? (
-        <Row>
-          {express ? <Tag>Express</Tag> : null}
-          {recipe.tags.map((t) => (
-            <Text key={t} style={{ fontFamily: fonts.text, fontSize: 14, color: palette.muted }}>
-              #{t}
-            </Text>
-          ))}
-        </Row>
-      ) : null}
     </Pressable>
   );
 }

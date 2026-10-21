@@ -2,6 +2,8 @@
 // Contrastes vérifiés (WCAG) : textes et liens au moins 4,5:1 sur le fond et sur les cartes, dans les huit palettes.
 // Polices servies par Chaudron (SIL Open Font License 1.1, apps/app/public/fonts/OFL-*.txt).
 
+import type { Hue } from './look.ts';
+
 export type Mode = 'light' | 'dark';
 export type ThemeId = 'chartreuse' | 'basilic' | 'safran' | 'encre';
 
@@ -21,6 +23,10 @@ export interface Palette {
   tagBg: string;
   tagText: string;
   alert: string;
+  /** Avertissement sans gravité (n'aime pas, fraîcheur), en texte : ambre. */
+  warn: string;
+  /** Fond des pastilles neutres (portions, durée) et des zones calmes. */
+  chip: string;
   /** Le o du logo. */
   logoO: string;
 }
@@ -51,15 +57,16 @@ export const themes: Record<ThemeId, Theme> = {
     radius: { card: 22, button: 16, tag: 999 },
     palettes: {
       light: {
-        bg: '#EDF4CC', card: '#FBFDF1', text: '#1C2208', muted: '#4F5833', line: '#D8E3A9',
+        // Fond à peine teinté : le chartreuse se garde pour ce qui compte (ce soir, l'action, la progression).
+        bg: '#F2F5E4', card: '#FFFFFB', text: '#1C2208', muted: '#4F5833', line: '#DFE6C3',
         // Fond chartreuse à 1,3:1 sur le fond de page : bouton cerné.
         action: '#C3E534', onAction: '#1C2208', actionBorder: '#1C2208',
-        link: '#4A6400', tagBg: '#283210', tagText: '#D7F55A', alert: '#B23A1E', logoO: '#4A6400',
+        link: '#4A6400', tagBg: '#283210', tagText: '#D7F55A', alert: '#B23A1E', warn: '#875200', chip: '#E9EFCF', logoO: '#4A6400',
       },
       dark: {
         bg: '#11140A', card: '#1C2111', text: '#EEF3DC', muted: '#AEB78F', line: '#2F361A',
         action: '#C9F23F', onAction: '#151A06', actionBorder: 'transparent',
-        link: '#C9F23F', tagBg: '#313D10', tagText: '#DAF76C', alert: '#FF9C82', logoO: '#C9F23F',
+        link: '#C9F23F', tagBg: '#313D10', tagText: '#DAF76C', alert: '#FF9C82', warn: '#F4BC5E', chip: '#272E18', logoO: '#C9F23F',
       },
     },
   },
@@ -76,12 +83,12 @@ export const themes: Record<ThemeId, Theme> = {
         bg: '#E4EEDF', card: '#F9FBF7', text: '#17241B', muted: '#46564B', line: '#CFDDCB',
         action: '#2E7D4F', onAction: '#FFFFFF', actionBorder: 'transparent',
         // Plus foncé que le bouton : à 4,2:1 sur le fond, le vert basilic ne suffisait pas pour du texte.
-        link: '#286E45', tagBg: '#C9E3CF', tagText: '#1A4D30', alert: '#B23A1E', logoO: '#286E45',
+        link: '#286E45', tagBg: '#C9E3CF', tagText: '#1A4D30', alert: '#B23A1E', warn: '#875200', chip: '#DDEAD8', logoO: '#286E45',
       },
       dark: {
         bg: '#101813', card: '#1A251E', text: '#E6EEE8', muted: '#A7B6AB', line: '#2B3A31',
         action: '#74C795', onAction: '#0E1B13', actionBorder: 'transparent',
-        link: '#74C795', tagBg: '#24402D', tagText: '#BFE6CB', alert: '#FF9C82', logoO: '#74C795',
+        link: '#74C795', tagBg: '#24402D', tagText: '#BFE6CB', alert: '#FF9C82', warn: '#F4BC5E', chip: '#223129', logoO: '#74C795',
       },
     },
   },
@@ -97,12 +104,12 @@ export const themes: Record<ThemeId, Theme> = {
       light: {
         bg: '#FAE3C2', card: '#FFF8EE', text: '#2A1E14', muted: '#6A5444', line: '#EBD2AE',
         action: '#1F6F78', onAction: '#FFFFFF', actionBorder: 'transparent',
-        link: '#1F6F78', tagBg: '#F6C35B', tagText: '#3A2A10', alert: '#A3361F', logoO: '#1F6F78',
+        link: '#1F6F78', tagBg: '#F6C35B', tagText: '#3A2A10', alert: '#A3361F', warn: '#7A4500', chip: '#F6DDB9', logoO: '#1F6F78',
       },
       dark: {
         bg: '#1C1510', card: '#2A2019', text: '#F7EBDD', muted: '#C4AE98', line: '#3D3026',
         action: '#F4B740', onAction: '#22180C', actionBorder: 'transparent',
-        link: '#F4B740', tagBg: '#3D3220', tagText: '#F6D58A', alert: '#FF9C82', logoO: '#F4B740',
+        link: '#F4B740', tagBg: '#3D3220', tagText: '#F6D58A', alert: '#FF9C82', warn: '#F4BC5E', chip: '#382A20', logoO: '#F4B740',
       },
     },
   },
@@ -118,18 +125,27 @@ export const themes: Record<ThemeId, Theme> = {
       light: {
         bg: '#E1E6FA', card: '#FFFFFF', text: '#141A33', muted: '#4B536E', line: '#CBD3F2',
         action: '#2747D6', onAction: '#FFFFFF', actionBorder: 'transparent',
-        link: '#2747D6', tagBg: '#FFDCCF', tagText: '#8A2E12', alert: '#B0301A', logoO: '#2747D6',
+        link: '#2747D6', tagBg: '#FFDCCF', tagText: '#8A2E12', alert: '#B0301A', warn: '#875200', chip: '#E9EDFC', logoO: '#2747D6',
       },
       dark: {
         bg: '#0E1330', card: '#182046', text: '#E7EAFB', muted: '#A9B1D6', line: '#2A3368',
         action: '#8FA3FF', onAction: '#0E1330', actionBorder: 'transparent',
-        link: '#8FA3FF', tagBg: '#45283F', tagText: '#FFB49C', alert: '#FF9C82', logoO: '#8FA3FF',
+        link: '#8FA3FF', tagBg: '#45283F', tagText: '#FFB49C', alert: '#FF9C82', warn: '#F4BC5E', chip: '#222A58', logoO: '#8FA3FF',
       },
     },
   },
 };
 
 export const themeIds = Object.keys(themes) as ThemeId[];
+
+/**
+ * Teintes des vignettes de recettes (`vignetteOf`), communes aux quatre thèmes : des couleurs de cuisine, douces en
+ * jour, sourdes en nuit. Le pictogramme se dessine dans la couleur du texte.
+ */
+export const vignettes: Record<Mode, Record<Hue, string>> = {
+  light: { herb: '#D3E7B4', tomato: '#F6CDBD', saffron: '#F5DF9F', sea: '#C7DFEA', plum: '#E6D0E7', wheat: '#EBDCC2' },
+  dark: { herb: '#2D3D1E', tomato: '#4A2A21', saffron: '#463818', sea: '#1D3440', plum: '#3A273F', wheat: '#3C3223' },
+};
 export const defaultTheme: ThemeId = 'chartreuse';
 
 /** Espacements : 4, 8, 12, 16, 24, 32, 48. */

@@ -1,13 +1,14 @@
 // Composants des menus : un plat prévu (badges, avertissements), le panneau « Déplacer vers… », la poignée pour
 // glisser un plat d'un jour à l'autre.
 import type { Meal, MenuSlot, MoveMode, Warning } from '@chaudron/api';
-import { addDays, dayLabel, servingsText, shortDateText, space, weekDays } from '@chaudron/domain';
+import { addDays, dayLabel, equipment as equipmentLabels, formatDuration, label as labelOf, type Notice, notices, servingsLabel, shortDateText, space, vignetteOf, weekDays } from '@chaudron/domain';
 import { Link } from 'expo-router';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { PanResponder, Pressable, Text, View } from 'react-native';
 
 import { useTheme } from '../lib/theme';
-import { Body, Button, Choice, Pill, Row, Stack, Tag } from './index';
+import { Icon, type IconName } from './icons';
+import { Body, Button, Choice, DishName, IconButton, Pill, Row, Stack, Tag, Vignette } from './index';
 
 export const mealLabels: Record<Meal, string> = { lunch: 'midi', dinner: 'soir' };
 
@@ -16,56 +17,84 @@ export function slotHref(slot: MenuSlot) {
   return `/recettes/${slot.recipe.slug}?slot=${slot.id}&menu=${slot.week_start}` as const;
 }
 
-/** Badges d'un plat : portions, express, boîtes, phase de la veille. */
+/** Badges d'un plat : express, phase de la veille, portions d'un autre jour. Les portions sont dans `slotMeta`. */
 export function SlotBadges({ slot }: { slot: MenuSlot }) {
+  if (!slot.express && slot.prep_days_before <= 0 && !slot.portions_date) return null;
   return (
     <Row gap={space[2]}>
-      <Tag>{`${servingsText(slot)} portions`}</Tag>
-      {slot.express ? <Tag>Express</Tag> : null}
-      {slot.prep_days_before > 0 ? <Tag>{slot.prep_days_before === 1 ? 'Se prépare la veille' : `${slot.prep_days_before} jours avant`}</Tag> : null}
+      {slot.express ? <Tag tone="strong" icon="bolt">Express</Tag> : null}
+      {slot.prep_days_before > 0 ? <Tag icon="moon">{slot.prep_days_before === 1 ? 'La veille' : `${slot.prep_days_before} jours avant`}</Tag> : null}
       {slot.portions_date ? <Tag>{`Portions du ${shortDateText(slot.portions_date)}`}</Tag> : null}
     </Row>
   );
 }
 
-/** Avertissements, en clair. */
-export function Warnings({ warnings }: { warnings: Warning[] }) {
-  const { palette } = useTheme();
-  if (!warnings.length) return null;
+const noticeIcons: Record<Notice['icon'], IconName> = { allergy: 'alert', dislike: 'dislike', fresh: 'snow', info: 'info' };
+
+/** Une ligne d'avertissement : son icône, en rouge (allergie) ou en ambre. */
+export function NoticeLine({ notice, onAccent = false }: { notice: Notice; onAccent?: boolean }) {
+  const { palette, fonts, weights } = useTheme();
+  const color = onAccent ? palette.onAction : notice.tone === 'alert' ? palette.alert : palette.warn;
   return (
-    <Stack gap={space[2]}>
-      {warnings.map((w, i) => (
-        <View key={`${w.kind}-${i}`} style={{ flexDirection: 'row', gap: space[2] }}>
-          <Text style={{ color: palette.alert, fontSize: 16, lineHeight: 24 }} aria-hidden>
-            ⚠
-          </Text>
-          <Body tone="alert" size={15} style={{ flex: 1 }}>
-            {w.message}
-          </Body>
-        </View>
+    <View style={{ flexDirection: 'row', gap: space[2], alignItems: 'flex-start' }}>
+      <View style={{ paddingTop: 2 }}>
+        <Icon name={noticeIcons[notice.icon]} size={17} color={color} strokeWidth={2.2} />
+      </View>
+      <Text style={{ flex: 1, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 15, lineHeight: 21, color }}>{notice.text}</Text>
+    </View>
+  );
+}
+
+/** Avertissements, regroupés et sans la date du repas : une ligne par sujet. */
+export function Warnings({ warnings, onAccent = false }: { warnings: Warning[]; onAccent?: boolean }) {
+  const lines = notices(warnings);
+  if (!lines.length) return null;
+  return (
+    <Stack gap={space[1]}>
+      {lines.map((n, i) => (
+        <NoticeLine key={`${n.icon}-${i}`} notice={n} onAccent={onAccent} />
       ))}
     </Stack>
   );
 }
 
-/** Un plat prévu : titre (vers la fiche du créneau), variante, badges, avertissements. */
-export function SlotSummary({ slot, warnings, big = false, handle, actions }: { slot: MenuSlot; warnings: Warning[]; big?: boolean; handle?: ReactNode; actions?: ReactNode }) {
-  const { palette, fonts, weights } = useTheme();
+/** « Cookeo · 20 min · 6 portions, dont 2 en boîtes » : la façon de cuisiner, le temps actif, les portions. */
+export function slotMeta(slot: MenuSlot): string {
+  const tool = slot.variant.label || slot.variant.equipment.map((code) => labelOf(equipmentLabels, `equipment.${code}`))[0];
+  return [tool, slot.variant.active_min ? formatDuration(slot.variant.active_min) : null, servingsLabel(slot)].filter(Boolean).join(' · ');
+}
+
+/** Vignette d'un plat prévu. */
+export function SlotVignette({ slot, size = 56 }: { slot: MenuSlot; size?: number }) {
+  const v = vignetteOf(slot.recipe.slug, slot.variant.equipment);
+  return <Vignette hue={v.hue} pictogram={v.pictogram} size={size} />;
+}
+
+/**
+ * Un plat prévu : vignette, nom (vers la fiche du créneau), façon de cuisiner, badges, avertissements. `onMore` : le
+ * bouton « ⋯ » à droite (déplacer…) ; `handle` : la poignée, en mode réorganisation.
+ */
+export function SlotSummary({ slot, warnings, handle, actions, onMore, moreOpen = false }: { slot: MenuSlot; warnings: Warning[]; handle?: ReactNode; actions?: ReactNode; onMore?: () => void; moreOpen?: boolean }) {
+  const { palette, fonts } = useTheme();
   return (
     <View style={{ flexDirection: 'row', gap: space[3], alignItems: 'flex-start' }}>
       {handle}
+      <Link href={slotHref(slot)} accessibilityLabel={slot.recipe.title}>
+        <SlotVignette slot={slot} />
+      </Link>
       <View style={{ flex: 1, gap: space[2], minWidth: 0 }}>
-        <Link href={slotHref(slot)} style={{ fontFamily: big ? fonts.title : fonts.text, fontWeight: big ? weights.title : weights.medium, fontSize: big ? 24 : 18, lineHeight: big ? 30 : 24, color: palette.text }}>
-          {slot.recipe.title}
+        <Link href={slotHref(slot)} style={{ textDecorationLine: 'none' }}>
+          <DishName title={slot.recipe.title} size={17} />
         </Link>
-        <Body tone="muted" size={15}>
-          {slot.variant.label}
+        <Text style={{ fontFamily: fonts.text, fontSize: 14.5, color: palette.muted }}>
+          {slotMeta(slot)}
           {slot.note ? ` · ${slot.note}` : ''}
-        </Body>
+        </Text>
         <SlotBadges slot={slot} />
         <Warnings warnings={warnings} />
         {actions}
       </View>
+      {onMore ? <IconButton icon="more" label={`Déplacer ${slot.recipe.title}`} onPress={onMore} active={moreOpen} /> : null}
     </View>
   );
 }
@@ -172,11 +201,9 @@ export function DragHandle({ label, onStart, onDrag, onDrop }: { label: string; 
       {...responder.panHandlers}
       accessibilityLabel={label}
       accessibilityHint="Maintenir et glisser vers un autre jour"
-      style={{ width: 36, minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: radius.button, backgroundColor: palette.bg, cursor: 'grab', userSelect: 'none', touchAction: 'none' } as never}
+      style={{ width: 36, minHeight: 56, alignItems: 'center', justifyContent: 'center', borderRadius: radius.button, backgroundColor: palette.chip, cursor: 'grab', userSelect: 'none', touchAction: 'none' } as never}
     >
-      <Text style={{ color: palette.muted, fontSize: 22, lineHeight: 24 }} aria-hidden>
-        ⠿
-      </Text>
+      <Icon name="grip" size={20} color={palette.muted} />
     </View>
   );
 }

@@ -1,8 +1,8 @@
 // Composants de l'appli. Couleurs, polices et arrondis viennent du thème choisi (jour ou nuit), espacements de
 // @chaudron/domain. Mobile d'abord ; à partir de DESKTOP_WIDTH, mise en page de bureau.
-import { space, textSize, touch } from '@chaudron/domain';
+import { type Hue, type Pictogram, space, splitTitle, textSize, touch, vignettes } from '@chaudron/domain';
 import { Link, type Href, usePathname } from 'expo-router';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -18,7 +18,9 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
+import { useSession } from '../lib/session';
 import { useTheme } from '../lib/theme';
+import { Icon, type IconName } from './icons';
 
 // Mise en page
 
@@ -64,38 +66,25 @@ export function Screen({ children, header = true }: { children: ReactNode; heade
   );
 }
 
-/** Téléphone : les grandes sections en bas de l'écran, à portée de pouce. */
+/** Téléphone : les grandes sections en bas de l'écran, à portée de pouce ; l'icône de l'onglet ouvert sur l'accent. */
 function TabBar() {
-  const { palette, fonts, weights, radius } = useTheme();
+  const { palette, fonts, weights } = useTheme();
   const path = usePathname();
   return (
     <View
       accessibilityRole="tablist"
-      style={{ flexDirection: 'row', gap: space[2], paddingHorizontal: space[3], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: palette.line, backgroundColor: palette.card }}
+      style={{ flexDirection: 'row', paddingHorizontal: space[2], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: palette.line, backgroundColor: palette.card }}
     >
       {tabs.map((tab) => {
         const active = tab.match(path);
         return (
-          <Link
-            key={tab.label}
-            href={tab.href}
-            accessibilityRole="tab"
-            aria-selected={active}
-            style={{
-              flex: 1,
-              minHeight: 48,
-              lineHeight: 48,
-              textAlign: 'center',
-              borderRadius: radius.button,
-              backgroundColor: active ? palette.tagBg : 'transparent',
-              color: active ? palette.tagText : palette.muted,
-              fontFamily: fonts.text,
-              fontWeight: weights.medium,
-              fontSize: 15,
-              textDecorationLine: 'none',
-            }}
-          >
-            {tab.label}
+          <Link key={tab.label} href={tab.href} accessibilityRole="tab" aria-selected={active} style={{ flex: 1, textDecorationLine: 'none' }}>
+            <View style={{ alignItems: 'center', gap: 3, minHeight: 48, justifyContent: 'center' }}>
+              <View style={{ paddingHorizontal: 16, paddingVertical: 4, borderRadius: 999, backgroundColor: active ? palette.action : 'transparent' }}>
+                <Icon name={tab.icon} size={22} color={active ? palette.onAction : palette.muted} />
+              </View>
+              <Text style={{ fontFamily: fonts.text, fontWeight: active ? weights.strong : weights.medium, fontSize: 12.5, color: active ? palette.text : palette.muted }}>{tab.label}</Text>
+            </View>
           </Link>
         );
       })}
@@ -104,36 +93,56 @@ function TabBar() {
 }
 
 function Header() {
-  const { palette, fonts, weights } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <Link href="/" accessibilityLabel="Chaudron, accueil">
         <Logo size={24} />
       </Link>
-      <Link href="/compte" style={{ color: palette.muted, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 16, padding: space[2] }}>
-        Compte
+      <Link href="/compte" accessibilityLabel="Ton compte">
+        <Avatar />
       </Link>
     </View>
   );
 }
 
-type NavEntry = { href: Href; label: string; match: (path: string) => boolean };
+/** Initiales du compte connecté, dans une pastille : le chemin vers le compte. */
+export function Avatar({ size = 36 }: { size?: number }) {
+  const { palette, fonts, weights } = useTheme();
+  const { me } = useSession();
+  const initials = (me?.display_name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join('');
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: palette.tagBg, alignItems: 'center', justifyContent: 'center' }}>
+      {initials ? (
+        <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: size * 0.4, color: palette.tagText }}>{initials}</Text>
+      ) : (
+        <Icon name="user" size={size * 0.55} color={palette.tagText} />
+      )}
+    </View>
+  );
+}
+
+type NavEntry = { href: Href; label: string; icon: IconName; match: (path: string) => boolean };
 
 const navigation: NavEntry[] = [
-  { href: '/', label: 'Cette semaine', match: (p) => p === '/' },
-  { href: '/menus', label: 'Menus', match: (p) => p.startsWith('/menus') },
-  { href: '/courses', label: 'Courses', match: (p) => p.startsWith('/courses') },
-  { href: '/recettes', label: 'Recettes', match: (p) => p.startsWith('/recettes') },
-  { href: '/foyer', label: 'Le foyer', match: (p) => p === '/foyer' || p.startsWith('/foyer/membres') || p === '/foyer/acces' },
-  { href: '/foyer/equipements', label: 'Le matériel', match: (p) => p === '/foyer/equipements' },
+  { href: '/', label: 'Cette semaine', icon: 'week', match: (p) => p === '/' },
+  { href: '/menus', label: 'Menus', icon: 'menus', match: (p) => p.startsWith('/menus') },
+  { href: '/courses', label: 'Courses', icon: 'basket', match: (p) => p.startsWith('/courses') },
+  { href: '/recettes', label: 'Recettes', icon: 'recipes', match: (p) => p.startsWith('/recettes') },
+  { href: '/foyer', label: 'Le foyer', icon: 'home', match: (p) => p === '/foyer' || p.startsWith('/foyer/membres') || p === '/foyer/acces' },
+  { href: '/foyer/equipements', label: 'Le matériel', icon: 'tools', match: (p) => p === '/foyer/equipements' },
 ];
 /** Téléphone : le matériel est dans le foyer. */
 const tabs: NavEntry[] = [
-  { href: '/', label: 'Semaine', match: (p) => p === '/' },
-  { href: '/menus', label: 'Menus', match: (p) => p.startsWith('/menus') },
-  { href: '/courses', label: 'Courses', match: (p) => p.startsWith('/courses') },
-  { href: '/recettes', label: 'Recettes', match: (p) => p.startsWith('/recettes') },
-  { href: '/foyer', label: 'Foyer', match: (p) => p.startsWith('/foyer') },
+  { href: '/', label: 'Semaine', icon: 'week', match: (p) => p === '/' },
+  { href: '/menus', label: 'Menus', icon: 'menus', match: (p) => p.startsWith('/menus') },
+  { href: '/courses', label: 'Courses', icon: 'basket', match: (p) => p.startsWith('/courses') },
+  { href: '/recettes', label: 'Recettes', icon: 'recipes', match: (p) => p.startsWith('/recettes') },
+  { href: '/foyer', label: 'Foyer', icon: 'home', match: (p) => p.startsWith('/foyer') || p === '/compte' },
 ];
 /** La suite de la V1, montrée pour donner la structure de l'appli. */
 const upcoming: string[] = [];
@@ -141,43 +150,37 @@ const upcoming: string[] = [];
 /** Bureau : logo, navigation, puis le compte en bas. */
 function Sidebar() {
   const { palette, fonts, weights, radius } = useTheme();
+  const { me } = useSession();
   const path = usePathname();
-  const item = (active: boolean) => ({
-    paddingVertical: space[3],
-    paddingHorizontal: space[4],
-    borderRadius: radius.button,
-    backgroundColor: active ? palette.tagBg : 'transparent',
-    color: active ? palette.tagText : palette.text,
-    fontFamily: fonts.text,
-    fontWeight: weights.medium,
-    fontSize: 17,
-    textDecorationLine: 'none' as const,
-  });
+  const entry = (active: boolean, icon: ReactNode, text: string) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[3], paddingHorizontal: space[4], borderRadius: radius.button, backgroundColor: active ? palette.chip : 'transparent' }}>
+      {icon}
+      <Text style={{ fontFamily: fonts.text, fontWeight: active ? weights.strong : weights.medium, fontSize: 17, color: palette.text }}>{text}</Text>
+    </View>
+  );
   return (
-    <View style={{ width: 264, paddingVertical: space[6], paddingHorizontal: space[4], gap: space[6], borderRightWidth: 1, borderRightColor: palette.line, backgroundColor: palette.card }}>
+    <View style={{ width: 248, paddingVertical: space[6], paddingHorizontal: space[3], gap: space[6], borderRightWidth: 1, borderRightColor: palette.line, backgroundColor: palette.card }}>
       <Link href="/" accessibilityLabel="Chaudron, accueil" style={{ paddingHorizontal: space[4] }}>
         <Logo size={28} />
       </Link>
       <View accessibilityRole="menu" style={{ gap: space[1] }}>
-        {navigation.map((entry) => (
-          <Link key={entry.label} href={entry.href} style={item(entry.match(path))}>
-            {entry.label}
-          </Link>
-        ))}
-        {upcoming.length ? (
-          <Text style={{ marginTop: space[5], marginBottom: space[1], paddingHorizontal: space[4], fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 13, letterSpacing: 1, textTransform: 'uppercase', color: palette.muted }}>
-            Bientôt
-          </Text>
-        ) : null}
+        {navigation.map((nav) => {
+          const active = nav.match(path);
+          return (
+            <Link key={nav.label} href={nav.href} style={{ textDecorationLine: 'none' }}>
+              {entry(active, <Icon name={nav.icon} size={22} color={active ? palette.link : palette.muted} />, nav.label)}
+            </Link>
+          );
+        })}
         {upcoming.map((label) => (
-          <Text key={label} style={{ ...item(false), color: palette.muted, opacity: 0.7 }}>
+          <Text key={label} style={{ paddingHorizontal: space[4], fontFamily: fonts.text, fontSize: 17, color: palette.muted, opacity: 0.7 }}>
             {label}
           </Text>
         ))}
       </View>
       <View style={{ marginTop: 'auto' }}>
-        <Link href="/compte" style={item(path === '/compte')}>
-          Compte
+        <Link href="/compte" style={{ textDecorationLine: 'none' }}>
+          {entry(path === '/compte', <Avatar size={28} />, me?.display_name?.split(' ')[0] ?? 'Compte')}
         </Link>
       </View>
     </View>
@@ -251,8 +254,11 @@ export function AuthLayout({ children }: { children: ReactNode }) {
 export function Back({ href, label }: { href: Href; label: string }) {
   const { palette, fonts, weights } = useTheme();
   return (
-    <Link href={href} style={{ color: palette.link, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 16, paddingVertical: space[2] }}>
-      ← {label}
+    <Link href={href} style={{ paddingVertical: space[2], textDecorationLine: 'none' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Icon name="back" size={18} color={palette.link} strokeWidth={2.4} />
+        <Text style={{ color: palette.link, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 16 }}>{label}</Text>
+      </View>
     </Link>
   );
 }
@@ -311,7 +317,7 @@ export function Logo({ size = 24 }: { size?: number }) {
 export function Title({ children, level = 1 }: { children: ReactNode; level?: 1 | 2 }) {
   const { palette, fonts, weights } = useTheme();
   const wide = useWide();
-  const size = level === 1 ? (wide ? 40 : textSize.h1) : textSize.h2;
+  const size = level === 1 ? (wide ? 40 : textSize.h1) : wide ? textSize.h2 : 20;
   return (
     <Text
       role="heading"
@@ -335,6 +341,25 @@ export function Body({ children, tone = 'normal', size = textSize.body, style }:
   );
 }
 
+/** Texte long replié à trois lignes, avec « Lire la suite » (présentation d'une recette, notes d'un menu). */
+export function Clamped({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const { palette, fonts, weights } = useTheme();
+  const long = text.length > 180;
+  return (
+    <View style={{ gap: space[1], maxWidth: 720 }}>
+      <Body tone="muted" style={long && !open ? ({ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as object) : undefined}>
+        {text}
+      </Body>
+      {long ? (
+        <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={{ alignSelf: 'flex-start', paddingVertical: space[1] }}>
+          <Text style={{ fontFamily: fonts.text, fontWeight: weights.medium, fontSize: textSize.small, color: palette.link }}>{open ? 'Replier' : 'Lire la suite'}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 /** Gras du texte, selon la police du thème (800 en Atkinson : à 700, il se distingue mal du demi-gras de loin). */
 export function Strong({ children }: { children: ReactNode }) {
   const { weights } = useTheme();
@@ -350,12 +375,101 @@ export function ErrorText({ children }: { children: ReactNode }) {
   );
 }
 
-export function Tag({ children }: { children: ReactNode }) {
+type BadgeTone = 'neutral' | 'strong' | 'warn';
+
+/**
+ * Pastille d'information. `neutral` (par défaut) : calme, pour les étiquettes et les durées ; `strong` : ce qui
+ * décide du soir (express) ; `warn` : à surveiller. Une icône facultative la précède.
+ */
+export function Tag({ children, tone = 'neutral', icon }: { children: ReactNode; tone?: BadgeTone; icon?: IconName }) {
   const { palette, fonts, radius, weights } = useTheme();
+  const colors = {
+    neutral: { bg: palette.chip, fg: palette.text },
+    strong: { bg: palette.tagBg, fg: palette.tagText },
+    warn: { bg: palette.chip, fg: palette.warn },
+  }[tone];
   return (
-    <View style={{ alignSelf: 'flex-start', backgroundColor: palette.tagBg, borderRadius: radius.tag, paddingVertical: 6, paddingHorizontal: 12 }}>
-      <Text style={{ fontFamily: fonts.text, fontWeight: weights.medium, fontSize: textSize.small, color: palette.tagText }}>{children}</Text>
+    <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.bg, borderRadius: radius.tag, paddingVertical: 5, paddingHorizontal: icon ? 10 : 12 }}>
+      {icon ? <Icon name={icon} size={15} color={colors.fg} strokeWidth={2.2} /> : null}
+      <Text style={{ fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 14.5, color: colors.fg }}>{children}</Text>
     </View>
+  );
+}
+
+/** Nom d'un plat en deux temps : le plat, en gras, puis sa garniture, plus discrète. `display` : police de titre. */
+export function DishName({ title, size = 17, display = false, lines, color }: { title: string; size?: number; display?: boolean; lines?: number; color?: string }) {
+  const { palette, fonts, weights } = useTheme();
+  const { main, rest } = splitTitle(title);
+  const restSize = display ? Math.max(16, Math.round(size * 0.6)) : Math.round(size * 0.85);
+  return (
+    <View style={{ gap: display ? space[1] : 1, minWidth: 0 }}>
+      <Text
+        numberOfLines={lines}
+        style={{ fontFamily: display ? fonts.title : fonts.text, fontWeight: display ? weights.title : weights.strong, fontSize: size, lineHeight: Math.round(size * (display ? 1.15 : 1.3)), color: color ?? palette.text }}
+      >
+        {main}
+      </Text>
+      {rest ? (
+        <Text numberOfLines={lines} style={{ fontFamily: fonts.text, fontSize: restSize, lineHeight: Math.round(restSize * 1.4), color: color ?? palette.muted, opacity: color ? 0.8 : 1 }}>
+          {rest}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Vignette d'une recette, en attendant les photos : sa teinte de cuisine et le pictogramme de son appareil.
+ * `size` : carré ; `height` : bandeau sur toute la largeur.
+ */
+export function Vignette({ hue, pictogram, size = 56, height }: { hue: Hue; pictogram: Pictogram; size?: number; height?: number }) {
+  const { palette, mode, radius } = useTheme();
+  const h = height ?? size;
+  const icon = Math.round(Math.min(h * 0.52, 64));
+  return (
+    <View
+      aria-hidden
+      style={{ width: height ? '100%' : size, height: h, borderRadius: Math.min(radius.card, Math.round(h / 3.5)), backgroundColor: vignettes[mode][hue], alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Icon name={pictogram} size={icon} color={palette.text} strokeWidth={icon > 40 ? 1.4 : 1.7} />
+    </View>
+  );
+}
+
+/** Barre de progression (courses prises). */
+export function Progress({ value, label }: { value: number; label: string }) {
+  const { palette } = useTheme();
+  const pct = Math.max(0, Math.min(1, value));
+  return (
+    <View accessibilityRole="progressbar" aria-label={label} aria-valuenow={Math.round(pct * 100)} style={{ height: 10, borderRadius: 5, backgroundColor: palette.chip, overflow: 'hidden' }}>
+      {pct > 0 ? (
+        <View style={{ width: `${pct * 100}%`, height: '100%', borderRadius: 5, backgroundColor: palette.action, borderWidth: palette.actionBorder !== 'transparent' ? 1 : 0, borderColor: palette.actionBorder }} />
+      ) : null}
+    </View>
+  );
+}
+
+/** Bouton rond à icône (« ⋯ », réorganiser) ; la cible tactile reste pleine. */
+export function IconButton({ icon, label, onPress, active = false }: { icon: IconName; label: string; onPress: () => void; active?: boolean }) {
+  const { palette } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ expanded: active }}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: active || hovered ? palette.chip : 'transparent',
+        opacity: pressed ? 0.7 : 1,
+      })}
+    >
+      <Icon name={icon} size={22} color={active ? palette.text : palette.muted} />
+    </Pressable>
   );
 }
 

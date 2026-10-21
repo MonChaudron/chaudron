@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { type Palette, themeIds, themes } from './theme.ts';
+import { type Palette, themeIds, themes, vignettes } from './theme.ts';
 
 // Contraste WCAG 2 entre deux couleurs #RRGGBB.
 function luminance(hex: string): number {
@@ -27,6 +27,11 @@ const textPairs: [keyof Palette, keyof Palette][] = [
   ['link', 'card'],
   ['alert', 'bg'],
   ['alert', 'card'],
+  ['warn', 'bg'],
+  ['warn', 'card'],
+  ['text', 'chip'],
+  ['muted', 'chip'],
+  ['warn', 'chip'],
   ['onAction', 'action'],
   ['tagText', 'tagBg'],
 ];
@@ -48,6 +53,26 @@ test('le bouton principal se détache du fond (3:1), sinon il est cerné', () =>
       const ratio = contrast(palette.action, palette.bg);
       const outlined = palette.actionBorder !== 'transparent' && contrast(palette.actionBorder, palette.bg) >= 3;
       assert.ok(ratio >= 3 || outlined, `${id} ${mode} : bouton à ${ratio.toFixed(2)}:1, sans contour`);
+    }
+  }
+});
+
+test('le pictogramme d’une vignette se lit sur sa teinte (3:1)', () => {
+  for (const id of themeIds) {
+    for (const [mode, palette] of Object.entries(themes[id].palettes)) {
+      for (const [hue, color] of Object.entries(vignettes[mode as keyof typeof vignettes])) {
+        const ratio = contrast(palette.text, color);
+        assert.ok(ratio >= 3, `${id} ${mode} : texte sur ${hue} à ${ratio.toFixed(2)}:1`);
+      }
+    }
+  }
+});
+
+test('le texte du bouton principal se lit aussi sur le bandeau « ce soir » (fond action)', () => {
+  for (const id of themeIds) {
+    for (const [mode, palette] of Object.entries(themes[id].palettes)) {
+      const ratio = contrast(palette.onAction, palette.action);
+      assert.ok(ratio >= 4.5, `${id} ${mode} : ${ratio.toFixed(2)}:1`);
     }
   }
 });
