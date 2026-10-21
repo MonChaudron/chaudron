@@ -2,7 +2,7 @@ import { Redirect, Stack as Router, useLocalSearchParams } from 'expo-router';
 
 import { LoginOptions, loginErrors } from '../lib/LoginOptions';
 import { useSession } from '../lib/session';
-import { AuthLayout, Body, Card, ErrorText, Loading, Title } from '../ui';
+import { AuthLayout, Back, Body, Card, ErrorText, Loading, Title } from '../ui';
 
 export default function Connexion() {
   const { me, offline } = useSession();
@@ -12,6 +12,7 @@ export default function Connexion() {
   return (
     <AuthLayout>
       <Router.Screen options={{ title: 'Connexion · Chaudron' }} />
+      <Back href="/" label="Découvrir Chaudron" />
       <Card>
         {offline ? <ErrorText>Chaudron ne répond pas. Vérifie ta connexion.</ErrorText> : null}
         <Title>Les menus de la maison</Title>

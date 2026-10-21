@@ -25,6 +25,27 @@ async fn fournisseurs_disponibles(db: PgPool) {
     assert_eq!(response.status, StatusCode::NOT_FOUND);
 }
 
+/// La page d'accueil sait qui peut créer un compte : premier compte, tout le monde, une liste, sur invitation.
+#[sqlx::test]
+async fn qui_peut_creer_un_compte(db: PgPool) {
+    let app = TestApp::new(db.clone(), SignupPolicy::Closed).await;
+    let signup = || async { app.browser().get("/api/v1/auth/signup").await.json["signup"].clone() };
+    assert_eq!(signup().await, "first");
+    app.browser().login("alice@example.org").await;
+    assert_eq!(signup().await, "invite");
+
+    let open = TestApp::new(db.clone(), SignupPolicy::Open).await;
+    assert_eq!(
+        open.browser().get("/api/v1/auth/signup").await.json,
+        json!({"signup": "open"})
+    );
+    let listed = TestApp::new(db, SignupPolicy::parse("bob@example.org")).await;
+    assert_eq!(
+        listed.browser().get("/api/v1/auth/signup").await.json,
+        json!({"signup": "allowlist"})
+    );
+}
+
 #[sqlx::test]
 async fn premier_compte_puis_inscriptions_fermees(db: PgPool) {
     let app = TestApp::new(db, SignupPolicy::Closed).await;

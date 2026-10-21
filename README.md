@@ -38,6 +38,8 @@ curl http://localhost:28471/health   # {"status":"ok","database":"ok"}
   entre par un lien d'invitation (créé par un propriétaire du foyer). `SIGNUP_ALLOWED_EMAILS` les ouvre à une liste
   d'adresses, ou à tout le monde avec `*`. Une liste s'applique aussi au premier compte : sur une instance exposée
   à internet, y mettre son adresse Google évite qu'un inconnu se connecte avant soi.
+  La page d'accueil suit ce réglage : « Créer notre foyer » quand on peut s'inscrire, sinon seulement « J'ai une
+  invitation » (`GET /api/v1/auth/signup`).
 - **Mise à jour** : `docker compose pull && docker compose up -d`.
 - Avec l'ancien `docker-compose` (avec un tiret), remplacer `docker compose` par `docker-compose`.
 

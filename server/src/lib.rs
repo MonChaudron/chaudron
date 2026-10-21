@@ -86,6 +86,7 @@ impl AppState {
         health,
         openapi,
         auth::list_providers,
+        auth::signup_status,
         auth::login,
         auth::callback,
         auth::one_tap_login,

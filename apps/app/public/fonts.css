@@ -45,3 +45,10 @@
   font-weight: 100 900;
   font-display: swap;
 }
+/* Écriture à la craie de la page d'accueil. */
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/caveat-latin-wght.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}

@@ -58,6 +58,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Qui peut créer un compte : la page d'accueil propose « créer un foyer » ou seulement « j'ai une invitation ». */
+        get: operations["signup_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/{provider}/callback": {
         parameters: {
             query?: never;
@@ -1628,6 +1645,14 @@ export interface components {
             /** Format: date */
             week_start: string;
         };
+        /**
+         * @description Qui peut créer un compte sur l'instance (les invitations marchent toujours).
+         * @enum {string}
+         */
+        Signup: "first" | "open" | "allowlist" | "invite";
+        SignupInfo: {
+            signup: components["schemas"]["Signup"];
+        };
         /** @description Un membre qui mange ce plat : au repas même (`dinner` ou `lunch`), ou en boîte le lendemain midi (`box`). */
         SlotEater: {
             /** @description `meal` : au repas ; `box` : boîte du lendemain. */
@@ -1943,6 +1968,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderInfo"][];
+                };
+            };
+        };
+    };
+    signup_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupInfo"];
                 };
             };
         };

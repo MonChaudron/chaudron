@@ -6,6 +6,7 @@ import type { components, paths } from './schema';
 export type { paths } from './schema';
 export type Schemas = components['schemas'];
 export type Me = Schemas['Me'];
+export type SignupInfo = Schemas['SignupInfo'];
 export type Household = Schemas['Household'];
 export type HouseholdUser = Schemas['HouseholdUser'];
 export type Member = Schemas['Member'];

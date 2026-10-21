@@ -10,11 +10,12 @@ import { useSession } from '../lib/session';
 import { useTheme } from '../lib/theme';
 import { setItem } from '../lib/store';
 import { useCached } from '../lib/useCached';
+import { Landing } from '../ui/landing/Landing';
 import { Body, Button, Card, DishName, ErrorText, IconButton, Loading, Row, Screen, Stack, Title, useWide } from '../ui';
 import { Icon, type IconName } from '../ui/icons';
 import { DragHandle, mealLabels, modeHelp, type MoveRequest, MovePanel, NoticeLine, SlotBadges, slotHref, slotMeta, SlotSummary, SlotVignette, Warnings, warningsOf } from '../ui/menu';
 
-/** Accueil : connexion, création du foyer, ou les repas de la semaine. */
+/** Accueil : la présentation de Chaudron hors connexion, la création du foyer, ou les repas de la semaine. */
 export default function Home() {
   const { me } = useSession();
   if (me === undefined) {
@@ -24,7 +25,7 @@ export default function Home() {
       </Screen>
     );
   }
-  if (!me) return <Redirect href="/connexion" />;
+  if (!me) return <Landing />;
   const home = me.households[0];
   if (!home) return <Redirect href="/foyer/nouveau" />;
   return <Week householdId={home.id} />;
