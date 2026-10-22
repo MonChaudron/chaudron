@@ -93,14 +93,40 @@ function TabBar() {
 }
 
 function Header() {
+  const { palette } = useTheme();
+  const { me } = useSession();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
       <Link href="/" accessibilityLabel="Chaudron, accueil">
         <Logo size={24} />
       </Link>
-      <Link href="/compte" accessibilityLabel="Ton compte">
-        <Avatar />
-      </Link>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+        {me?.instance_admin ? (
+          <Link href="/revoir" accessibilityLabel="À revoir">
+            <Icon name="people" size={24} color={palette.muted} />
+          </Link>
+        ) : null}
+        <Link href="/notifications" accessibilityLabel={`Notifications${me?.unread_notifications ? ` : ${me.unread_notifications} nouvelles` : ''}`}>
+          <View>
+            <Icon name="bell" size={24} color={palette.muted} />
+            <Badge count={me?.unread_notifications ?? 0} />
+          </View>
+        </Link>
+        <Link href="/compte" accessibilityLabel="Ton compte">
+          <Avatar />
+        </Link>
+      </View>
+    </View>
+  );
+}
+
+/** Pastille du nombre de notifications non lues, sur une icône. */
+function Badge({ count }: { count: number }) {
+  const { palette, fonts, weights } = useTheme();
+  if (!count) return null;
+  return (
+    <View style={{ position: 'absolute', top: -6, right: -8, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: palette.action, borderWidth: 1, borderColor: palette.actionBorder, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: 11, color: palette.onAction }}>{count > 9 ? '9+' : count}</Text>
     </View>
   );
 }
@@ -172,6 +198,21 @@ function Sidebar() {
             </Link>
           );
         })}
+        {me?.instance_admin ? (
+          <Link href="/revoir" style={{ textDecorationLine: 'none' }}>
+            {entry(path.startsWith('/revoir'), <Icon name="people" size={22} color={path.startsWith('/revoir') ? palette.link : palette.muted} />, 'À revoir')}
+          </Link>
+        ) : null}
+        <Link href="/notifications" style={{ textDecorationLine: 'none' }}>
+          {entry(
+            path === '/notifications',
+            <View>
+              <Icon name="bell" size={22} color={path === '/notifications' ? palette.link : palette.muted} />
+              <Badge count={me?.unread_notifications ?? 0} />
+            </View>,
+            'Notifications',
+          )}
+        </Link>
         {upcoming.map((label) => (
           <Text key={label} style={{ paddingHorizontal: space[4], fontFamily: fonts.text, fontSize: 17, color: palette.muted, opacity: 0.7 }}>
             {label}

@@ -287,8 +287,34 @@ pub struct Recipe {
     pub notes: Vec<Feedback>,
     /// « Comment c'était ? », compté.
     pub ratings: RatingCounts,
+    /// Copie d'une recette de la communauté : laquelle, et si elle a changé depuis.
+    pub copied_from: Option<CopiedFrom>,
+    /// La dernière proposition de cette recette à la communauté par le foyer qui la lit.
+    pub submission: Option<SubmissionState>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
+}
+
+/// L'originale d'une copie (« d'après Hachis parmentier, v3 »).
+#[derive(Serialize, ToSchema, FromRow)]
+pub struct CopiedFrom {
+    pub slug: String,
+    pub title: String,
+    /// La version de l'originale que la copie suit.
+    pub version: i32,
+    /// Version courante de l'originale.
+    pub current_version: i32,
+    /// L'originale a changé depuis.
+    pub behind: bool,
+}
+
+/// Où en est la proposition d'une recette à la communauté.
+#[derive(Serialize, ToSchema, FromRow)]
+pub struct SubmissionState {
+    /// `pending`, `accepted` ou `refused`.
+    pub status: String,
+    /// Le mot de l'admin.
+    pub review_message: Option<String>,
 }
 
 /// Un élément d'une recette, désigné par sa clé.
@@ -490,6 +516,11 @@ pub(crate) async fn load_by_id(db: &PgPool, household_id: Uuid, id: Uuid) -> Api
     load_id(&mut conn, Some(household_id), id).await
 }
 
+/// La recette sans foyer qui la lit (l'admin, une version, une copie) : ni notes, ni matériel.
+pub(crate) async fn load_plain(conn: &mut PgConnection, id: Uuid) -> ApiResult<Recipe> {
+    load_id(conn, None, id).await
+}
+
 /// `viewer` : le foyer dont on compare le matériel (aucun : tout manque).
 async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> ApiResult<Recipe> {
     let recipe: RecipeRow = sqlx::query_as(
@@ -618,18 +649,35 @@ async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> Api
             .collect(),
         notes: Vec::new(),
         ratings: RatingCounts::default(),
+        copied_from: sqlx::query_as(
+            "SELECT o.slug, o.title, c.copied_version AS version, o.version AS current_version,
+                    o.version > c.copied_version AS behind
+             FROM recipes c JOIN recipes o ON o.id = c.copied_from WHERE c.id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await?,
+        submission: None,
         updated_at: recipe.updated_at,
     };
     if let Some(household_id) = viewer {
         loaded.notes = feedback::open_notes(conn, household_id, id, &loaded).await?;
         loaded.ratings = feedback::counts(conn, id).await?;
+        loaded.submission = sqlx::query_as(
+            "SELECT status, review_message FROM recipe_submissions
+             WHERE recipe_id = $1 AND household_id = $2 ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(id)
+        .bind(household_id)
+        .fetch_optional(&mut *conn)
+        .await?;
     }
     Ok(loaded)
 }
 
 // Écriture
 
-fn check_slug(slug: &str) -> ApiResult<()> {
+pub(crate) fn check_slug(slug: &str) -> ApiResult<()> {
     let ok = !slug.is_empty()
         && slug.len() <= 80
         && slug.split('-').all(|part| {
@@ -1104,19 +1152,21 @@ pub(crate) async fn save(
         }
     }
     let message = optional_text(input.message.as_ref()).unwrap_or_default();
-    record_version(conn, recipe_id, author, &message).await?;
+    record_version(conn, recipe_id, author, &message, false).await?;
     Ok(Saved {
         id: recipe_id,
         created: existing.is_none(),
     })
 }
 
-/// Écrit une version si le contenu a changé depuis la dernière ; renvoie le numéro de la version courante.
-async fn record_version(
+/// Écrit une version si le contenu a changé depuis la dernière (ou toujours, `force` : un changement de niveau) ;
+/// renvoie le numéro de la version courante.
+pub(crate) async fn record_version(
     conn: &mut PgConnection,
     recipe_id: Uuid,
     author: &Author,
     message: &str,
+    force: bool,
 ) -> ApiResult<i32> {
     let recipe = load_id(conn, None, recipe_id).await?;
     let content = serde_json::to_value(recipe.to_input()).map_err(|_| ApiError::internal())?;
@@ -1126,7 +1176,7 @@ async fn record_version(
     .bind(recipe_id)
     .fetch_optional(&mut *conn)
     .await?;
-    if last.as_ref() == Some(&content) {
+    if !force && last.as_ref() == Some(&content) {
         return Ok(recipe.version);
     }
     let number = recipe.version + 1;
@@ -1161,7 +1211,7 @@ pub async fn backfill_versions(db: &PgPool) -> ApiResult<usize> {
     };
     for id in &ids {
         let mut tx = db.begin().await?;
-        record_version(&mut tx, *id, &author, "Version de départ").await?;
+        record_version(&mut tx, *id, &author, "Version de départ", false).await?;
         tx.commit().await?;
     }
     Ok(ids.len())

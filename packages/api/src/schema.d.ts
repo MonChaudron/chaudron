@@ -134,6 +134,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/community/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** « À revoir » (admin de l'instance). */
+        get: operations["review_queue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/submissions/{submission_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["read_submission"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/submissions/{submission_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accepte une recette proposée (admin) : elle devient la recette de la communauté. 409 `slug_taken` si une autre
+         *     recette (d'un foyer ou de la communauté) a ce slug.
+         */
+        post: operations["accept_submission"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/submissions/{submission_id}/refuse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refuse une recette proposée (admin), avec un mot pour le foyer. */
+        post: operations["refuse_submission"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment": {
         parameters: {
             query?: never;
@@ -589,6 +659,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/recipes/{slug}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copie une recette de la communauté dans le foyer : une recette du foyer, modifiable librement, qui garde le lien
+         *     avec l'originale et ses clés. Les menus qui utilisent l'originale ne changent pas.
+         */
+        post: operations["copy_recipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/recipes/{slug}/feedback": {
         parameters: {
             query?: never;
@@ -601,6 +691,46 @@ export interface paths {
         put?: never;
         /** Écrit une note dans le cahier du foyer : visible du foyer seul, jamais relue par personne d'autre. */
         post: operations["create_feedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Propose une recette du foyer à la communauté (tout compte du foyer). Une seule proposition en attente par recette ;
+         *     une copie ne se propose pas (ses changements se proposent à l'originale).
+         */
+        post: operations["submit_recipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/upstream/take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reprend dans la copie des changements de l'originale, élément par élément (il remplace celui de la copie) ; pas
+         *     de fusion à trois versions. `seen` : la copie suit la version courante de l'originale.
+         */
+        post: operations["take_upstream"];
         delete?: never;
         options?: never;
         head?: never;
@@ -826,6 +956,39 @@ export interface paths {
         patch: operations["update_me"];
         trace?: never;
     };
+    "/api/v1/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les 50 dernières notifications du compte. */
+        get: operations["list_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["mark_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/oauth/authorize": {
         parameters: {
             query?: never;
@@ -948,6 +1111,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Accepter : avec un autre slug, et la recette modifiée (« Modifier puis accepter »), si besoin. */
+        AcceptInput: {
+            /** @description Un mot pour le foyer. */
+            message?: string | null;
+            recipe?: components["schemas"]["RecipeInput"] | null;
+            /** @description Le slug dans la communauté ; par défaut, celui du foyer. */
+            slug?: string | null;
+        };
         /** @description Les repas d'une période, tous menus confondus, avec les recettes pour lire et cuisiner sans autre appel. */
         Agenda: {
             /** Format: int32 */
@@ -1088,6 +1259,27 @@ export interface components {
             /** @description Titre de la phase. */
             title: string;
             video_url?: string | null;
+        };
+        /** @description L'originale d'une copie (« d'après Hachis parmentier, v3 »). */
+        CopiedFrom: {
+            /** @description L'originale a changé depuis. */
+            behind: boolean;
+            /**
+             * Format: int32
+             * @description Version courante de l'originale.
+             */
+            current_version: number;
+            slug: string;
+            title: string;
+            /**
+             * Format: int32
+             * @description La version de l'originale que la copie suit.
+             */
+            version: number;
+        };
+        /** @description La copie : son slug ; par défaut, celui de l'originale suivi de `-maison`. */
+        CopyInput: {
+            slug?: string | null;
         };
         /** @description Jeton créé : sa valeur n'est montrée qu'ici. */
         CreatedApiToken: components["schemas"]["ApiTokenInfo"] & {
@@ -1432,6 +1624,10 @@ export interface components {
             /** @description Chaque recette avec son `slug`. */
             recipes?: components["schemas"]["RecipeInput"][];
         };
+        /** @description Lues : celles-ci, ou toutes sans liste. */
+        MarkRead: {
+            ids?: string[];
+        };
         /** @description Utilisateur connecté, ses fournisseurs liés et ses foyers. */
         Me: {
             display_name: string;
@@ -1442,6 +1638,11 @@ export interface components {
             identities: components["schemas"]["Identity"][];
             /** @description Admin de l'instance (`ADMIN_EMAILS`, adresse vérifiée) : « À revoir ». */
             instance_admin: boolean;
+            /**
+             * Format: int64
+             * @description Notifications pas encore lues (le badge).
+             */
+            unread_notifications: number;
         };
         MeUpdate: {
             /** @description Nom affiché aux autres comptes du foyer. */
@@ -1623,6 +1824,22 @@ export interface components {
             /** Format: uuid */
             user_id?: string | null;
         };
+        /** @description Une notification. */
+        Notification: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `submission_accepted`, `submission_refused`, `feedback_applied`, `feedback_published`, `feedback_closed`,
+             *     `feedback_refused`.
+             */
+            kind: string;
+            read: boolean;
+            /** @description La recette concernée, si elle existe encore. */
+            recipe_slug?: string | null;
+            text: string;
+        };
         /** @description Erreur au format OAuth2 : `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`. */
         OAuthError: {
             error: string;
@@ -1755,6 +1972,7 @@ export interface components {
         Recipe: {
             /** @description Recette de la communauté (modifiée par l'admin de l'instance), sinon du foyer. */
             community: boolean;
+            copied_from?: components["schemas"]["CopiedFrom"] | null;
             description: string;
             ingredients: components["schemas"]["RecipeLine"][];
             /** @description Les notes ouvertes du cahier du foyer qui lit la recette. */
@@ -1766,6 +1984,7 @@ export interface components {
             season_months: number[];
             slug: string;
             source?: string | null;
+            submission?: components["schemas"]["SubmissionState"] | null;
             tags: string[];
             title: string;
             /** Format: date-time */
@@ -1848,9 +2067,18 @@ export interface components {
             message: string;
             slug: string;
         };
+        /** @description Refuser, avec un mot. */
+        RefuseInput: {
+            message: string;
+        };
         /** @description Une remarque à la voix (« Alexa, remarque : ça rentre pas dans le Cookeo »). */
         RemarkInput: {
             text: string;
+        };
+        /** @description Ce qui attend l'admin. */
+        Review: {
+            /** @description Recettes proposées, de la plus ancienne à la plus récente. */
+            submissions: components["schemas"]["Submission"][];
         };
         /**
          * @description Rôle d'un compte dans un foyer.
@@ -2031,11 +2259,56 @@ export interface components {
             /** @description Vidéo MP4 en HTTPS. */
             video_url?: string | null;
         };
+        /** @description Une recette proposée à la communauté. */
+        Submission: {
+            author_name: string;
+            /** Format: date-time */
+            created_at: string;
+            household_name?: string | null;
+            /** Format: uuid */
+            id: string;
+            message: string;
+            review_message?: string | null;
+            slug: string;
+            status: components["schemas"]["SubmissionStatus"];
+            title: string;
+        };
+        /** @description Une proposition et la recette telle qu'elle est proposée. */
+        SubmissionDetail: {
+            recipe: components["schemas"]["Recipe"];
+            submission: components["schemas"]["Submission"];
+        };
+        /** @description Où en est la proposition d'une recette à la communauté. */
+        SubmissionState: {
+            /** @description Le mot de l'admin. */
+            review_message?: string | null;
+            /** @description `pending`, `accepted` ou `refused`. */
+            status: string;
+        };
+        /**
+         * @description Où en est une recette proposée.
+         * @enum {string}
+         */
+        SubmissionStatus: "pending" | "accepted" | "refused";
+        /** @description Un mot pour l'admin. */
+        SubmitInput: {
+            message?: string | null;
+        };
         /** @description Autre variante qui lève un conflit. */
         Suggestion: {
             /** Format: uuid */
             slot: string;
             variant: string;
+        };
+        /** @description Reprendre des changements de l'originale. */
+        TakeInput: {
+            /**
+             * @description Clés des éléments de l'originale à reprendre (ajoutés, changés ; retirés de l'originale : retirés de la
+             *     copie).
+             */
+            keys?: string[];
+            /** @description Le reste est vu : la copie suit désormais la version courante de l'originale. */
+            seen?: boolean;
         };
         /** @description Ingrédient congelé pour ce plat. */
         ThawItem: {
@@ -2442,6 +2715,182 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    review_queue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Review"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_submission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionDetail"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    accept_submission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    refuse_submission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submission_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefuseInput"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3948,6 +4397,56 @@ export interface operations {
             };
         };
     };
+    copy_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_feedback: {
         parameters: {
             query?: {
@@ -4003,6 +4502,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    submit_recipe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Submission"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Déjà proposée */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    take_upstream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TakeInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
                 };
             };
             404: {
@@ -4632,6 +5224,62 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_notifications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"][];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkRead"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

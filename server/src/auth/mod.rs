@@ -850,6 +850,8 @@ pub struct Me {
     pub households: Vec<HouseholdSummary>,
     /// Admin de l'instance (`ADMIN_EMAILS`, adresse vérifiée) : « À revoir ».
     pub instance_admin: bool,
+    /// Notifications pas encore lues (le badge).
+    pub unread_notifications: i64,
 }
 
 #[derive(Serialize, ToSchema, FromRow)]
@@ -911,6 +913,8 @@ async fn load_me(state: &AppState, user_id: Uuid) -> ApiResult<Me> {
         identities,
         households,
         instance_admin: is_admin(state, user_id).await?,
+        unread_notifications: crate::notifications::unread(&mut *db.acquire().await?, user_id)
+            .await?,
     })
 }
 

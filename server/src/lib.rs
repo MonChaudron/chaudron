@@ -3,6 +3,7 @@
 pub mod auth;
 pub mod catalog;
 pub mod ciqual;
+pub mod community;
 pub mod config;
 pub mod cooking;
 pub mod crypto;
@@ -14,6 +15,7 @@ pub mod http;
 pub mod ingredients;
 pub mod members;
 pub mod menus;
+pub mod notifications;
 pub mod oauth;
 pub mod recipes;
 pub mod shopping;
@@ -145,6 +147,15 @@ impl AppState {
         feedback::update_feedback,
         feedback::delete_feedback,
         feedback::rate_meal,
+        community::submit_recipe,
+        community::copy_recipe,
+        community::take_upstream,
+        community::review_queue,
+        community::read_submission,
+        community::accept_submission,
+        community::refuse_submission,
+        notifications::list_notifications,
+        notifications::mark_read,
         events::events,
         oauth::client_info,
         oauth::authorize,
@@ -246,6 +257,8 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(shopping::router())
         .merge(cooking::router())
         .merge(feedback::router())
+        .merge(community::router())
+        .merge(notifications::router())
         .merge(events::router())
         .merge(tokens::router())
         .merge(oauth::router())

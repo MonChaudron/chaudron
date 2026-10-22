@@ -1,6 +1,6 @@
 import type { VersionInfo } from '@chaudron/api';
 import { errorMessage } from '@chaudron/api';
-import { diffRecipes, diffWords, fieldLabels, formatDuration, type RecipeChange, space } from '@chaudron/domain';
+import { diffRecipes, space } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -10,6 +10,7 @@ import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Button, Card, Columns, ErrorText, Loading, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { ChangeView } from '../../ui/changes';
 
 /** Historique d'une recette (`/recettes/historique?slug=…`) : les versions, ce qui a changé, revenir à une version. */
 export default function History() {
@@ -145,59 +146,5 @@ function Changes({ householdId, slug, number, first }: { householdId: string; sl
         ))}
       </View>
     </Card>
-  );
-}
-
-const kindLabels: Record<RecipeChange['kind'], string> = {
-  added: 'Ajouté',
-  removed: 'Retiré',
-  changed: 'Modifié',
-  moved: 'Déplacé',
-};
-
-const TEXT_FIELDS = new Set(['title', 'description', 'text', 'spoken_text', 'note', 'label', 'source']);
-
-function show(value: unknown, field: string): string {
-  if (value === null || value === undefined || value === '') return '—';
-  if (field === 'timer_s' && typeof value === 'number') return formatDuration(Math.max(1, Math.round(value / 60)));
-  if (Array.isArray(value)) return value.length ? value.join(', ') : '—';
-  if (typeof value === 'boolean') return value ? 'oui' : 'non';
-  return String(value);
-}
-
-function ChangeView({ change }: { change: RecipeChange }) {
-  const { palette, fonts, weights } = useTheme();
-  return (
-    <View style={{ gap: space[2] }}>
-      <Row gap={space[2]}>
-        <Tag tone={change.kind === 'removed' ? 'warn' : 'neutral'}>{kindLabels[change.kind]}</Tag>
-        <Text style={{ flexShrink: 1, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 16, color: palette.text }}>{change.where}</Text>
-      </Row>
-      {change.fields.map((f) => (
-        <View key={f.field} style={{ gap: 2, paddingLeft: space[3], borderLeftWidth: 2, borderLeftColor: palette.line }}>
-          <Body tone="muted" size={14}>{fieldLabels[f.field] ?? f.field}</Body>
-          {TEXT_FIELDS.has(f.field) && typeof (f.before ?? '') === 'string' && typeof (f.after ?? '') === 'string' ? (
-            <Text style={{ fontFamily: fonts.text, fontSize: 16, lineHeight: 24, color: palette.text }}>
-              {diffWords(String(f.before ?? ''), String(f.after ?? '')).map((piece, j) => (
-                <Text
-                  key={j}
-                  style={
-                    piece.kind === 'removed'
-                      ? { color: palette.muted, textDecorationLine: 'line-through' }
-                      : piece.kind === 'added'
-                        ? { backgroundColor: palette.chip, fontWeight: weights.strong }
-                        : undefined
-                  }
-                >
-                  {piece.text}
-                </Text>
-              ))}
-            </Text>
-          ) : (
-            <Body size={16}>{`${show(f.before, f.field)} → ${show(f.after, f.field)}`}</Body>
-          )}
-        </View>
-      ))}
-    </View>
   );
 }

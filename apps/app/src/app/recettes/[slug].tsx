@@ -28,6 +28,7 @@ import { useTheme } from '../../lib/theme';
 import { useCached } from '../../lib/useCached';
 import { Back, Body, Button, Card, Clamped, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
+import { CommunityCard } from '../../ui/community';
 import { changeText, NoteForm, Notes, RateMeal } from '../../ui/notes';
 
 export default function RecipeScreen() {
@@ -123,6 +124,7 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
         <Stack gap={space[5]}>
           <Ingredients lines={data.ingredients} members={members.data} slot={slot} />
           <Cahier householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
+          <CommunityCard householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
         </Stack>
         <Steps variant={variant} householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
       </Columns>

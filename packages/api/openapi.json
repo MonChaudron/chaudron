@@ -360,6 +360,229 @@
         }
       }
     },
+    "/api/v1/community/review": {
+      "get": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "« À revoir » (admin de l'instance).",
+        "operationId": "review_queue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/submissions/{submission_id}": {
+      "get": {
+        "tags": [
+          "communauté"
+        ],
+        "operationId": "read_submission",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/submissions/{submission_id}/accept": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Accepte une recette proposée (admin) : elle devient la recette de la communauté. 409 `slug_taken` si une autre\nrecette (d'un foyer ou de la communauté) a ce slug.",
+        "operationId": "accept_submission",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/submissions/{submission_id}/refuse": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Refuse une recette proposée (admin), avec un mot pour le foyer.",
+        "operationId": "refuse_submission",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/equipment": {
       "get": {
         "tags": [
@@ -2486,6 +2709,82 @@
         }
       }
     },
+    "/api/v1/households/{id}/recipes/{slug}/copy": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Copie une recette de la communauté dans le foyer : une recette du foyer, modifiable librement, qui garde le lien\navec l'originale et ses clés. Les menus qui utilisent l'originale ne changent pas.",
+        "operationId": "copy_recipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes/{slug}/feedback": {
       "get": {
         "tags": [
@@ -2586,6 +2885,150 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/submit": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Propose une recette du foyer à la communauté (tout compte du foyer). Une seule proposition en attente par recette ;\nune copie ne se propose pas (ses changements se proposent à l'originale).",
+        "operationId": "submit_recipe",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Submission"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Déjà proposée",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/upstream/take": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Reprend dans la copie des changements de l'originale, élément par élément (il remplace celui de la copie) ; pas\nde fusion à trois versions. `seen` : la copie suit la version courante de l'originale.",
+        "operationId": "take_upstream",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
                 }
               }
             }
@@ -3490,6 +3933,68 @@
         }
       }
     },
+    "/api/v1/me/notifications": {
+      "get": {
+        "tags": [
+          "compte"
+        ],
+        "summary": "Les 50 dernières notifications du compte.",
+        "operationId": "list_notifications",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Notification"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/notifications/read": {
+      "post": {
+        "tags": [
+          "compte"
+        ],
+        "operationId": "mark_read",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkRead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oauth/authorize": {
       "post": {
         "tags": [
@@ -3750,6 +4255,37 @@
   },
   "components": {
     "schemas": {
+      "AcceptInput": {
+        "type": "object",
+        "description": "Accepter : avec un autre slug, et la recette modifiée (« Modifier puis accepter »), si besoin.",
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Un mot pour le foyer."
+          },
+          "recipe": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecipeInput",
+                "description": "La recette telle que l'admin la publie."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Le slug dans la communauté ; par défaut, celui du foyer."
+          }
+        }
+      },
       "Agenda": {
         "type": "object",
         "description": "Les repas d'une période, tous menus confondus, avec les recettes pour lire et cuisiner sans autre appel.",
@@ -4150,6 +4686,51 @@
             "description": "Titre de la phase."
           },
           "video_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "CopiedFrom": {
+        "type": "object",
+        "description": "L'originale d'une copie (« d'après Hachis parmentier, v3 »).",
+        "required": [
+          "slug",
+          "title",
+          "version",
+          "current_version",
+          "behind"
+        ],
+        "properties": {
+          "behind": {
+            "type": "boolean",
+            "description": "L'originale a changé depuis."
+          },
+          "current_version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Version courante de l'originale."
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "La version de l'originale que la copie suit."
+          }
+        }
+      },
+      "CopyInput": {
+        "type": "object",
+        "description": "La copie : son slug ; par défaut, celui de l'originale suivi de `-maison`.",
+        "properties": {
+          "slug": {
             "type": [
               "string",
               "null"
@@ -5143,6 +5724,19 @@
           }
         }
       },
+      "MarkRead": {
+        "type": "object",
+        "description": "Lues : celles-ci, ou toutes sans liste.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
       "Me": {
         "type": "object",
         "description": "Utilisateur connecté, ses fournisseurs liés et ses foyers.",
@@ -5151,7 +5745,8 @@
           "display_name",
           "identities",
           "households",
-          "instance_admin"
+          "instance_admin",
+          "unread_notifications"
         ],
         "properties": {
           "display_name": {
@@ -5182,6 +5777,11 @@
           "instance_admin": {
             "type": "boolean",
             "description": "Admin de l'instance (`ADMIN_EMAILS`, adresse vérifiée) : « À revoir »."
+          },
+          "unread_notifications": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Notifications pas encore lues (le badge)."
           }
         }
       },
@@ -5678,6 +6278,44 @@
           }
         }
       },
+      "Notification": {
+        "type": "object",
+        "description": "Une notification.",
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "read",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "description": "`submission_accepted`, `submission_refused`, `feedback_applied`, `feedback_published`, `feedback_closed`,\n`feedback_refused`."
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "recipe_slug": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "La recette concernée, si elle existe encore."
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
       "OAuthError": {
         "type": "object",
         "description": "Erreur au format OAuth2 : `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`.",
@@ -6066,6 +6704,17 @@
             "type": "boolean",
             "description": "Recette de la communauté (modifiée par l'admin de l'instance), sinon du foyer."
           },
+          "copied_from": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CopiedFrom",
+                "description": "Copie d'une recette de la communauté : laquelle, et si elle a changé depuis."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "type": "string"
           },
@@ -6104,6 +6753,17 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "submission": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionState",
+                "description": "La dernière proposition de cette recette à la communauté par le foyer qui la lit."
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "tags": {
@@ -6372,6 +7032,18 @@
           }
         }
       },
+      "RefuseInput": {
+        "type": "object",
+        "description": "Refuser, avec un mot.",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "RemarkInput": {
         "type": "object",
         "description": "Une remarque à la voix (« Alexa, remarque : ça rentre pas dans le Cookeo »).",
@@ -6381,6 +7053,22 @@
         "properties": {
           "text": {
             "type": "string"
+          }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "description": "Ce qui attend l'admin.",
+        "required": [
+          "submissions"
+        ],
+        "properties": {
+          "submissions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Submission"
+            },
+            "description": "Recettes proposées, de la plus ancienne à la plus récente."
           }
         }
       },
@@ -6895,6 +7583,113 @@
           }
         }
       },
+      "Submission": {
+        "type": "object",
+        "description": "Une recette proposée à la communauté.",
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "author_name",
+          "message",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "author_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "household_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "message": {
+            "type": "string"
+          },
+          "review_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubmissionStatus"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "SubmissionDetail": {
+        "type": "object",
+        "description": "Une proposition et la recette telle qu'elle est proposée.",
+        "required": [
+          "submission",
+          "recipe"
+        ],
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/Recipe"
+          },
+          "submission": {
+            "$ref": "#/components/schemas/Submission"
+          }
+        }
+      },
+      "SubmissionState": {
+        "type": "object",
+        "description": "Où en est la proposition d'une recette à la communauté.",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "review_message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Le mot de l'admin."
+          },
+          "status": {
+            "type": "string",
+            "description": "`pending`, `accepted` ou `refused`."
+          }
+        }
+      },
+      "SubmissionStatus": {
+        "type": "string",
+        "description": "Où en est une recette proposée.",
+        "enum": [
+          "pending",
+          "accepted",
+          "refused"
+        ]
+      },
+      "SubmitInput": {
+        "type": "object",
+        "description": "Un mot pour l'admin.",
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "Suggestion": {
         "type": "object",
         "description": "Autre variante qui lève un conflit.",
@@ -6909,6 +7704,24 @@
           },
           "variant": {
             "type": "string"
+          }
+        }
+      },
+      "TakeInput": {
+        "type": "object",
+        "description": "Reprendre des changements de l'originale.",
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Clés des éléments de l'originale à reprendre (ajoutés, changés ; retirés de l'originale : retirés de la\ncopie)."
+          },
+          "seen": {
+            "type": "boolean",
+            "description": "Le reste est vu : la copie suit désormais la version courante de l'originale."
           }
         }
       },
