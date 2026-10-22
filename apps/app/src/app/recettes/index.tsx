@@ -8,7 +8,7 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useLoad } from '../../lib/useLoad';
-import { Body, Card, DishName, ErrorText, Field, LinkButton, Loading, Pill, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
+import { Body, Card, DishName, ErrorText, Field, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 
 /** Au plus 15 min actives : un soir express. */
 const EXPRESS_MIN = 15;
@@ -33,6 +33,7 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [tag, setTag] = useState<string | null>(null);
+  const [scope, setScope] = useState<'household' | 'community' | null>(null);
   // La recherche part un quart de seconde après la dernière frappe.
   useEffect(() => {
     const timer = setTimeout(() => setSearch(query.trim()), 250);
@@ -46,10 +47,12 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
   const filtered = useLoad(
     () =>
       api.GET('/api/v1/households/{id}/recipes', {
-        params: { path: { id: householdId }, query: { q: search || undefined, tag: tag ?? undefined } },
+        params: { path: { id: householdId }, query: { q: search || undefined, tag: tag ?? undefined, scope: scope ?? undefined } },
       }),
-    [householdId, search, tag],
+    [householdId, search, tag, scope],
   );
+  const community = (all.data ?? []).filter((r) => r.community).length;
+  const own = (all.data?.length ?? 0) - community;
   const tags = useMemo(() => [...new Set((all.data ?? []).flatMap((r) => r.tags))].sort((a, b) => a.localeCompare(b, 'fr')), [all.data]);
   const list = filtered.data;
   const empty = all.data?.length === 0;
@@ -62,7 +65,9 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
           <Title>Recettes</Title>
           {all.data?.length ? (
             <Body tone="muted" size={16}>
-              {all.data.length} recette{all.data.length > 1 ? 's' : ''} du foyer, chacune avec ses façons de la cuisiner.
+              {community
+                ? `${own} recette${own > 1 ? 's' : ''} du foyer et ${community} de la communauté, chacune avec ses façons de la cuisiner.`
+                : `${own} recette${own > 1 ? 's' : ''} du foyer, chacune avec ses façons de la cuisiner.`}
             </Body>
           ) : null}
         </Stack>
@@ -85,6 +90,13 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
             <View style={wide ? { maxWidth: 520 } : undefined}>
               <Field label="Chercher" hideLabel placeholder="Chercher un plat, un ingrédient : chili, lentilles…" value={query} onChangeText={setQuery} autoCorrect={false} />
             </View>
+            {community ? (
+              <View accessibilityRole="radiogroup" aria-label="Recettes à montrer" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
+                <Pill label="Toutes" role="radio" selected={scope === null} onPress={() => setScope(null)} />
+                <Pill label="Du foyer" role="radio" selected={scope === 'household'} onPress={() => setScope('household')} />
+                <Pill label="Communauté" role="radio" selected={scope === 'community'} onPress={() => setScope('community')} />
+              </View>
+            ) : null}
             {/* Les étiquettes sur une ligne qui défile : la première recette reste à l'écran. */}
             {tags.length ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: wide ? 0 : -space[4] }} contentContainerStyle={{ gap: space[2], paddingHorizontal: wide ? 0 : space[4] }}>
@@ -149,7 +161,10 @@ function RecipeTile({ recipe, wide }: { recipe: RecipeSummary; wide: boolean }) 
         <Text style={{ fontFamily: fonts.text, fontSize: 14, color: palette.muted }}>
           {`${formatDuration(variant.active_min)} · ${tool}${others > 0 ? ` · +${others}` : ''}`}
         </Text>
-        {express ? <Tag tone="strong" icon="bolt">Express</Tag> : null}
+        <Row gap={space[1]}>
+          {express ? <Tag tone="strong" icon="bolt">Express</Tag> : null}
+          {recipe.community ? <Tag icon="people">Communauté</Tag> : null}
+        </Row>
       </View>
     </Pressable>
   );

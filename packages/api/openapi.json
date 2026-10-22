@@ -255,6 +255,111 @@
         ]
       }
     },
+    "/api/v1/community/recipes/{slug}": {
+      "put": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Modifie une recette de la communauté (admin de l'instance). Elle se crée en acceptant une recette proposée.",
+        "operationId": "put_community",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Supprime une recette de la communauté (admin) ; utilisée par un menu ou une cuisson, elle est seulement retirée\ndu catalogue, et ceux qui l'utilisent la gardent.",
+        "operationId": "delete_community",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/equipment": {
       "get": {
         "tags": [
@@ -854,7 +959,7 @@
         "tags": [
           "recettes"
         ],
-        "summary": "Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,\n`week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`.",
+        "summary": "Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,\n`week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`. Une recette au\nslug d'une recette de la communauté est laissée de côté (`recipe_warnings`) : le menu prend celle de la\ncommunauté.",
         "operationId": "import",
         "parameters": [
           {
@@ -1875,7 +1980,7 @@
         "tags": [
           "recettes"
         ],
-        "summary": "Recettes du foyer, par titre.",
+        "summary": "Recettes du foyer et de la communauté (sauf celles qui sont retirées), par titre.",
         "operationId": "list_recipes",
         "parameters": [
           {
@@ -1903,6 +2008,20 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Un seul niveau ; sans, les deux.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Niveau d'une recette.",
+              "enum": [
+                "household",
+                "community"
+              ]
             }
           }
         ],
@@ -1982,7 +2101,7 @@
         "tags": [
           "recettes"
         ],
-        "summary": "Publie une recette : la crée (201) ou la remplace entièrement (200). Idempotent.",
+        "summary": "Publie une recette du foyer : la crée (201) ou la remplace entièrement (200). Idempotent ; une version s'écrit\nsi le contenu change. Le slug d'une recette de la communauté est refusé (409 `slug_taken`).",
         "operationId": "put_recipe",
         "parameters": [
           {
@@ -2052,6 +2171,16 @@
               }
             }
           },
+          "409": {
+            "description": "Slug d'une recette de la communauté",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2090,6 +2219,7 @@
         "responses": {
           "204": {},
           "403": {
+            "description": "Recette de la communauté",
             "content": {
               "application/json": {
                 "schema": {
@@ -2109,6 +2239,180 @@
           },
           "409": {
             "description": "Prévue dans un menu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/versions": {
+      "get": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Historique d'une recette, de la plus récente à la plus ancienne.",
+        "operationId": "list_versions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VersionInfo"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/versions/{number}": {
+      "get": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Une version, avec la recette telle qu'elle était.",
+        "operationId": "read_version",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeVersion"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/versions/{number}/restore": {
+      "post": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Revient à une version : la republie, ce qui crée une nouvelle version (rien ne se perd). Recette du foyer : tout\ncompte du foyer ; de la communauté : l'admin de l'instance.",
+        "operationId": "restore_version",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3907,6 +4211,7 @@
           "ingredients_created",
           "recipes_created",
           "recipes_updated",
+          "recipe_warnings",
           "menu_imported",
           "warnings"
         ],
@@ -3921,6 +4226,13 @@
           "menu_imported": {
             "type": "boolean",
             "description": "Le lot avait un menu, et il est publié."
+          },
+          "recipe_warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeWarning"
+            },
+            "description": "Recettes du lot laissées de côté."
           },
           "recipes_created": {
             "type": "array",
@@ -4195,6 +4507,14 @@
             "type": "string",
             "description": "Code de l'ingrédient du référentiel (`minced_beef`)."
           },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Clé stable, renvoyée par l'éditeur ; sans clé, celle de la ligne au même endroit, sinon une nouvelle."
+          },
           "note": {
             "type": [
               "string",
@@ -4327,7 +4647,8 @@
           "id",
           "display_name",
           "identities",
-          "households"
+          "households",
+          "instance_admin"
         ],
         "properties": {
           "display_name": {
@@ -4354,6 +4675,10 @@
             "items": {
               "$ref": "#/components/schemas/Identity"
             }
+          },
+          "instance_admin": {
+            "type": "boolean",
+            "description": "Admin de l'instance (`ADMIN_EMAILS`, adresse vérifiée) : « À revoir »."
           }
         }
       },
@@ -4951,6 +5276,7 @@
       "Phase": {
         "type": "object",
         "required": [
+          "key",
           "title",
           "text",
           "day_offset",
@@ -4960,6 +5286,10 @@
           "day_offset": {
             "type": "integer",
             "format": "int32"
+          },
+          "key": {
+            "type": "string",
+            "format": "uuid"
           },
           "spoken_text": {
             "type": [
@@ -5001,6 +5331,13 @@
             "type": "integer",
             "format": "int32",
             "description": "-1 : la veille."
+          },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "spoken_text": {
             "type": [
@@ -5132,6 +5469,9 @@
         "description": "Recette complète.",
         "required": [
           "slug",
+          "community",
+          "retired",
+          "version",
           "title",
           "description",
           "tags",
@@ -5141,6 +5481,10 @@
           "updated_at"
         ],
         "properties": {
+          "community": {
+            "type": "boolean",
+            "description": "Recette de la communauté (modifiée par l'admin de l'instance), sinon du foyer."
+          },
           "description": {
             "type": "string"
           },
@@ -5149,6 +5493,10 @@
             "items": {
               "$ref": "#/components/schemas/RecipeLine"
             }
+          },
+          "retired": {
+            "type": "boolean",
+            "description": "Retirée du catalogue de la communauté : gardée par les menus qui l'utilisent."
           },
           "season_months": {
             "type": "array",
@@ -5185,12 +5533,17 @@
               "$ref": "#/components/schemas/Variant"
             },
             "description": "La variante par défaut d'abord, puis dans l'ordre de publication."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Numéro de la version courante (historique)."
           }
         }
       },
       "RecipeInput": {
         "type": "object",
-        "description": "Recette complète, telle que publiée.",
+        "description": "Recette complète, telle que publiée ; c'est aussi le contenu d'une version.",
         "required": [
           "title",
           "ingredients",
@@ -5205,6 +5558,13 @@
             "items": {
               "$ref": "#/components/schemas/LineInput"
             }
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Un mot sur ce changement, gardé dans l'historique (pas dans la recette)."
           },
           "season_months": {
             "type": "array",
@@ -5248,6 +5608,7 @@
         "type": "object",
         "description": "Ligne d'ingrédient, pour une portion standard.",
         "required": [
+          "key",
           "ingredient",
           "ingredient_id",
           "name",
@@ -5263,6 +5624,10 @@
             "description": "Code de l'ingrédient."
           },
           "ingredient_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
             "type": "string",
             "format": "uuid"
           },
@@ -5321,6 +5686,7 @@
         "required": [
           "slug",
           "title",
+          "community",
           "description",
           "tags",
           "season_months",
@@ -5328,6 +5694,10 @@
           "variant_count"
         ],
         "properties": {
+          "community": {
+            "type": "boolean",
+            "description": "Recette de la communauté."
+          },
           "default_variant": {
             "$ref": "#/components/schemas/VariantSummary"
           },
@@ -5356,6 +5726,57 @@
           "variant_count": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "RecipeVersion": {
+        "type": "object",
+        "description": "Une version avec son contenu complet.",
+        "required": [
+          "number",
+          "author_name",
+          "message",
+          "created_at",
+          "content"
+        ],
+        "properties": {
+          "author_name": {
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/components/schemas/RecipeInput"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RecipeWarning": {
+        "type": "object",
+        "description": "Recette du lot laissée de côté.",
+        "required": [
+          "slug",
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "`slug_taken` : le slug est celui d'une recette de la communauté, que le menu du lot utilise à la place."
+          },
+          "message": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
           }
         }
       },
@@ -5777,6 +6198,7 @@
       "Step": {
         "type": "object",
         "required": [
+          "key",
           "text",
           "params"
         ],
@@ -5786,6 +6208,10 @@
               "string",
               "null"
             ]
+          },
+          "key": {
+            "type": "string",
+            "format": "uuid"
           },
           "params": {
             "type": "object"
@@ -5827,6 +6253,13 @@
               "null"
             ],
             "description": "Appareil du geste."
+          },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "params": {
             "type": "object",
@@ -6003,6 +6436,7 @@
         "type": "object",
         "required": [
           "id",
+          "key",
           "label",
           "equipment",
           "missing_equipment",
@@ -6029,6 +6463,10 @@
           },
           "is_default": {
             "type": "boolean"
+          },
+          "key": {
+            "type": "string",
+            "format": "uuid"
           },
           "label": {
             "type": "string"
@@ -6080,6 +6518,13 @@
           "is_default": {
             "type": "boolean",
             "description": "Une seule variante par défaut ; sans indication, la première."
+          },
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
           },
           "label": {
             "type": "string"
@@ -6133,6 +6578,33 @@
             "format": "int32"
           },
           "vessels": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "VersionInfo": {
+        "type": "object",
+        "description": "Une version de l'historique, sans son contenu.",
+        "required": [
+          "number",
+          "author_name",
+          "message",
+          "created_at"
+        ],
+        "properties": {
+          "author_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string",
+            "description": "Le mot laissé avec le changement ; vide s'il n'y en a pas."
+          },
+          "number": {
             "type": "integer",
             "format": "int32"
           }

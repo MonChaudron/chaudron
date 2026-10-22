@@ -47,6 +47,7 @@ export default function RecipeScreen() {
 /** Ouverte depuis un créneau (`?slot=…&menu=…`) : la variante prévue, les quantités et les avertissements du créneau. */
 function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: string; slug: string; slotId?: string; weekStart?: string }) {
   const wide = useWide();
+  const { me } = useSession();
   const recipe = useCached(`recipe:${householdId}:${slug}`, () =>
     api.GET('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } }),
   );
@@ -82,7 +83,11 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
       <Router.Screen options={{ title: `${data.title} · Chaudron` }} />
       <Row style={{ justifyContent: 'space-between' }}>
         {back}
-        <LinkButton kind="quiet" label="Modifier" href={`/recettes/modifier?slug=${data.slug}`} />
+        <Row gap={space[1]}>
+          <LinkButton kind="quiet" label="Historique" href={`/recettes/historique?slug=${data.slug}`} />
+          {/* Une recette de la communauté se modifie par l'admin de l'instance ; les autres, par des propositions. */}
+          {!data.community || me?.instance_admin ? <LinkButton kind="quiet" label="Modifier" href={`/recettes/modifier?slug=${data.slug}`} /> : null}
+        </Row>
       </Row>
       <Vignette hue={look.hue} pictogram={look.pictogram} height={wide ? 180 : 128} />
       <Stack gap={space[3]}>
@@ -107,9 +112,11 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
 
 function Meta({ recipe }: { recipe: Recipe }) {
   const season = seasonText(recipe.season_months);
-  if (!recipe.tags.length && !season && !recipe.source) return null;
+  if (!recipe.community && !recipe.tags.length && !season && !recipe.source) return null;
   return (
     <Row gap={space[3]}>
+      {recipe.community ? <Tag tone="strong" icon="people">Communauté</Tag> : null}
+      {recipe.retired ? <Body tone="muted" size={15}>Retirée du catalogue, gardée par tes menus</Body> : null}
       {recipe.tags.map((t) => (
         <Tag key={t}>{t}</Tag>
       ))}

@@ -96,16 +96,17 @@ function Loader({ householdId, slug }: { householdId: string; slug?: string }) {
     );
   }
   const initial: Draft = recipe.data ? (recipeToInput(recipe.data) as Draft) : emptyDraft();
-  return <Editor householdId={householdId} initial={initial} editing={!!recipe.data} />;
+  return <Editor householdId={householdId} initial={initial} editing={!!recipe.data} community={!!recipe.data?.community} />;
 }
 
-function Editor({ householdId, initial, editing }: { householdId: string; initial: Draft; editing: boolean }) {
+function Editor({ householdId, initial, editing, community }: { householdId: string; initial: Draft; editing: boolean; community: boolean }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(initial);
   const [tags, setTags] = useState(initial.tags?.join(', ') ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [message, setMessage] = useState('');
   const catalog = useLoad(() => api.GET('/api/v1/ingredients'), []);
   const equipment = useLoad(() => api.GET('/api/v1/equipment'), []);
   const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
@@ -118,20 +119,21 @@ function Editor({ householdId, initial, editing }: { householdId: string; initia
       ...draft,
       slug,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      message: message.trim() || null,
     };
-    const { data, error: failure } = await api.PUT('/api/v1/households/{id}/recipes/{slug}', {
-      params: { path: { id: householdId, slug } },
-      body,
-    });
+    // Une recette de la communauté : seul l'admin de l'instance arrive ici.
+    const { data, error: failure } = community
+      ? await api.PUT('/api/v1/community/recipes/{slug}', { params: { path: { slug } }, body })
+      : await api.PUT('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } }, body });
     setBusy(false);
     if (!data) return setError(errorMessage(failure));
     router.replace(`/recettes/${data.slug}`);
   };
 
   const remove = async () => {
-    const { response, error: failure } = await api.DELETE('/api/v1/households/{id}/recipes/{slug}', {
-      params: { path: { id: householdId, slug } },
-    });
+    const { response, error: failure } = community
+      ? await api.DELETE('/api/v1/community/recipes/{slug}', { params: { path: { slug } } })
+      : await api.DELETE('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } });
     if (!response.ok) return setError(errorMessage(failure));
     router.replace('/recettes');
   };
@@ -140,7 +142,7 @@ function Editor({ householdId, initial, editing }: { householdId: string; initia
     <Screen>
       <Router.Screen options={{ title: `${editing ? draft.title : 'Nouvelle recette'} · Chaudron` }} />
       <Back href={editing ? `/recettes/${slug}` : '/recettes'} label={editing ? draft.title : 'Recettes'} />
-      <Title>{editing ? 'Modifier la recette' : 'Nouvelle recette'}</Title>
+      <Title>{editing ? (community ? 'Modifier la recette de la communauté' : 'Modifier la recette') : 'Nouvelle recette'}</Title>
 
       <Columns weights={[2, 3]}>
         <Stack gap={space[5]}>
@@ -200,6 +202,15 @@ function Editor({ householdId, initial, editing }: { householdId: string; initia
       </Columns>
 
       <View style={{ gap: space[3], maxWidth: 480 }}>
+        {editing ? (
+          <Field
+            label="Un mot sur ce changement"
+            hint="Facultatif, gardé dans l’historique : « 14 min de vapeur, le cœur restait ferme »."
+            value={message}
+            onChangeText={setMessage}
+            maxLength={300}
+          />
+        ) : null}
         <ErrorText>{error}</ErrorText>
         <Button kind="primary" label={editing ? 'Enregistrer' : 'Publier la recette'} busy={busy} disabled={!draft.title.trim() || !slug} onPress={save} />
         {editing ? (

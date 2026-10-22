@@ -273,7 +273,7 @@ async fn compute(
         "SELECT r.slug, r.title, l.ingredient_id, i.code, i.name, i.aisle, l.state, l.qty, l.unit, l.role,
                 l.optional, l.per_batch
          FROM recipe_ingredients l JOIN recipes r ON r.id = l.recipe_id JOIN ingredients i ON i.id = l.ingredient_id
-         WHERE r.household_id = $1 AND r.slug = ANY($2) ORDER BY l.position",
+         WHERE (r.household_id = $1 OR r.household_id IS NULL) AND r.slug = ANY($2) ORDER BY l.position",
     )
     .bind(household_id)
     .bind(&slugs)

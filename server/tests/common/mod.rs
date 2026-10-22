@@ -55,6 +55,7 @@ pub fn config(fake_base: &str, signup: SignupPolicy) -> Config {
         fake_oauth: false,
         dev_web_origin: None,
         oauth_clients: vec![alexa_client()],
+        admin_emails: Vec::new(),
     }
 }
 

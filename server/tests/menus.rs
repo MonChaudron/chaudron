@@ -738,6 +738,7 @@ async fn importer_un_menu(db: PgPool) {
             "ingredients_created": [],
             "recipes_created": ["tajine"],
             "recipes_updated": [],
+            "recipe_warnings": [],
             "menu_imported": true,
             "warnings": response.json["warnings"],
         })

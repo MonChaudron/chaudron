@@ -72,6 +72,12 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     sqlx::migrate!().run(&db).await?;
     chaudron_server::ciqual::sync(&db).await?;
+    let backfilled = chaudron_server::recipes::backfill_versions(&db)
+        .await
+        .map_err(|err| format!("historique des recettes : {err:?}"))?;
+    if backfilled > 0 {
+        tracing::info!(backfilled, "version de départ des recettes");
+    }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port()));
     // Sans TCP_NODELAY, les fichiers servis en plusieurs écritures attendent ~40 ms (Nagle + ACK retardé).

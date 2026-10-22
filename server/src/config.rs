@@ -68,6 +68,9 @@ pub struct Config {
     pub dev_web_origin: Option<String>,
     /// Clients OAuth : la skill Alexa (`ALEXA_CLIENT_ID`, `ALEXA_CLIENT_SECRET`, `ALEXA_REDIRECT_URIS`).
     pub oauth_clients: Vec<OAuthClient>,
+    /// Admin de l'instance (`ADMIN_EMAILS`, en minuscules) : valide les recettes et les retours de la communauté.
+    /// Reconnu à une adresse vérifiée par le fournisseur ; `.env` fait toujours foi.
+    pub admin_emails: Vec<String>,
 }
 
 impl Config {
@@ -160,6 +163,14 @@ impl Config {
             fake_oauth,
             dev_web_origin,
             oauth_clients,
+            admin_emails: var("ADMIN_EMAILS")
+                .map(|list| {
+                    list.split(',')
+                        .map(|e| e.trim().to_lowercase())
+                        .filter(|e| !e.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 

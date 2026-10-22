@@ -130,6 +130,17 @@ impl<S: Send + Sync> OptionalFromRequestParts<S> for CurrentUser {
 pub struct ApiToken {
     pub household_id: Uuid,
     pub scopes: Vec<Scope>,
+    /// Le compte derrière le jeton : celui qui a fait la liaison (Alexa), ou créé le jeton (Claude).
+    pub user_id: Option<Uuid>,
+    /// Nom signé dans l'historique : celui du jeton (« Claude »), ou du compte pour une liaison.
+    pub author_name: String,
+}
+
+/// Qui signe une écriture (version, retour, notification).
+#[derive(Clone, Debug)]
+pub struct Author {
+    pub id: Option<Uuid>,
+    pub name: String,
 }
 
 /// Qui appelle : un compte connecté (toute la cuisine de ses foyers) ou un jeton d'API (son foyer, ses scopes).
@@ -169,6 +180,31 @@ impl Caller {
         }
     }
 
+    /// Qui signe : le compte connecté, ou le jeton.
+    pub async fn author(&self, db: &PgPool) -> ApiResult<Author> {
+        Ok(match self {
+            Self::User(id) => Author {
+                id: Some(*id),
+                name: sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+                    .bind(id)
+                    .fetch_one(db)
+                    .await?,
+            },
+            Self::Token(token) => Author {
+                id: token.user_id,
+                name: token.author_name.clone(),
+            },
+        })
+    }
+
+    /// Admin de l'instance : un compte connecté seulement (jamais un jeton). 403 sinon.
+    pub async fn require_admin(&self, state: &AppState) -> ApiResult<Uuid> {
+        match self {
+            Self::User(id) if is_admin(state, *id).await? => Ok(*id),
+            _ => Err(ApiError::forbidden("Réservé à l'admin de l'instance.")),
+        }
+    }
+
     /// Accès au foyer : un compte du foyer, ou un jeton de ce foyer qui a ce scope. 404 hors du foyer.
     pub async fn require(&self, db: &PgPool, household_id: Uuid, scope: Scope) -> ApiResult<()> {
         match self {
@@ -190,21 +226,27 @@ async fn bearer_token(db: &PgPool, headers: &HeaderMap) -> Result<Option<ApiToke
     else {
         return Ok(None);
     };
-    let row: Option<(Uuid, Vec<String>)> = sqlx::query_as(
-        "UPDATE api_tokens SET last_used_at = now()
+    let row: Option<(Uuid, Vec<String>, Option<Uuid>, String)> = sqlx::query_as(
+        "UPDATE api_tokens t SET last_used_at = now()
          WHERE token_hash = $1 AND (expires_at IS NULL OR expires_at > now())
-         RETURNING household_id, scopes",
+         RETURNING household_id, scopes, created_by,
+                   CASE WHEN grant_id IS NULL THEN name
+                        ELSE coalesce((SELECT display_name FROM users u WHERE u.id = t.created_by), name) END",
     )
     .bind(sha256(token.trim().as_bytes()))
     .fetch_optional(db)
     .await?;
-    Ok(row.map(|(household_id, scopes)| ApiToken {
-        household_id,
-        scopes: scopes
-            .into_iter()
-            .filter_map(|s| Scope::try_from(s).ok())
-            .collect(),
-    }))
+    Ok(
+        row.map(|(household_id, scopes, user_id, author_name)| ApiToken {
+            household_id,
+            scopes: scopes
+                .into_iter()
+                .filter_map(|s| Scope::try_from(s).ok())
+                .collect(),
+            user_id,
+            author_name,
+        }),
+    )
 }
 
 /// Middleware de l'API : lit le cookie de session, place `CurrentUser` dans la requête, prolonge la session.
@@ -590,11 +632,13 @@ async fn resolve_user(
         }
         (Some(user_id), _) => {
             sqlx::query(
-                "UPDATE identities SET email = $3, updated_at = now() WHERE provider = $1 AND subject = $2",
+                "UPDATE identities SET email = $3, email_verified = $4, updated_at = now()
+                 WHERE provider = $1 AND subject = $2",
             )
             .bind(provider.as_str())
             .bind(&profile.subject)
             .bind(&profile.email)
+            .bind(profile.email_verified)
             .execute(&mut *tx)
             .await
             .map_err(internal)?;
@@ -669,12 +713,13 @@ async fn insert_identity(
     profile: &Profile,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "INSERT INTO identities (provider, subject, user_id, email) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO identities (provider, subject, user_id, email, email_verified) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(provider.as_str())
     .bind(&profile.subject)
     .bind(user_id)
     .bind(&profile.email)
+    .bind(profile.email_verified)
     .execute(conn)
     .await?;
     Ok(())
@@ -803,6 +848,8 @@ pub struct Me {
     pub email: Option<String>,
     pub identities: Vec<Identity>,
     pub households: Vec<HouseholdSummary>,
+    /// Admin de l'instance (`ADMIN_EMAILS`, adresse vérifiée) : « À revoir ».
+    pub instance_admin: bool,
 }
 
 #[derive(Serialize, ToSchema, FromRow)]
@@ -825,10 +872,26 @@ async fn me(
     State(state): State<AppState>,
     CurrentUser(user_id): CurrentUser,
 ) -> ApiResult<Json<Me>> {
-    load_me(&state.db, user_id).await.map(Json)
+    load_me(&state, user_id).await.map(Json)
 }
 
-async fn load_me(db: &PgPool, user_id: Uuid) -> ApiResult<Me> {
+/// Admin de l'instance : une adresse de `ADMIN_EMAILS`, vérifiée par le fournisseur.
+pub async fn is_admin(state: &AppState, user_id: Uuid) -> ApiResult<bool> {
+    if state.config.admin_emails.is_empty() {
+        return Ok(false);
+    }
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM identities
+                        WHERE user_id = $1 AND email_verified AND lower(email) = ANY($2))",
+    )
+    .bind(user_id)
+    .bind(&state.config.admin_emails)
+    .fetch_one(&state.db)
+    .await?)
+}
+
+async fn load_me(state: &AppState, user_id: Uuid) -> ApiResult<Me> {
+    let db = &state.db;
     let (display_name, email): (String, Option<String>) =
         sqlx::query_as("SELECT display_name, email FROM users WHERE id = $1")
             .bind(user_id)
@@ -847,6 +910,7 @@ async fn load_me(db: &PgPool, user_id: Uuid) -> ApiResult<Me> {
         email,
         identities,
         households,
+        instance_admin: is_admin(state, user_id).await?,
     })
 }
 
@@ -877,7 +941,7 @@ async fn update_me(
         .bind(name)
         .execute(&state.db)
         .await?;
-    load_me(&state.db, user_id).await.map(Json)
+    load_me(&state, user_id).await.map(Json)
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ export function slugify(title: string): string {
 type State = 'fresh' | 'frozen' | 'canned' | 'dried' | 'cooked';
 
 export interface StepData {
+  key?: string | null;
   text: string;
   spoken_text?: string | null;
   timer_s?: number | null;
@@ -24,6 +25,7 @@ export interface StepData {
 }
 
 export interface PhaseData {
+  key?: string | null;
   title: string;
   text: string;
   spoken_text?: string | null;
@@ -33,6 +35,7 @@ export interface PhaseData {
 }
 
 export interface VariantData {
+  key?: string | null;
   label: string;
   equipment: readonly string[];
   active_min: number;
@@ -43,6 +46,7 @@ export interface VariantData {
 }
 
 export interface LineData {
+  key?: string | null;
   ingredient: string;
   state: State;
   qty?: number | null;
@@ -65,7 +69,10 @@ export interface RecipeData {
   variants: readonly VariantData[];
 }
 
-/** Corps du PUT pour republier une recette lue, sans les champs calculés par le serveur. */
+/** La clé stable d'un élément, quand il en a une (le serveur garde la place des notes et des propositions). */
+const keyOf = (item: { key?: string | null }) => (item.key ? { key: item.key } : {});
+
+/** Corps du PUT pour republier une recette lue, sans les champs calculés par le serveur ; les clés sont gardées. */
 export function recipeToInput(recipe: RecipeData) {
   return {
     slug: recipe.slug,
@@ -75,6 +82,7 @@ export function recipeToInput(recipe: RecipeData) {
     season_months: [...recipe.season_months],
     source: recipe.source ?? null,
     ingredients: recipe.ingredients.map((l) => ({
+      ...keyOf(l),
       ingredient: l.ingredient,
       state: l.state,
       qty: l.qty ?? null,
@@ -85,6 +93,7 @@ export function recipeToInput(recipe: RecipeData) {
       note: l.note ?? null,
     })),
     variants: recipe.variants.map((v) => ({
+      ...keyOf(v),
       label: v.label,
       equipment: [...v.equipment],
       active_min: v.active_min,
@@ -92,12 +101,14 @@ export function recipeToInput(recipe: RecipeData) {
       vessels: v.vessels,
       is_default: v.is_default,
       phases: v.phases.map((p) => ({
+        ...keyOf(p),
         title: p.title,
         text: p.text,
         spoken_text: p.spoken_text ?? null,
         timer_s: p.timer_s ?? null,
         day_offset: p.day_offset,
         steps: p.steps.map((s) => ({
+          ...keyOf(s),
           text: s.text,
           spoken_text: s.spoken_text ?? null,
           timer_s: s.timer_s ?? null,

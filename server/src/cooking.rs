@@ -112,7 +112,6 @@ pub struct Cooking {
 #[derive(FromRow)]
 struct CookingRow {
     recipe_id: Uuid,
-    slug: String,
     variant_label: String,
     date: Option<Date>,
     meal: Option<String>,
@@ -186,7 +185,7 @@ async fn today(db: &PgPool, household_id: Uuid) -> ApiResult<Day> {
 }
 
 async fn view(db: &PgPool, household_id: Uuid, row: CookingRow) -> ApiResult<Cooking> {
-    let recipe = recipes::load(db, household_id, &row.slug).await?;
+    let recipe = recipes::load_by_id(db, household_id, row.recipe_id).await?;
     let date = row.date.map(Day);
     let meal = row.meal.and_then(|m| Meal::try_from(m).ok());
     let slot = slot(db, household_id, date, meal, row.recipe_id).await?;
@@ -281,9 +280,8 @@ pub async fn read_cooking(
 ) -> ApiResult<Response> {
     caller.require(&state.db, id, Scope::Read).await?;
     let row: Option<CookingRow> = sqlx::query_as(
-        "SELECT c.recipe_id, r.slug, c.variant_label, c.date, c.meal, c.mode, c.phase, c.step, c.started_at,
-                c.updated_at
-         FROM cooking_sessions c JOIN recipes r ON r.id = c.recipe_id
+        "SELECT c.recipe_id, c.variant_label, c.date, c.meal, c.mode, c.phase, c.step, c.started_at, c.updated_at
+         FROM cooking_sessions c
          WHERE c.household_id = $1 AND c.updated_at > now() - make_interval(hours => $2)",
     )
     .bind(id)
@@ -324,14 +322,10 @@ pub async fn put_cooking(
     if body.phase < 0 || body.step.is_some_and(|s| s < 0) {
         return Err(ApiError::invalid("Les positions commencent à 0."));
     }
-    let recipe_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM recipes WHERE household_id = $1 AND slug = $2")
-            .bind(id)
-            .bind(&body.recipe)
-            .fetch_optional(&state.db)
-            .await?
-            .ok_or_else(|| ApiError::invalid(format!("Recette inconnue : {}.", body.recipe)))?;
-    let recipe = recipes::load(&state.db, id, &body.recipe).await?;
+    let (recipe_id, _) = recipes::find(&mut *state.db.acquire().await?, id, &body.recipe)
+        .await?
+        .ok_or_else(|| ApiError::invalid(format!("Recette inconnue : {}.", body.recipe)))?;
+    let recipe = recipes::load_by_id(&state.db, id, recipe_id).await?;
     if let Some(label) = &body.variant
         && !recipe.variants.iter().any(|v| &v.label == label)
     {
@@ -356,7 +350,7 @@ pub async fn put_cooking(
                  updated_at = now()
              RETURNING *
          )
-         SELECT s.recipe_id, $10::text AS slug, s.variant_label, s.date, s.meal, s.mode, s.phase, s.step,
+         SELECT s.recipe_id, s.variant_label, s.date, s.meal, s.mode, s.phase, s.step,
                 s.started_at, s.updated_at
          FROM saved s",
     )
@@ -369,7 +363,6 @@ pub async fn put_cooking(
     .bind(phase)
     .bind(step)
     .bind(ACTIVE_HOURS)
-    .bind(&body.recipe)
     .fetch_one(&state.db)
     .await?;
     let cooking = view(&state.db, id, row).await?;

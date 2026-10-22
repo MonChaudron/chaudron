@@ -26,6 +26,9 @@ export type IconName =
   | 'back'
   | 'search'
   | 'plus'
+  | 'people'
+  | 'note'
+  | 'bell'
   | Pictogram;
 
 const shapes: Record<IconName, ReactNode> = {
@@ -135,6 +138,27 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   check: <Path d="M5 12.5 10 17.5 19 7" />,
+  people: (
+    <>
+      <Circle cx={9} cy={8.5} r={3.5} />
+      <Path d="M2.5 19.5c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" />
+      <Path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14.4c2 .7 3.4 2.4 4 5.1" />
+    </>
+  ),
+  note: (
+    <>
+      <Path d="M5 4.5h14v10l-5 5H5z" />
+      <Path d="M14 19.5v-5h5" />
+      <Line x1={8.5} y1={9} x2={15.5} y2={9} />
+      <Line x1={8.5} y1={12.5} x2={12} y2={12.5} />
+    </>
+  ),
+  bell: (
+    <>
+      <Path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" />
+      <Path d="M10 20.5a2 2 0 0 0 4 0" />
+    </>
+  ),
   chevron: <Path d="M9.5 5.5 16 12l-6.5 6.5" />,
   back: <Path d="M14.5 5.5 8 12l6.5 6.5" />,
   search: (

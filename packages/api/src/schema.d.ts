@@ -113,6 +113,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/community/recipes/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Modifie une recette de la communauté (admin de l'instance). Elle se crée en acceptant une recette proposée. */
+        put: operations["put_community"];
+        post?: never;
+        /**
+         * Supprime une recette de la communauté (admin) ; utilisée par un menu ou une cuisson, elle est seulement retirée
+         *     du catalogue, et ceux qui l'utilisent la gardent.
+         */
+        delete: operations["delete_community"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment": {
         parameters: {
             query?: never;
@@ -269,7 +290,9 @@ export interface paths {
         put?: never;
         /**
          * Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,
-         *     `week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`.
+         *     `week_start` du menu). Recettes et ingrédients demandent `recipes:write`, le menu `menus:write`. Une recette au
+         *     slug d'une recette de la communauté est laissée de côté (`recipe_warnings`) : le menu prend celle de la
+         *     communauté.
          */
         post: operations["import"];
         delete?: never;
@@ -480,7 +503,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recettes du foyer, par titre. */
+        /** Recettes du foyer et de la communauté (sauf celles qui sont retirées), par titre. */
         get: operations["list_recipes"];
         put?: never;
         post?: never;
@@ -499,10 +522,67 @@ export interface paths {
         };
         /** Recette complète, avec les équipements qui manquent au foyer pour chaque variante. */
         get: operations["read_recipe"];
-        /** Publie une recette : la crée (201) ou la remplace entièrement (200). Idempotent. */
+        /**
+         * Publie une recette du foyer : la crée (201) ou la remplace entièrement (200). Idempotent ; une version s'écrit
+         *     si le contenu change. Le slug d'une recette de la communauté est refusé (409 `slug_taken`).
+         */
         put: operations["put_recipe"];
         post?: never;
         delete: operations["delete_recipe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historique d'une recette, de la plus récente à la plus ancienne. */
+        get: operations["list_versions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Une version, avec la recette telle qu'elle était. */
+        get: operations["read_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/versions/{number}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revient à une version : la republie, ce qui crée une nouvelle version (rien ne se perd). Recette du foyer : tout
+         *     compte du foyer ; de la communauté : l'admin de l'instance.
+         */
+        post: operations["restore_version"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1075,6 +1155,8 @@ export interface components {
             ingredients_created: string[];
             /** @description Le lot avait un menu, et il est publié. */
             menu_imported: boolean;
+            /** @description Recettes du lot laissées de côté. */
+            recipe_warnings: components["schemas"]["RecipeWarning"][];
             recipes_created: string[];
             recipes_updated: string[];
             /** @description Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions… */
@@ -1174,6 +1256,11 @@ export interface components {
         LineInput: {
             /** @description Code de l'ingrédient du référentiel (`minced_beef`). */
             ingredient: string;
+            /**
+             * Format: uuid
+             * @description Clé stable, renvoyée par l'éditeur ; sans clé, celle de la ligne au même endroit, sinon une nouvelle.
+             */
+            key?: string | null;
             note?: string | null;
             optional?: boolean;
             /** @description Ne suit pas le nombre de portions (un citron, un cube de bouillon). */
@@ -1221,6 +1308,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             identities: components["schemas"]["Identity"][];
+            /** @description Admin de l'instance (`ADMIN_EMAILS`, adresse vérifiée) : « À revoir ». */
+            instance_admin: boolean;
         };
         MeUpdate: {
             /** @description Nom affiché aux autres comptes du foyer. */
@@ -1441,6 +1530,8 @@ export interface components {
         Phase: {
             /** Format: int32 */
             day_offset: number;
+            /** Format: uuid */
+            key: string;
             spoken_text?: string | null;
             /** @description Gestes du pas à pas ; vide : le pas à pas montre la phase. */
             steps: components["schemas"]["Step"][];
@@ -1456,6 +1547,8 @@ export interface components {
              * @description -1 : la veille.
              */
             day_offset?: number;
+            /** Format: uuid */
+            key?: string | null;
             spoken_text?: string | null;
             steps?: components["schemas"]["StepInput"][];
             text: string;
@@ -1499,8 +1592,12 @@ export interface components {
         };
         /** @description Recette complète. */
         Recipe: {
+            /** @description Recette de la communauté (modifiée par l'admin de l'instance), sinon du foyer. */
+            community: boolean;
             description: string;
             ingredients: components["schemas"]["RecipeLine"][];
+            /** @description Retirée du catalogue de la communauté : gardée par les menus qui l'utilisent. */
+            retired: boolean;
             season_months: number[];
             slug: string;
             source?: string | null;
@@ -1510,11 +1607,18 @@ export interface components {
             updated_at: string;
             /** @description La variante par défaut d'abord, puis dans l'ordre de publication. */
             variants: components["schemas"]["Variant"][];
+            /**
+             * Format: int32
+             * @description Numéro de la version courante (historique).
+             */
+            version: number;
         };
-        /** @description Recette complète, telle que publiée. */
+        /** @description Recette complète, telle que publiée ; c'est aussi le contenu d'une version. */
         RecipeInput: {
             description?: string;
             ingredients: components["schemas"]["LineInput"][];
+            /** @description Un mot sur ce changement, gardé dans l'historique (pas dans la recette). */
+            message?: string | null;
             /** @description Mois de saison, de 1 à 12. */
             season_months?: number[];
             /** @description Obligatoire dans un lot ; dans un PUT, doit être celui de l'adresse s'il est donné. */
@@ -1530,6 +1634,8 @@ export interface components {
             ingredient: string;
             /** Format: uuid */
             ingredient_id: string;
+            /** Format: uuid */
+            key: string;
             name: string;
             note?: string | null;
             optional: boolean;
@@ -1549,6 +1655,8 @@ export interface components {
         };
         /** @description Recette, dans la liste du foyer. */
         RecipeSummary: {
+            /** @description Recette de la communauté. */
+            community: boolean;
             default_variant: components["schemas"]["VariantSummary"];
             description: string;
             season_months: number[];
@@ -1557,6 +1665,23 @@ export interface components {
             title: string;
             /** Format: int64 */
             variant_count: number;
+        };
+        /** @description Une version avec son contenu complet. */
+        RecipeVersion: {
+            author_name: string;
+            content: components["schemas"]["RecipeInput"];
+            /** Format: date-time */
+            created_at: string;
+            message: string;
+            /** Format: int32 */
+            number: number;
+        };
+        /** @description Recette du lot laissée de côté. */
+        RecipeWarning: {
+            /** @description `slug_taken` : le slug est celui d'une recette de la communauté, que le menu du lot utilise à la place. */
+            code: string;
+            message: string;
+            slug: string;
         };
         /**
          * @description Rôle d'un compte dans un foyer.
@@ -1712,6 +1837,8 @@ export interface components {
         };
         Step: {
             equipment?: string | null;
+            /** Format: uuid */
+            key: string;
             params: Record<string, never>;
             spoken_text?: string | null;
             text: string;
@@ -1723,6 +1850,8 @@ export interface components {
         StepInput: {
             /** @description Appareil du geste. */
             equipment?: string | null;
+            /** Format: uuid */
+            key?: string | null;
             /** @description Réglages pour les futurs connecteurs (vitesse, température, programme). */
             params?: Record<string, never>;
             /** @description Texte lu par Alexa, s'il diffère. */
@@ -1788,6 +1917,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             is_default: boolean;
+            /** Format: uuid */
+            key: string;
             label: string;
             /** @description Équipements de la variante que le foyer n'a pas. */
             missing_equipment: string[];
@@ -1805,6 +1936,8 @@ export interface components {
             equipment?: string[];
             /** @description Une seule variante par défaut ; sans indication, la première. */
             is_default?: boolean;
+            /** Format: uuid */
+            key?: string | null;
             label: string;
             phases: components["schemas"]["PhaseInput"][];
             /** Format: int32 */
@@ -1825,6 +1958,16 @@ export interface components {
             total_min: number;
             /** Format: int32 */
             vessels: number;
+        };
+        /** @description Une version de l'historique, sans son contenu. */
+        VersionInfo: {
+            author_name: string;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Le mot laissé avec le changement ; vide s'il n'y en a pas. */
+            message: string;
+            /** Format: int32 */
+            number: number;
         };
         Warning: {
             /**
@@ -2040,6 +2183,90 @@ export interface operations {
                 content?: never;
             };
             /** @description Fournisseur non configuré */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_community: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_community: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3206,6 +3433,8 @@ export interface operations {
                 q?: string;
                 /** @description Étiquette exacte. */
                 tag?: string;
+                /** @description Un seul niveau ; sans, les deux. */
+                scope?: "household" | "community";
             };
             header?: never;
             path: {
@@ -3313,6 +3542,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            /** @description Slug d'une recette de la communauté */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3341,6 +3579,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Recette de la communauté */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3359,6 +3598,106 @@ export interface operations {
             };
             /** @description Prévue dans un menu */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_versions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeVersion"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    restore_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

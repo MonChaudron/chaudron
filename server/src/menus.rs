@@ -1248,8 +1248,9 @@ pub(crate) async fn save(
         ));
     }
     let slugs: Vec<&str> = input.slots.iter().map(|s| s.recipe.as_str()).collect();
+    // Recettes du foyer et de la communauté (un slug n'est jamais aux deux).
     let recipes: HashMap<String, Uuid> = sqlx::query_as::<_, (String, Uuid)>(
-        "SELECT slug, id FROM recipes WHERE household_id = $1 AND slug = ANY($2)",
+        "SELECT slug, id FROM recipes WHERE (household_id = $1 OR household_id IS NULL) AND slug = ANY($2)",
     )
     .bind(household_id)
     .bind(&slugs)
