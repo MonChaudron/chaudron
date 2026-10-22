@@ -446,3 +446,68 @@ async fn admin_view(admin: &mut Browser, _app: &TestApp) -> Value {
     }
     recipe
 }
+
+#[sqlx::test]
+async fn accepter_ce_que_l_admin_a_relu(db: PgPool) {
+    let app = app(db).await;
+    let (mut alice, home) = home_of(&app, "alice@example.org", "Maison").await;
+    let url = format!("/api/v1/households/{home}/recipes/gratin");
+    alice.put(&url, gratin("Gratin dauphinois")).await;
+    let mut private = gratin("Gratin dauphinois");
+    private["description"] = json!("La recette de mamie, avec son secret.");
+    alice.put(&url, private).await;
+    alice.put(&url, gratin("Gratin dauphinois")).await;
+    let id = submit(&mut alice, home).await;
+
+    // Modifiée après avoir été proposée : l'admin ne publie pas un contenu qu'il n'a pas relu.
+    alice.put(&url, gratin("Gratin dauphinois au lard")).await;
+    let mut admin = admin(&app).await;
+    let changed = admin
+        .post(
+            &format!("/api/v1/community/submissions/{id}/accept"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(changed.status, StatusCode::CONFLICT, "{}", changed.text);
+    assert_eq!(changed.json["error"], "changed_since");
+    // Reproposée telle quelle, elle passe.
+    admin
+        .post(
+            &format!("/api/v1/community/submissions/{id}/refuse"),
+            json!({"message": "Changée depuis."}),
+        )
+        .await;
+    let id = submit(&mut alice, home).await;
+    let accepted = admin
+        .post(
+            &format!("/api/v1/community/submissions/{id}/accept"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(accepted.status, StatusCode::OK, "{}", accepted.text);
+
+    // Les versions d'avant, quand elle était au foyer, restent au foyer.
+    let (mut bob, bob_home) = home_of(&app, "bob@example.org", "Chez Bob").await;
+    let versions = bob
+        .get(&format!(
+            "/api/v1/households/{bob_home}/recipes/gratin/versions"
+        ))
+        .await
+        .json;
+    let numbers: Vec<i64> = versions
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["number"].as_i64().unwrap())
+        .collect();
+    assert_eq!(numbers.len(), 1, "{versions}");
+    assert_eq!(versions[0]["message"], "Acceptée dans la communauté");
+    let old = bob
+        .get(&format!(
+            "/api/v1/households/{bob_home}/recipes/gratin/versions/2"
+        ))
+        .await;
+    assert_eq!(old.status, StatusCode::NOT_FOUND);
+    let mine = alice.get(&format!("{url}/versions")).await.json;
+    assert!(mine.as_array().unwrap().len() > 1);
+}

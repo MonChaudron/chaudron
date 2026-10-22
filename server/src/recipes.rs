@@ -1193,8 +1193,8 @@ pub(crate) async fn record_version(
     }
     let number = recipe.version + 1;
     sqlx::query(
-        "INSERT INTO recipe_versions (recipe_id, number, content, author_id, author_name, message)
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO recipe_versions (recipe_id, number, content, author_id, author_name, message, household_id)
+         VALUES ($1, $2, $3, $4, $5, $6, (SELECT household_id FROM recipes WHERE id = $1))",
     )
     .bind(recipe_id)
     .bind(number)
@@ -1581,25 +1581,29 @@ pub async fn list_versions(
         .ok_or_else(ApiError::not_found)?;
     let versions = sqlx::query_as(
         "SELECT number, author_name, message, created_at FROM recipe_versions
-         WHERE recipe_id = $1 ORDER BY number DESC",
+         WHERE recipe_id = $1 AND (household_id IS NULL OR household_id = $2) ORDER BY number DESC",
     )
     .bind(recipe_id)
+    .bind(id)
     .fetch_all(&mut *conn)
     .await?;
     Ok(Json(versions))
 }
 
+/// Une version, vue par ce foyer : celles d'avant l'acceptation dans la communauté restent à leur foyer.
 async fn version(
     conn: &mut PgConnection,
+    viewer: Uuid,
     recipe_id: Uuid,
     number: i32,
 ) -> ApiResult<RecipeVersion> {
     let row: (i32, String, String, OffsetDateTime, Value) = sqlx::query_as(
         "SELECT number, author_name, message, created_at, content FROM recipe_versions
-         WHERE recipe_id = $1 AND number = $2",
+         WHERE recipe_id = $1 AND number = $2 AND (household_id IS NULL OR household_id = $3)",
     )
     .bind(recipe_id)
     .bind(number)
+    .bind(viewer)
     .fetch_optional(conn)
     .await?
     .ok_or_else(ApiError::not_found)?;
@@ -1633,7 +1637,7 @@ pub async fn read_version(
     let (recipe_id, _) = find(&mut conn, id, &slug)
         .await?
         .ok_or_else(ApiError::not_found)?;
-    version(&mut conn, recipe_id, number).await.map(Json)
+    version(&mut conn, id, recipe_id, number).await.map(Json)
 }
 
 /// Revient à une version : la republie, ce qui crée une nouvelle version (rien ne se perd). Recette du foyer : tout
@@ -1665,7 +1669,7 @@ pub async fn restore_version(
             caller.require_admin(&state).await?;
         }
     }
-    let mut content = version(&mut tx, recipe_id, number).await?.content;
+    let mut content = version(&mut tx, id, recipe_id, number).await?.content;
     content.slug = None;
     content.message = Some(format!("Retour à la version {number}"));
     let author = caller.author(&state.db).await?;

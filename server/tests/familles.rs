@@ -349,3 +349,65 @@ async fn proposer_comme_declinaison_et_import(db: PgPool) {
     assert_eq!(imported.json["similar"][0]["slug"], "gratin-du-dimanche");
     assert_eq!(imported.json["similar"][0]["similar_to"][0], "gratin-creme");
 }
+
+#[sqlx::test]
+async fn un_foyer_ne_range_pas_une_recette_de_la_communaute(db: PgPool) {
+    let app = app(db).await;
+    let (mut admin, admin_home) = home_of(&app, ADMIN, "Chez l'admin").await;
+    for slug in ["gratin-dauphinois", "gratin-creme"] {
+        admin
+            .put(
+                &format!("/api/v1/households/{admin_home}/recipes/{slug}"),
+                dauphinois(),
+            )
+            .await;
+        let id = admin
+            .post(
+                &format!("/api/v1/households/{admin_home}/recipes/{slug}/submit"),
+                json!({}),
+            )
+            .await
+            .json["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        admin
+            .post(
+                &format!("/api/v1/community/submissions/{id}/accept"),
+                json!({}),
+            )
+            .await;
+    }
+    let (mut alice, home) = home_of(&app, "alice@example.org", "Maison").await;
+    alice
+        .put(
+            &format!("/api/v1/households/{home}/recipes/mon-gratin"),
+            a_la_creme(),
+        )
+        .await;
+    // Sans famille, la recette de la communauté ne se range pas par un foyer : il faudrait la modifier.
+    let join = format!("/api/v1/households/{home}/recipes/mon-gratin/family");
+    let refused = alice.put(&join, json!({"with": "gratin-dauphinois"})).await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN, "{}", refused.text);
+    let community = admin
+        .get(&format!(
+            "/api/v1/households/{admin_home}/recipes/gratin-dauphinois"
+        ))
+        .await
+        .json;
+    assert_eq!(community["family"], Value::Null);
+    // L'admin fait la famille ; le foyer peut alors y ranger sa recette.
+    let made = admin
+        .put(
+            &format!("/api/v1/households/{admin_home}/recipes/gratin-creme/family"),
+            json!({"with": "gratin-dauphinois"}),
+        )
+        .await;
+    assert_eq!(made.status, StatusCode::OK, "{}", made.text);
+    let joined = alice.put(&join, json!({"with": "gratin-dauphinois"})).await;
+    assert_eq!(joined.status, StatusCode::OK, "{}", joined.text);
+    assert_eq!(
+        joined.json["family"]["members"].as_array().unwrap().len(),
+        3
+    );
+}

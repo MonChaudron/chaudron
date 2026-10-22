@@ -182,8 +182,8 @@ pub async fn submit_recipe(
     let submission_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO recipe_submissions (id, recipe_id, household_id, author_id, author_name, message, status,
-                                         family_with)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)",
+                                         family_with, version)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, (SELECT version FROM recipes WHERE id = $2))",
     )
     .bind(submission_id)
     .bind(recipe_id)
@@ -281,14 +281,14 @@ pub struct AcceptInput {
     pub message: Option<String>,
 }
 
-/// La proposition en attente, verrouillée : (recette, auteur, titre).
+/// La proposition en attente, verrouillée : (recette, auteur, titre, changée depuis la proposition).
 async fn pending(
     conn: &mut PgConnection,
     submission_id: Uuid,
-) -> ApiResult<(Uuid, Option<Uuid>, String)> {
-    let row: (Uuid, Option<Uuid>, String, String) = sqlx::query_as(
-        "SELECT s.recipe_id, s.author_id, s.status, r.title FROM recipe_submissions s
-         JOIN recipes r ON r.id = s.recipe_id WHERE s.id = $1 FOR UPDATE OF s",
+) -> ApiResult<(Uuid, Option<Uuid>, String, bool)> {
+    let row: (Uuid, Option<Uuid>, String, String, bool) = sqlx::query_as(
+        "SELECT s.recipe_id, s.author_id, s.status, r.title, s.version IS DISTINCT FROM r.version
+         FROM recipe_submissions s JOIN recipes r ON r.id = s.recipe_id WHERE s.id = $1 FOR UPDATE OF s, r",
     )
     .bind(submission_id)
     .fetch_optional(conn)
@@ -300,7 +300,7 @@ async fn pending(
             "Cette proposition a déjà une réponse.",
         ));
     }
-    Ok((row.0, row.1, row.3))
+    Ok((row.0, row.1, row.3, row.4))
 }
 
 /// Accepte une recette proposée (admin) : elle devient la recette de la communauté. 409 `slug_taken` si une autre
@@ -328,7 +328,15 @@ pub async fn accept_submission(
     let admin = caller.require_admin(&state).await?;
     let author = caller.author(&state.db).await?;
     let mut tx = state.db.begin().await?;
-    let (recipe_id, submitter, title) = pending(&mut tx, submission_id).await?;
+    let (recipe_id, submitter, title, changed) = pending(&mut tx, submission_id).await?;
+    // L'admin publie ce qu'il a relu : une recette modifiée depuis sa proposition se repropose (ou l'admin envoie
+    // la recette telle qu'il la publie).
+    if changed && input.recipe.is_none() {
+        return Err(ApiError::conflict(
+            "changed_since",
+            "La recette a changé depuis sa proposition : relis-la, ou laisse le foyer la reproposer.",
+        ));
+    }
     let current: String = sqlx::query_scalar("SELECT slug FROM recipes WHERE id = $1")
         .bind(recipe_id)
         .fetch_one(&mut *tx)
@@ -452,7 +460,7 @@ pub async fn refuse_submission(
         ));
     }
     let mut tx = state.db.begin().await?;
-    let (recipe_id, submitter, title) = pending(&mut tx, submission_id).await?;
+    let (recipe_id, submitter, title, _) = pending(&mut tx, submission_id).await?;
     sqlx::query(
         "UPDATE recipe_submissions SET status = 'refused', review_message = $2, reviewed_by = $3, reviewed_at = now()
          WHERE id = $1",

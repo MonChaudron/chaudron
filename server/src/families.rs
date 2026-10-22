@@ -313,13 +313,23 @@ pub async fn join_family(
 ) -> ApiResult<Json<Recipe>> {
     let mut tx = state.db.begin().await?;
     let recipe_id = arrangeable(&state, &caller, &mut tx, id, &slug).await?;
-    let (with, _) = recipes::find(&mut tx, id, &input.with)
+    let (with, owner) = recipes::find(&mut tx, id, &input.with)
         .await?
         .ok_or_else(|| ApiError::invalid(format!("Recette inconnue : {}.", input.with)))?;
     if with == recipe_id {
         return Err(ApiError::invalid(
             "Une recette n'est pas sa propre déclinaison.",
         ));
+    }
+    // Ranger avec une recette de la communauté qui n'a pas de famille la modifierait : l'admin seulement. Dans une
+    // famille qui existe déjà, chacun peut ranger la sienne.
+    let has_family: bool =
+        sqlx::query_scalar("SELECT family_id IS NOT NULL FROM recipes WHERE id = $1")
+            .bind(with)
+            .fetch_one(&mut *tx)
+            .await?;
+    if owner.is_none() && !has_family {
+        caller.require_admin(&state).await?;
     }
     join(&mut tx, recipe_id, with).await?;
     tx.commit().await?;

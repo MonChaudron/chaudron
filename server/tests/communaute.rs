@@ -387,9 +387,25 @@ async fn seul_l_admin_modifie_la_communaute(db: PgPool) {
         StatusCode::FORBIDDEN
     );
     let admin_home = admin.household("Admin").await;
-    let restore =
-        format!("/api/v1/households/{admin_home}/recipes/gratin-dauphinois/versions/1/restore");
-    assert_eq!(admin.post(&restore, json!({})).await.status, StatusCode::OK);
+    let versions = format!("/api/v1/households/{admin_home}/recipes/gratin-dauphinois/versions");
+    // La version 1 date du foyer d'Alice : elle reste au foyer, même pour l'admin.
+    assert_eq!(
+        admin
+            .post(&format!("{versions}/1/restore"), json!({}))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    let mut back = gratin();
+    back["title"] = json!("Gratin dauphinois, revu");
+    admin.put(community, back).await;
+    assert_eq!(
+        admin
+            .post(&format!("{versions}/2/restore"), json!({}))
+            .await
+            .status,
+        StatusCode::OK
+    );
 }
 
 #[sqlx::test]
