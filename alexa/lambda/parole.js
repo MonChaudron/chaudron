@@ -232,7 +232,7 @@ function direNotes(c) {
 function direIngredients(lignes) {
   return lignes
     .filter((l) => !l.optional || l.qty !== null)
-    .map((l) => `${l.name}, ${quantiteDite(l)}`)
+    .map((l) => `${l.name}${l.replaces ? ` au lieu de ${l.replaces.toLowerCase()}` : ''}, ${quantiteDite(l)}`)
     .join(' ; ');
 }
 

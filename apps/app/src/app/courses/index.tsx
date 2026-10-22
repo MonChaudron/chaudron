@@ -1,5 +1,5 @@
 import type { Aisle, Block, MenuSummary, ShoppingItem } from '@chaudron/api';
-import { aisles, applyPending, currentMenu, dateText, type PendingOp, formatQuantity, ingredientStates, joinNames, shortDateText, space, splitTitle, todayIso } from '@chaudron/domain';
+import { aisles, applyPending, currentMenu, dateText, type PendingOp, formatQuantity, ingredientStates, joinNames, searchKey, shortDateText, space, splitTitle, todayIso } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
@@ -98,7 +98,9 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
   }
 
   /** L'opération s'affiche tout de suite et part dans la file : envoyée maintenant, ou au retour du réseau. */
-  const send = (op: Pick<PendingOp, 'kind' | 'key' | 'label' | 'block'>) => queue.enqueue({ ...op, op_id: newId(), at: new Date().toISOString(), week_start: weekStart });
+  const send = (op: Pick<PendingOp, 'kind' | 'key' | 'label' | 'block' | 'substitution_id'>) => queue.enqueue({ ...op, op_id: newId(), at: new Date().toISOString(), week_start: weekStart });
+  /** Un remplacement pour ce menu (les plats de la ligne en tiennent compte), ou le retour à l'ingrédient. */
+  const substitute = (item: ShoppingItem, id: string | null) => send({ kind: 'substitute', key: item.key, substitution_id: id });
   const toggle = (item: ShoppingItem) => send({ kind: item.checked ? 'uncheck' : 'check', key: item.key });
   const add = (block: Block, label: string) => send({ kind: 'add', key: `manual:${newId()}`, label, block });
   const remove = (item: ShoppingItem) => send({ kind: 'remove', key: item.key });
@@ -142,6 +144,7 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
         </Body>
       ) : null}
       <ErrorText>{queue.error}</ErrorText>
+      <Promo items={recipes} onChoose={substitute} />
       <Columns weights={[3, 2]}>
         <Stack gap={space[5]}>
           {[...byAisle].map(([aisle, items]) => (
@@ -150,7 +153,7 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
                 <Title level={2}>{aisles[aisle]}</Title>
               </Sticky>
               {items.map((item, i) => (
-                <ItemRow key={item.key} item={item} last={i === items.length - 1} onToggle={() => toggle(item)} />
+                <ItemRow key={item.key} item={item} last={i === items.length - 1} onToggle={() => toggle(item)} onSubstitute={(id) => substitute(item, id)} />
               ))}
             </Card>
           ))}
@@ -175,42 +178,106 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
   );
 }
 
-/** Une ligne : la case, l'article, la quantité ; qui l'a pris ; ce qui a changé depuis. */
-function ItemRow({ item, last, onToggle, onRemove }: { item: ShoppingItem; last: boolean; onToggle: () => void; onRemove?: () => void }) {
+/**
+ * « Une promo ? » : chercher un ingrédient (« lieu noir ») donne les lignes du menu qui peuvent le prendre, à la place
+ * de quoi et combien.
+ */
+function Promo({ items, onChoose }: { items: ShoppingItem[]; onChoose: (item: ShoppingItem, id: string) => void }) {
+  const [query, setQuery] = useState('');
+  const needle = searchKey(query.trim());
+  const matches = needle
+    ? items.flatMap((item) => item.substitutes.filter((o) => searchKey(o.label).includes(needle)).map((offer) => ({ item, offer })))
+    : [];
+  if (!items.some((i) => i.substitutes.length)) return null;
+  return (
+    <Card style={{ gap: space[2], maxWidth: 720 }}>
+      <Field label="Une promo, un rayon vide ?" hint="Cherche ce que tu as sous les yeux : les plats du menu qui peuvent le prendre." value={query} onChangeText={setQuery} placeholder="Lieu noir, dinde…" autoCorrect={false} />
+      {needle && !matches.length ? <Body tone="muted" size={15}>Aucun plat du menu ne le prend à la place d’un ingrédient.</Body> : null}
+      {matches.map(({ item, offer }) => (
+        <Row key={`${item.key}-${offer.id}`} gap={space[3]}>
+          <Body size={16} style={{ flex: 1 }}>
+            {`${offer.label}, ${item.unit ? formatQuantity(offer.qty, item.unit) : ''} au lieu de ${(item.replaces?.label ?? item.label).toLowerCase()}${recipesText(item.recipes) ? ` (${recipesText(item.recipes)})` : ''}${offer.note ? ` : ${offer.note}` : ''}`}
+          </Body>
+          {item.substitution === offer.id ? <Body tone="muted" size={15}>Choisi</Body> : <Button label="Choisir" onPress={() => onChoose(item, offer.id)} />}
+        </Row>
+      ))}
+    </Card>
+  );
+}
+
+/** Une ligne : la case, l'article, la quantité ; qui l'a pris ; ce qui a changé depuis ; les remplacements. */
+function ItemRow({ item, last, onToggle, onRemove, onSubstitute }: { item: ShoppingItem; last: boolean; onToggle: () => void; onRemove?: () => void; onSubstitute?: (id: string | null) => void }) {
   const { palette, fonts, weights, radius } = useTheme();
+  const [swapping, setSwapping] = useState(false);
   const state = item.state === 'frozen' || item.state === 'canned' || item.state === 'cooked' ? ingredientStates[item.state].toLowerCase() : null;
   const detail = [state, item.optional ? 'facultatif' : null, recipesText(item.recipes)].filter(Boolean).join(' · ');
   const qty = item.unit ? formatQuantity(item.qty, item.unit) : item.qty != null ? String(item.qty) : '';
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3], paddingVertical: space[2], borderBottomWidth: last ? 0 : 1, borderBottomColor: palette.line }}>
-      <Pressable
-        onPress={onToggle}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: item.checked }}
-        accessibilityLabel={item.label}
-        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 52 }}
-      >
-        <View style={{ width: 28, height: 28, borderRadius: Math.min(14, radius.tag), borderWidth: 2, borderColor: item.checked ? palette.actionBorder : palette.muted, backgroundColor: item.checked ? palette.action : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-          {item.checked ? <Icon name="check" size={18} color={palette.onAction} strokeWidth={3} /> : null}
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
-            <Text style={{ flex: 1, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 17, color: item.checked ? palette.muted : palette.text, textDecorationLine: item.checked ? 'line-through' : 'none' }}>{item.label}</Text>
-            <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: 17, color: item.checked ? palette.muted : palette.text, fontVariant: ['tabular-nums'] }}>{qty}</Text>
+    <View style={{ paddingVertical: space[2], gap: space[1], borderBottomWidth: last ? 0 : 1, borderBottomColor: palette.line }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+        <Pressable
+          onPress={onToggle}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: item.checked }}
+          accessibilityLabel={item.label}
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: space[3], minHeight: 52 }}
+        >
+          <View style={{ width: 28, height: 28, borderRadius: Math.min(14, radius.tag), borderWidth: 2, borderColor: item.checked ? palette.actionBorder : palette.muted, backgroundColor: item.checked ? palette.action : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+            {item.checked ? <Icon name="check" size={18} color={palette.onAction} strokeWidth={3} /> : null}
           </View>
-          {detail ? <Body tone="muted" size={14}>{detail}</Body> : null}
-          {item.checked && item.checked_by ? <Body tone="muted" size={14}>{`Pris par ${item.checked_by}`}</Body> : null}
-          {item.grown && item.unit ? <NoticeLine notice={{ tone: 'warn', icon: 'info', text: `Le menu a changé : ${formatQuantity(item.grown, item.unit)} de plus à prendre` }} /> : null}
-          {item.freeze.map((hint) =>
-            hint.frozen ? (
-              <Body key={hint.date} tone="muted" size={14}>{`Congelé pour ${dateText(hint.date)} (${splitTitle(hint.recipe).main}).`}</Body>
-            ) : (
-              <NoticeLine key={hint.date} notice={{ tone: 'warn', icon: 'fresh', text: `À congeler en rentrant : la part de ${dateText(hint.date)}` }} />
-            ),
-          )}
+          <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
+              <Text style={{ flex: 1, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 17, color: item.checked ? palette.muted : palette.text, textDecorationLine: item.checked ? 'line-through' : 'none' }}>{item.label}</Text>
+              <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: 17, color: item.checked ? palette.muted : palette.text, fontVariant: ['tabular-nums'] }}>{qty}</Text>
+            </View>
+            {detail ? <Body tone="muted" size={14}>{detail}</Body> : null}
+            {item.checked && item.checked_by ? <Body tone="muted" size={14}>{`Pris par ${item.checked_by}`}</Body> : null}
+            {item.grown && item.unit ? <NoticeLine notice={{ tone: 'warn', icon: 'info', text: `Le menu a changé : ${formatQuantity(item.grown, item.unit)} de plus à prendre` }} /> : null}
+            {item.freeze.map((hint) =>
+              hint.frozen ? (
+                <Body key={hint.date} tone="muted" size={14}>{`Congelé pour ${dateText(hint.date)} (${splitTitle(hint.recipe).main}).`}</Body>
+              ) : (
+                <NoticeLine key={hint.date} notice={{ tone: 'warn', icon: 'fresh', text: `À congeler en rentrant : la part de ${dateText(hint.date)}` }} />
+              ),
+            )}
+            {item.replaces ? <Body tone="muted" size={14}>{`Au lieu de ${item.replaces.label.toLowerCase()}${item.replaces.qty != null && item.unit ? `, ${formatQuantity(item.replaces.qty, item.unit)}` : ''}`}</Body> : null}
+          </View>
+        </Pressable>
+        {onRemove ? <Button kind="quiet" label="Retirer" accessibilityLabel={`Retirer ${item.label}`} onPress={onRemove} /> : null}
+      </View>
+      {/* Sous la ligne, aligné sur le texte : la case garde toute la largeur. */}
+      {onSubstitute && (item.substitutes.length || item.replaces) && !item.checked ? (
+        <Pressable onPress={() => setSwapping(!swapping)} accessibilityRole="button" accessibilityLabel={`Remplacer ${item.label}`} style={{ alignSelf: 'flex-start', marginLeft: 28 + space[3], minHeight: 32, justifyContent: 'center' }}>
+          <Body tone="muted" size={14} style={{ textDecorationLine: 'underline' }}>{swapping ? 'Fermer' : item.replaces ? 'Changer de remplacement' : 'Remplacer…'}</Body>
+        </Pressable>
+      ) : null}
+      {swapping && onSubstitute ? (
+        <View style={{ marginLeft: 28 + space[3], gap: space[2], paddingBottom: space[2] }}>
+          {item.substitutes.map((o) => (
+            <Pill
+              key={o.id}
+              role="radio"
+              label={`${o.label}${item.unit ? `, ${formatQuantity(o.qty, item.unit)}` : ''}${o.note ? ` · ${o.note}` : ''}`}
+              selected={item.substitution === o.id}
+              onPress={() => {
+                onSubstitute(o.id);
+                setSwapping(false);
+              }}
+            />
+          ))}
+          {item.replaces ? (
+            <Pill
+              role="radio"
+              label={`Revenir à : ${item.replaces.label.toLowerCase()}`}
+              selected={false}
+              onPress={() => {
+                onSubstitute(null);
+                setSwapping(false);
+              }}
+            />
+          ) : null}
         </View>
-      </Pressable>
-      {onRemove ? <Button kind="quiet" label="Retirer" accessibilityLabel={`Retirer ${item.label}`} onPress={onRemove} /> : null}
+      ) : null}
     </View>
   );
 }

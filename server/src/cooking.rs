@@ -9,6 +9,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use time::{Date, OffsetDateTime};
@@ -86,6 +88,8 @@ pub struct CookingLine {
     pub unit: Unit,
     pub optional: bool,
     pub note: Option<String>,
+    /// Remplacé sur la liste de courses de ce menu : l'ingrédient d'origine.
+    pub replaces: Option<String>,
 }
 
 /// Cuisson en cours.
@@ -208,6 +212,29 @@ async fn slot(
     }
 }
 
+/// Les remplacements choisis sur la liste de courses d'un menu, par clé d'article : (remplacement, code et nom du
+/// remplaçant, coefficient, note).
+async fn substituted(
+    db: &PgPool,
+    household_id: Uuid,
+    week_start: Day,
+) -> ApiResult<HashMap<String, (Uuid, String, String, f32, String)>> {
+    let rows: Vec<(String, Uuid, String, String, f32, String)> = sqlx::query_as(
+        "SELECT s.key, sub.id, i.code, i.name, sub.factor, sub.note
+         FROM shopping_items s JOIN menus m ON m.id = s.menu_id
+         JOIN substitutions sub ON sub.id = s.substitution_id JOIN ingredients i ON i.id = sub.substitute_id
+         WHERE m.household_id = $1 AND m.week_start = $2",
+    )
+    .bind(household_id)
+    .bind(week_start.0)
+    .fetch_all(db)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(key, id, code, name, factor, note)| (key, (id, code, name, factor, note)))
+        .collect())
+}
+
 /// Le jour du foyer, dans son fuseau.
 async fn today(db: &PgPool, household_id: Uuid) -> ApiResult<Day> {
     let date: Date = sqlx::query_scalar(
@@ -259,23 +286,63 @@ async fn view(db: &PgPool, household_id: Uuid, row: CookingRow) -> ApiResult<Coo
             },
         })
         .ok_or_else(ApiError::not_found)?;
+    let chosen = match &slot {
+        Some(slot) => substituted(db, household_id, slot.week_start).await?,
+        None => HashMap::new(),
+    };
     let ingredients = recipe
         .ingredients
         .iter()
-        .map(|l| CookingLine {
-            ingredient: l.ingredient.clone(),
-            name: l.name.clone(),
-            state: l.state,
-            qty: l.qty.map(|q| {
+        .map(|l| {
+            let qty = l.qty.map(|q| {
                 if l.per_batch {
                     q
                 } else {
                     q * scale.for_role(l.role)
                 }
-            }),
-            unit: l.unit,
-            optional: l.optional,
-            note: l.note.clone(),
+            });
+            let key = format!(
+                "{}:{}:{}",
+                l.ingredient_id,
+                l.state.as_str(),
+                l.unit.as_str()
+            );
+            // Remplacé sur la liste de ce menu, si la recette ne le refuse pas : sa précision d'abord.
+            let swap = chosen.get(&key).and_then(|(id, code, name, factor, note)| {
+                let rule = recipe
+                    .substitutions
+                    .iter()
+                    .find(|r| r.substitution_id == *id);
+                match rule {
+                    Some(r) if !r.allowed => None,
+                    Some(r) if !r.note.is_empty() => Some((code, name, *factor, r.note.clone())),
+                    _ => Some((code, name, *factor, note.clone())),
+                }
+            });
+            match swap {
+                Some((code, name, factor, note)) => CookingLine {
+                    ingredient: code.clone(),
+                    name: name.clone(),
+                    state: l.state,
+                    qty: qty.map(|q| (q * factor * 10.0).round() / 10.0),
+                    unit: l.unit,
+                    optional: l.optional,
+                    note: Some(note)
+                        .filter(|n| !n.is_empty())
+                        .or_else(|| l.note.clone()),
+                    replaces: Some(l.name.clone()),
+                },
+                None => CookingLine {
+                    ingredient: l.ingredient.clone(),
+                    name: l.name.clone(),
+                    state: l.state,
+                    qty,
+                    unit: l.unit,
+                    optional: l.optional,
+                    note: l.note.clone(),
+                    replaces: None,
+                },
+            }
         })
         .collect();
     let (_, keys) = screen(&recipe, &variant, phase, step);

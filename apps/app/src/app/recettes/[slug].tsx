@@ -31,6 +31,7 @@ import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 import { CommunityCard } from '../../ui/community';
 import { Discussion, ProposalForm } from '../../ui/discussion';
 import { FamilyCard } from '../../ui/similar';
+import { RecipeSubstitutions } from '../../ui/substitutions';
 import { changeText, NoteForm, Notes, RateMeal } from '../../ui/notes';
 
 export default function RecipeScreen() {
@@ -126,6 +127,7 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
       <Columns weights={[2, 3]}>
         <Stack gap={space[5]}>
           <Ingredients lines={data.ingredients} members={members.data} slot={slot} />
+          <RecipeSubstitutions householdId={householdId} recipe={data} editable={!data.community || !!me?.instance_admin} onChange={() => void recipe.reload()} />
           <Cahier householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
           <CommunityCard householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
           {data.community ? <Discussion householdId={householdId} recipe={data} onChange={() => void recipe.reload()} /> : null}

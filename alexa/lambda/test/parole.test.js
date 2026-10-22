@@ -102,3 +102,8 @@ test('ingrédients et service', () => {
   );
   assert.equal(p.ssml('Sel & poivre <b>'), 'Sel  et  poivre b');
 });
+
+test('un ingrédient remplacé sur la liste de courses se dit comme tel', () => {
+  const lignes = [{ name: 'Lieu noir', replaces: 'Cabillaud', qty: 990, unit: 'g', optional: false }];
+  assert.equal(p.direIngredients(lignes), 'Lieu noir au lieu de cabillaud, 990 grammes');
+});

@@ -8,6 +8,7 @@ import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
 import { Body, Card, ErrorText, LinkButton, Loading, Row, Screen, Stack, Title } from '../../ui';
 import { ReviewFeedback } from '../../ui/review';
+import { SubstitutionsAdmin } from '../../ui/substitutions';
 
 const when = (iso: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(iso));
 
@@ -43,6 +44,7 @@ export default function Review() {
               <ReviewFeedback key={group.slug} group={group} householdId={me?.households[0]?.id} onChange={() => void review.reload()} />
             ))}
           </View>
+          <SubstitutionsAdmin />
         </Stack>
       ) : null}
     </Screen>

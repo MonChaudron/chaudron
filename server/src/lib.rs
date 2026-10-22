@@ -21,6 +21,7 @@ pub mod oauth;
 pub mod recipes;
 pub mod shopping;
 pub mod similar;
+pub mod substitutions;
 pub mod text;
 pub mod tokens;
 pub mod types;
@@ -161,6 +162,12 @@ impl AppState {
         families::join_family,
         families::leave_family,
         families::prefer,
+        substitutions::list_substitutions,
+        substitutions::create_substitution,
+        substitutions::update_substitution,
+        substitutions::delete_substitution,
+        substitutions::set_rule,
+        substitutions::delete_rule,
         community::submit_recipe,
         community::copy_recipe,
         community::take_upstream,
@@ -273,6 +280,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(feedback::router())
         .merge(community::router())
         .merge(families::router())
+        .merge(substitutions::router())
         .merge(notifications::router())
         .merge(events::router())
         .merge(tokens::router())

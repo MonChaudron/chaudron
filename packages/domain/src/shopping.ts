@@ -8,11 +8,21 @@ export interface PendingOp {
   op_id: string;
   at: string;
   week_start: string;
-  kind: 'check' | 'uncheck' | 'add' | 'edit' | 'remove';
+  kind: 'check' | 'uncheck' | 'add' | 'edit' | 'remove' | 'substitute';
   key: string;
   label?: string | null;
   qty?: number | null;
   block?: Block | null;
+  /** `substitute` : le remplacement choisi ; nul, retour à l'ingrédient. */
+  substitution_id?: string | null;
+}
+
+/** Un remplacement proposé sur une ligne. */
+interface Offer {
+  id: string;
+  ingredient: string;
+  label: string;
+  qty?: number | null;
 }
 
 interface Item {
@@ -23,6 +33,10 @@ interface Item {
   block: Block;
   qty?: number | null;
   grown?: number | null;
+  ingredient?: string | null;
+  substitutes?: Offer[];
+  substitution?: string | null;
+  replaces?: { ingredient: string; label: string; qty?: number | null } | null;
 }
 
 /** La liste, avec les opérations en attente de ce menu appliquées dans l'ordre. */
@@ -46,6 +60,17 @@ export function applyPending<I extends Item, L extends { week_start: string; ite
         break;
       case 'remove':
         items = items.filter((i) => i.key !== op.key);
+        break;
+      case 'substitute':
+        items = items.map((i) => {
+          if (i.key !== op.key) return i;
+          // La ligne d'origine : celle d'avant un remplacement déjà choisi.
+          const base = i.replaces ?? { ingredient: i.ingredient ?? '', label: i.label, qty: i.qty ?? null };
+          if (!op.substitution_id) return { ...i, label: base.label, qty: base.qty, ingredient: base.ingredient, substitution: null, replaces: null };
+          const offer = i.substitutes?.find((o) => o.id === op.substitution_id);
+          if (!offer) return i;
+          return { ...i, label: offer.label, qty: offer.qty ?? null, ingredient: offer.ingredient, substitution: offer.id, replaces: base };
+        });
         break;
     }
   }

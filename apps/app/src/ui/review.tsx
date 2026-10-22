@@ -11,6 +11,7 @@ import { api } from '../lib/api';
 import { useTheme } from '../lib/theme';
 import { ProposedChanges } from './discussion';
 import { Body, Button, Card, ErrorText, Field, Row, Tag, Title } from './index';
+import { TriedToSubstitution } from './substitutions';
 
 const kindLabels = { comment: 'Commentaire', proposal: 'Proposition', tried: 'Variante tentée' } as const;
 
@@ -89,6 +90,7 @@ function Item({ feedback: f, slug, householdId, onChange }: { feedback: Feedback
       </Row>
       {f.kind === 'proposal' ? <ProposedChanges changes={f.changes} /> : null}
       <Body size={15}>{f.body}</Body>
+      {f.kind === 'tried' ? <TriedToSubstitution feedback={f} onDone={onChange} /> : null}
       <Body tone="muted" size={13}>{`${f.author_name}${f.household_name ? ` (${f.household_name})` : ''}${f.supports ? ` · +${f.supports}` : ''}`}</Body>
       {editing ? (
         <View style={{ gap: space[2] }}>

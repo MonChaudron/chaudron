@@ -849,6 +849,170 @@
         }
       }
     },
+    "/api/v1/community/substitutions": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Saisit un remplacement (admin), éventuellement depuis une variante tentée.",
+        "operationId": "create_substitution",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubstitutionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Substitution"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Existe déjà",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/substitutions/{substitution_id}": {
+      "put": {
+        "tags": [
+          "communauté"
+        ],
+        "operationId": "update_substitution",
+        "parameters": [
+          {
+            "name": "substitution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubstitutionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Substitution"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Supprime un remplacement (admin) ; les lignes de courses qui l'avaient choisi reviennent à l'ingrédient.",
+        "operationId": "delete_substitution",
+        "parameters": [
+          {
+            "name": "substitution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/equipment": {
       "get": {
         "tags": [
@@ -3716,6 +3880,147 @@
         }
       }
     },
+    "/api/v1/households/{id}/recipes/{slug}/substitutions/{substitution_id}": {
+      "put": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Précise ou refuse un remplacement dans une recette (ceux qui la modifient).",
+        "operationId": "set_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "substitution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "La recette revient à ce que dit le remplacement.",
+        "operationId": "delete_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "substitution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes/{slug}/upstream/take": {
       "post": {
         "tags": [
@@ -4918,6 +5223,29 @@
         }
       }
     },
+    "/api/v1/substitutions": {
+      "get": {
+        "tags": [
+          "référentiels"
+        ],
+        "summary": "Tous les remplacements de l'instance (la copie de travail du téléphone : chercher une promo hors ligne).",
+        "operationId": "list_substitutions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Substitution"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/token": {
       "get": {
         "tags": [
@@ -5368,6 +5696,13 @@
             ],
             "format": "float",
             "description": "Nulle : « au goût »."
+          },
+          "replaces": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Remplacé sur la liste de courses de ce menu : l'ingrédient d'origine."
           },
           "state": {
             "$ref": "#/components/schemas/IngredientState"
@@ -7256,6 +7591,42 @@
           }
         }
       },
+      "Offer": {
+        "type": "object",
+        "description": "Un remplacement proposé sur une ligne de courses.",
+        "required": [
+          "id",
+          "ingredient",
+          "label",
+          "note"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Le remplacement."
+          },
+          "ingredient": {
+            "type": "string",
+            "description": "Code du remplaçant."
+          },
+          "label": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "description": "La précision de la recette, sinon celle du remplacement."
+          },
+          "qty": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Quantité à prendre, pour toute la ligne."
+          }
+        }
+      },
       "OneTapLogin": {
         "type": "object",
         "description": "Jeton reçu de Google One Tap.",
@@ -7284,7 +7655,8 @@
           "uncheck",
           "add",
           "edit",
-          "remove"
+          "remove",
+          "substitute"
         ]
       },
       "OpsInput": {
@@ -7645,6 +8017,7 @@
           "variants",
           "notes",
           "ratings",
+          "substitutions",
           "updated_at"
         ],
         "properties": {
@@ -7724,6 +8097,13 @@
                 "type": "null"
               }
             ]
+          },
+          "substitutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecipeSubstitution"
+            },
+            "description": "Les remplacements que la recette précise ou refuse."
           },
           "tags": {
             "type": "array",
@@ -7891,6 +8271,29 @@
           }
         }
       },
+      "RecipeSubstitution": {
+        "type": "object",
+        "description": "Ce qu'une recette dit d'un remplacement.",
+        "required": [
+          "substitution_id",
+          "allowed",
+          "note"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean",
+            "description": "Refusé dans cette recette (« pas dans le tartare »)."
+          },
+          "note": {
+            "type": "string",
+            "description": "Une précision (« +2 min de vapeur »)."
+          },
+          "substitution_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "RecipeSummary": {
         "type": "object",
         "description": "Recette, dans la liste du foyer.",
@@ -8028,6 +8431,29 @@
           }
         }
       },
+      "Replaced": {
+        "type": "object",
+        "description": "L'ingrédient d'une ligne remplacée.",
+        "required": [
+          "ingredient",
+          "label"
+        ],
+        "properties": {
+          "ingredient": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "qty": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          }
+        }
+      },
       "ReplyInput": {
         "type": "object",
         "description": "Une réponse dans un fil.",
@@ -8131,6 +8557,21 @@
           }
         }
       },
+      "RuleInput": {
+        "type": "object",
+        "description": "Ce que la recette dit d'un remplacement.",
+        "required": [
+          "allowed"
+        ],
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      },
       "Scope": {
         "type": "string",
         "description": "Droit d'un jeton d'API.",
@@ -8154,7 +8595,8 @@
           "manual",
           "recipes",
           "checked",
-          "freeze"
+          "freeze",
+          "substitutes"
         ],
         "properties": {
           "aisle": {
@@ -8235,6 +8677,17 @@
             },
             "description": "Recettes du menu qui l'utilisent."
           },
+          "replaces": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Replaced",
+                "description": "Ce qu'il remplace."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "state": {
             "oneOf": [
               {
@@ -8244,6 +8697,21 @@
                 "type": "null"
               }
             ]
+          },
+          "substitutes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Offer"
+            },
+            "description": "Les remplacements possibles (« lieu noir, 1 kg ») ; aucun qu'une recette de la ligne refuse."
+          },
+          "substitution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Le remplacement choisi : l'article dit alors le remplaçant, sa quantité et son rayon."
           },
           "unit": {
             "oneOf": [
@@ -8343,6 +8811,14 @@
               "null"
             ],
             "format": "float"
+          },
+          "substitution_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "`substitute` : le remplacement choisi ; nul, retour à l'ingrédient."
           },
           "unit": {
             "oneOf": [
@@ -8764,6 +9240,125 @@
             "description": "Une autre déclinaison de cette recette de la communauté (slug) : l'admin les range ensemble en acceptant."
           },
           "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Substitution": {
+        "type": "object",
+        "description": "Un remplacement.",
+        "required": [
+          "id",
+          "ingredient",
+          "ingredient_name",
+          "substitute",
+          "substitute_name",
+          "factor",
+          "note",
+          "source"
+        ],
+        "properties": {
+          "factor": {
+            "type": "number",
+            "format": "float",
+            "description": "Quantité du remplaçant pour une quantité de l'ingrédient."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ingredient": {
+            "type": "string",
+            "description": "Code de l'ingrédient remplacé."
+          },
+          "ingredient_name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "`admin` ou `feedback` (une variante tentée validée)."
+          },
+          "substitute": {
+            "type": "string",
+            "description": "Code du remplaçant."
+          },
+          "substitute_name": {
+            "type": "string"
+          },
+          "substitute_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Forme d'achat du remplaçant (`fresh`, `frozen`…) ; nulle : celle de la ligne remplacée."
+          }
+        }
+      },
+      "SubstitutionInput": {
+        "type": "object",
+        "description": "Un remplacement à saisir.",
+        "required": [
+          "ingredient",
+          "substitute",
+          "factor"
+        ],
+        "properties": {
+          "factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "feedback_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "La variante tentée qu'il valide : elle passe en « appliquée », son auteur est prévenu."
+          },
+          "ingredient": {
+            "type": "string",
+            "description": "Code de l'ingrédient remplacé."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "substitute": {
+            "type": "string",
+            "description": "Code du remplaçant."
+          },
+          "substitute_state": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IngredientState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "SubstitutionUpdate": {
+        "type": "object",
+        "description": "Le coefficient et la note d'un remplacement.",
+        "required": [
+          "factor"
+        ],
+        "properties": {
+          "factor": {
+            "type": "number",
+            "format": "float"
+          },
+          "note": {
             "type": [
               "string",
               "null"

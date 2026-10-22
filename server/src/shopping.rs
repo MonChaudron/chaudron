@@ -20,6 +20,7 @@ use crate::{
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
     menus::{self, Day},
+    substitutions::{Catalog, Offer},
     text::search_key,
     types::{Aisle, IngredientState, PortionRole, Scope, Unit},
 };
@@ -59,6 +60,8 @@ crate::types::text_enum! {
         Edit = "edit",
         /// Retirer un ajout à la main.
         Remove = "remove",
+        /// Choisir un remplacement pour un article calculé (`substitution_id`), ou revenir à l'ingrédient (nul).
+        Substitute = "substitute",
     }
 }
 
@@ -93,6 +96,20 @@ pub struct ShoppingItem {
     pub grown: Option<f32>,
     /// Les plats pour lesquels cet ingrédient frais ne tiendra pas : à congeler en rentrant (ou déjà congelé).
     pub freeze: Vec<FreezeHint>,
+    /// Les remplacements possibles (« lieu noir, 1 kg ») ; aucun qu'une recette de la ligne refuse.
+    pub substitutes: Vec<Offer>,
+    /// Le remplacement choisi : l'article dit alors le remplaçant, sa quantité et son rayon.
+    pub substitution: Option<Uuid>,
+    /// Ce qu'il remplace.
+    pub replaces: Option<Replaced>,
+}
+
+/// L'ingrédient d'une ligne remplacée.
+#[derive(Serialize, ToSchema)]
+pub struct Replaced {
+    pub ingredient: String,
+    pub label: String,
+    pub qty: Option<f32>,
 }
 
 /// Un plat dont la part de cet article est à congeler.
@@ -134,6 +151,8 @@ pub struct ShoppingOp {
     pub unit: Option<Unit>,
     pub aisle: Option<Aisle>,
     pub block: Option<Block>,
+    /// `substitute` : le remplacement choisi ; nul, retour à l'ingrédient.
+    pub substitution_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -196,6 +215,9 @@ pub struct JournalQuery {
 /// Article calculé, avant fusion avec l'état stocké.
 struct Computed {
     key: String,
+    ingredient_id: Uuid,
+    /// Recettes du menu qui la composent (identifiants).
+    recipe_ids: Vec<Uuid>,
     label: String,
     ingredient: String,
     state: IngredientState,
@@ -209,6 +231,7 @@ struct Computed {
 
 #[derive(FromRow)]
 struct LineRow {
+    recipe_id: Uuid,
     slug: String,
     title: String,
     ingredient_id: Uuid,
@@ -270,7 +293,7 @@ async fn compute(
     slugs.sort_unstable();
     slugs.dedup();
     let lines: Vec<LineRow> = sqlx::query_as(
-        "SELECT r.slug, r.title, l.ingredient_id, i.code, i.name, i.aisle, l.state, l.qty, l.unit, l.role,
+        "SELECT r.id AS recipe_id, r.slug, r.title, l.ingredient_id, i.code, i.name, i.aisle, l.state, l.qty, l.unit, l.role,
                 l.optional, l.per_batch
          FROM recipe_ingredients l JOIN recipes r ON r.id = l.recipe_id JOIN ingredients i ON i.id = l.ingredient_id
          WHERE (r.household_id = $1 OR r.household_id IS NULL) AND r.slug = ANY($2) ORDER BY l.position",
@@ -308,6 +331,8 @@ async fn compute(
             let i = *index.entry(key.clone()).or_insert_with(|| {
                 items.push(Computed {
                     key,
+                    ingredient_id: line.ingredient_id,
+                    recipe_ids: Vec::new(),
                     label: line.name.clone(),
                     ingredient: line.code.clone(),
                     state: line.state,
@@ -327,6 +352,9 @@ async fn compute(
             item.optional &= line.optional;
             if !item.recipes.contains(&line.title) {
                 item.recipes.push(line.title.clone());
+            }
+            if !item.recipe_ids.contains(&line.recipe_id) {
+                item.recipe_ids.push(line.recipe_id);
             }
         }
     }
@@ -378,6 +406,7 @@ fn freeze_hints(menu: &menus::Menu, code: &str) -> Vec<FreezeHint> {
 #[derive(FromRow)]
 struct StateRow {
     key: String,
+    substitution_id: Option<Uuid>,
     manual: bool,
     label: Option<String>,
     qty: Option<f32>,
@@ -435,7 +464,7 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
     let menu_id = menu_id(db, household_id, week_start).await?;
     let (computed, menu) = compute(db, household_id, week_start).await?;
     let states: Vec<StateRow> = sqlx::query_as(
-        "SELECT s.key, s.manual, s.label, s.qty, s.unit, s.aisle, s.block, s.checked, u.display_name AS checked_by,
+        "SELECT s.key, s.substitution_id, s.manual, s.label, s.qty, s.unit, s.aisle, s.block, s.checked, u.display_name AS checked_by,
                 s.checked_at, s.qty_at_check, s.removed
          FROM shopping_items s LEFT JOIN users u ON u.id = s.checked_by WHERE s.menu_id = $1",
     )
@@ -443,25 +472,44 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
     .fetch_all(db)
     .await?;
     let by_key: HashMap<&str, &StateRow> = states.iter().map(|s| (s.key.as_str(), s)).collect();
+    let catalog = catalog(db, &computed).await?;
 
     let mut items: Vec<ShoppingItem> = computed
         .into_iter()
         .map(|c| {
             let state = by_key.get(c.key.as_str());
+            let substitutes = catalog.offers(c.ingredient_id, &c.recipe_ids, c.qty);
+            // Le remplacement choisi, s'il vaut encore (refusé depuis, ou supprimé : oublié sans bruit).
+            let chosen = state
+                .and_then(|s| s.substitution_id)
+                .and_then(|id| substitutes.iter().find(|o| o.id == id))
+                .cloned();
             let checked = state.is_some_and(|s| s.checked);
             let grown = match (checked, state.and_then(|s| s.qty_at_check), c.qty) {
                 (true, Some(before), Some(now)) if now > before + 1e-3 => Some(now - before),
                 _ => None,
             };
             let freeze = freeze_hints(&menu, &c.ingredient);
+            let replaces = chosen.as_ref().map(|_| Replaced {
+                ingredient: c.ingredient.clone(),
+                label: c.label.clone(),
+                qty: c.qty,
+            });
             ShoppingItem {
                 key: c.key,
-                label: c.label,
-                ingredient: Some(c.ingredient),
+                label: chosen.as_ref().map_or(c.label, |o| o.label.clone()),
+                ingredient: Some(
+                    chosen
+                        .as_ref()
+                        .map_or(c.ingredient, |o| o.ingredient.clone()),
+                ),
                 state: Some(c.state),
-                qty: c.qty,
+                qty: chosen.as_ref().map_or(c.qty, |o| o.qty),
                 unit: Some(c.unit),
-                aisle: c.aisle,
+                aisle: chosen
+                    .as_ref()
+                    .and_then(|o| Aisle::try_from(o.aisle.clone()).ok())
+                    .map_or(c.aisle, |a| aisle_for(c.state, a)),
                 block: Block::Recipes,
                 pantry: c.pantry,
                 optional: c.optional,
@@ -472,6 +520,9 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
                 checked_at: state.filter(|_| checked).and_then(|s| s.checked_at),
                 grown,
                 freeze,
+                substitution: chosen.as_ref().map(|o| o.id),
+                substitutes,
+                replaces,
             }
         })
         .collect();
@@ -494,6 +545,9 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
             checked_at: s.checked_at.filter(|_| s.checked),
             grown: None,
             freeze: Vec::new(),
+            substitutes: Vec::new(),
+            substitution: None,
+            replaces: None,
         });
     }
     items.sort_by_cached_key(|i| {
@@ -510,6 +564,18 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
         cursor: cursor(db, household_id).await?,
         items,
     })
+}
+
+/// Les remplacements des ingrédients de la liste, et ce qu'en disent ses recettes.
+async fn catalog(db: &PgPool, computed: &[Computed]) -> ApiResult<Catalog> {
+    let ingredients: Vec<Uuid> = computed.iter().map(|c| c.ingredient_id).collect();
+    let mut recipes: Vec<Uuid> = computed
+        .iter()
+        .flat_map(|c| c.recipe_ids.iter().copied())
+        .collect();
+    recipes.sort_unstable();
+    recipes.dedup();
+    Catalog::load(&mut *db.acquire().await?, &ingredients, &recipes).await
 }
 
 // Opérations
@@ -532,7 +598,7 @@ async fn apply(
     user: Option<Uuid>,
     op: &ShoppingOp,
     at: OffsetDateTime,
-    computed: &HashMap<String, Option<f32>>,
+    computed: &HashMap<String, (Option<f32>, Vec<Uuid>)>,
 ) -> ApiResult<bool> {
     let manual: Option<(bool, OffsetDateTime)> = sqlx::query_as(
         "SELECT removed, op_at FROM shopping_items WHERE menu_id = $1 AND key = $2 AND manual",
@@ -550,6 +616,21 @@ async fn apply(
             if label(op.label.as_ref())?.is_none() {
                 return Err(ApiError::invalid("Un ajout a un libellé."));
             }
+        }
+        OpKind::Substitute if !is_computed => {
+            return Err(ApiError::invalid(format!(
+                "{} : on remplace un article des recettes.",
+                op.key
+            )));
+        }
+        OpKind::Substitute
+            if op
+                .substitution_id
+                .is_some_and(|id| !computed[&op.key].1.contains(&id)) =>
+        {
+            return Err(ApiError::invalid(
+                "Ce remplacement ne vaut pas pour cet article (une recette le refuse ?).",
+            ));
         }
         OpKind::Edit | OpKind::Remove if manual.is_none() => {
             return Err(ApiError::invalid(format!(
@@ -589,7 +670,7 @@ async fn apply(
     let applied = match op.kind {
         OpKind::Check | OpKind::Uncheck => {
             let checked = op.kind == OpKind::Check;
-            let qty_now = computed.get(&op.key).copied().flatten();
+            let qty_now = computed.get(&op.key).and_then(|c| c.0);
             sqlx::query(
                 "INSERT INTO shopping_items (id, menu_id, key, manual, checked, checked_by, checked_at, qty_at_check, op_at)
                  VALUES ($1, $2, $3, false, $4, $5, $6, $7, $8)
@@ -631,6 +712,22 @@ async fn apply(
             .bind(op.unit.map(Unit::as_str))
             .bind(op.aisle.map(Aisle::as_str))
             .bind(op.block.map(Block::as_str))
+            .bind(at)
+            .execute(&mut *conn)
+            .await?
+        }
+        OpKind::Substitute => {
+            sqlx::query(
+                "INSERT INTO shopping_items (id, menu_id, key, manual, substitution_id, op_at)
+                 VALUES ($1, $2, $3, false, $4, $5)
+                 ON CONFLICT (menu_id, key) DO UPDATE SET
+                    substitution_id = excluded.substitution_id, op_at = excluded.op_at
+                 WHERE NOT shopping_items.manual AND shopping_items.op_at <= excluded.op_at",
+            )
+            .bind(Uuid::now_v7())
+            .bind(menu_id)
+            .bind(&op.key)
+            .bind(op.substitution_id)
             .bind(at)
             .execute(&mut *conn)
             .await?
@@ -710,17 +807,25 @@ pub async fn apply_ops(
         return Err(ApiError::invalid("500 opérations au plus par envoi."));
     }
     // Les menus concernés et leurs articles calculés (pour valider les clés et noter la quantité cochée).
-    let mut menus: HashMap<Day, (Uuid, HashMap<String, Option<f32>>)> = HashMap::new();
+    type Computed = HashMap<String, (Option<f32>, Vec<Uuid>)>;
+    let mut menus: HashMap<Day, (Uuid, Computed)> = HashMap::new();
     for op in &body.ops {
         if let std::collections::hash_map::Entry::Vacant(entry) = menus.entry(op.week_start) {
             let menu_id = menu_id(&state.db, id, op.week_start)
                 .await
                 .map_err(|_| ApiError::invalid(format!("Pas de menu le {}.", op.week_start)))?;
-            let computed = compute(&state.db, id, op.week_start)
-                .await?
-                .0
+            let items = compute(&state.db, id, op.week_start).await?.0;
+            let catalog = catalog(&state.db, &items).await?;
+            let computed = items
                 .into_iter()
-                .map(|c| (c.key, c.qty))
+                .map(|c| {
+                    let offers = catalog
+                        .offers(c.ingredient_id, &c.recipe_ids, c.qty)
+                        .into_iter()
+                        .map(|o| o.id)
+                        .collect();
+                    (c.key, (c.qty, offers))
+                })
                 .collect();
             entry.insert((menu_id, computed));
         }

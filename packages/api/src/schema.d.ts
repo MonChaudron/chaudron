@@ -281,6 +281,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/community/substitutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Saisit un remplacement (admin), éventuellement depuis une variante tentée. */
+        post: operations["create_substitution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/substitutions/{substitution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_substitution"];
+        post?: never;
+        /** Supprime un remplacement (admin) ; les lignes de courses qui l'avaient choisi reviennent à l'ingrédient. */
+        delete: operations["delete_substitution"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment": {
         parameters: {
             query?: never;
@@ -916,6 +950,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/recipes/{slug}/substitutions/{substitution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Précise ou refuse un remplacement dans une recette (ceux qui la modifient). */
+        put: operations["set_rule"];
+        post?: never;
+        /** La recette revient à ce que dit le remplacement. */
+        delete: operations["delete_rule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/recipes/{slug}/upstream/take": {
         parameters: {
             query?: never;
@@ -1272,6 +1324,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/substitutions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tous les remplacements de l'instance (la copie de travail du téléphone : chercher une promo hors ligne). */
+        get: operations["list_substitutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/token": {
         parameters: {
             query?: never;
@@ -1440,6 +1509,8 @@ export interface components {
              * @description Nulle : « au goût ».
              */
             qty?: number | null;
+            /** @description Remplacé sur la liste de courses de ce menu : l'ingrédient d'origine. */
+            replaces?: string | null;
             state: components["schemas"]["IngredientState"];
             unit: components["schemas"]["Unit"];
         };
@@ -2098,6 +2169,24 @@ export interface components {
             error: string;
             error_description: string;
         };
+        /** @description Un remplacement proposé sur une ligne de courses. */
+        Offer: {
+            /**
+             * Format: uuid
+             * @description Le remplacement.
+             */
+            id: string;
+            /** @description Code du remplaçant. */
+            ingredient: string;
+            label: string;
+            /** @description La précision de la recette, sinon celle du remplacement. */
+            note: string;
+            /**
+             * Format: float
+             * @description Quantité à prendre, pour toute la ligne.
+             */
+            qty?: number | null;
+        };
         /** @description Jeton reçu de Google One Tap. */
         OneTapLogin: {
             /** @description Jeton d'identité (JWT) donné par Google à la page. */
@@ -2109,7 +2198,7 @@ export interface components {
          * @description Opération sur un article.
          * @enum {string}
          */
-        OpKind: "check" | "uncheck" | "add" | "edit" | "remove";
+        OpKind: "check" | "uncheck" | "add" | "edit" | "remove" | "substitute";
         OpsInput: {
             ops: components["schemas"]["ShoppingOp"][];
         };
@@ -2247,6 +2336,8 @@ export interface components {
             slug: string;
             source?: string | null;
             submission?: components["schemas"]["SubmissionState"] | null;
+            /** @description Les remplacements que la recette précise ou refuse. */
+            substitutions: components["schemas"]["RecipeSubstitution"][];
             tags: string[];
             title: string;
             /** Format: date-time */
@@ -2299,6 +2390,15 @@ export interface components {
             slug: string;
             title: string;
         };
+        /** @description Ce qu'une recette dit d'un remplacement. */
+        RecipeSubstitution: {
+            /** @description Refusé dans cette recette (« pas dans le tartare »). */
+            allowed: boolean;
+            /** @description Une précision (« +2 min de vapeur »). */
+            note: string;
+            /** Format: uuid */
+            substitution_id: string;
+        };
         /** @description Recette, dans la liste du foyer. */
         RecipeSummary: {
             /** @description Recette de la communauté. */
@@ -2344,6 +2444,13 @@ export interface components {
         RemarkInput: {
             text: string;
         };
+        /** @description L'ingrédient d'une ligne remplacée. */
+        Replaced: {
+            ingredient: string;
+            label: string;
+            /** Format: float */
+            qty?: number | null;
+        };
         /** @description Une réponse dans un fil. */
         ReplyInput: {
             body: string;
@@ -2375,6 +2482,11 @@ export interface components {
         Role: "owner" | "member";
         RoleUpdate: {
             role: components["schemas"]["Role"];
+        };
+        /** @description Ce que la recette dit d'un remplacement. */
+        RuleInput: {
+            allowed: boolean;
+            note?: string;
         };
         /**
          * @description Droit d'un jeton d'API.
@@ -2414,7 +2526,15 @@ export interface components {
             qty?: number | null;
             /** @description Recettes du menu qui l'utilisent. */
             recipes: string[];
+            replaces?: components["schemas"]["Replaced"] | null;
             state?: components["schemas"]["IngredientState"] | null;
+            /** @description Les remplacements possibles (« lieu noir, 1 kg ») ; aucun qu'une recette de la ligne refuse. */
+            substitutes: components["schemas"]["Offer"][];
+            /**
+             * Format: uuid
+             * @description Le remplacement choisi : l'article dit alors le remplaçant, sa quantité et son rayon.
+             */
+            substitution?: string | null;
             unit?: components["schemas"]["Unit"] | null;
         };
         /** @description Liste de courses d'un menu. */
@@ -2451,6 +2571,11 @@ export interface components {
             op_id: string;
             /** Format: float */
             qty?: number | null;
+            /**
+             * Format: uuid
+             * @description `substitute` : le remplacement choisi ; nul, retour à l'ingrédient.
+             */
+            substitution_id?: string | null;
             unit?: components["schemas"]["Unit"] | null;
             /** Format: date */
             week_start: string;
@@ -2596,6 +2721,49 @@ export interface components {
             /** @description Une autre déclinaison de cette recette de la communauté (slug) : l'admin les range ensemble en acceptant. */
             family_with?: string | null;
             message?: string | null;
+        };
+        /** @description Un remplacement. */
+        Substitution: {
+            /**
+             * Format: float
+             * @description Quantité du remplaçant pour une quantité de l'ingrédient.
+             */
+            factor: number;
+            /** Format: uuid */
+            id: string;
+            /** @description Code de l'ingrédient remplacé. */
+            ingredient: string;
+            ingredient_name: string;
+            note: string;
+            /** @description `admin` ou `feedback` (une variante tentée validée). */
+            source: string;
+            /** @description Code du remplaçant. */
+            substitute: string;
+            substitute_name: string;
+            /** @description Forme d'achat du remplaçant (`fresh`, `frozen`…) ; nulle : celle de la ligne remplacée. */
+            substitute_state?: string | null;
+        };
+        /** @description Un remplacement à saisir. */
+        SubstitutionInput: {
+            /** Format: float */
+            factor: number;
+            /**
+             * Format: uuid
+             * @description La variante tentée qu'il valide : elle passe en « appliquée », son auteur est prévenu.
+             */
+            feedback_id?: string | null;
+            /** @description Code de l'ingrédient remplacé. */
+            ingredient: string;
+            note?: string | null;
+            /** @description Code du remplaçant. */
+            substitute: string;
+            substitute_state?: components["schemas"]["IngredientState"] | null;
+        };
+        /** @description Le coefficient et la note d'un remplacement. */
+        SubstitutionUpdate: {
+            /** Format: float */
+            factor: number;
+            note?: string | null;
         };
         /** @description Autre variante qui lève un conflit. */
         Suggestion: {
@@ -3407,6 +3575,138 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_substitution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubstitutionInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Substitution"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Existe déjà */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_substitution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                substitution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubstitutionUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Substitution"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_substitution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                substitution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5396,6 +5696,94 @@ export interface operations {
             };
         };
     };
+    set_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+                substitution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+                substitution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     take_upstream: {
         parameters: {
             query?: never;
@@ -6261,6 +6649,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DefaultPortions"];
+                };
+            };
+        };
+    };
+    list_substitutions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Substitution"][];
                 };
             };
         };

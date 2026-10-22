@@ -33,6 +33,7 @@ use crate::{
     ingredients::{self, NewIngredient},
     members,
     menus::{self, MenuInput, Warning},
+    substitutions::{self, RecipeSubstitution},
     text::{code, like_patterns, search_key},
     types::{IngredientState, PortionRole, Scope, Unit},
 };
@@ -294,6 +295,8 @@ pub struct Recipe {
     pub submission: Option<SubmissionState>,
     /// Ses déclinaisons, et la préférée du foyer.
     pub family: Option<Family>,
+    /// Les remplacements que la recette précise ou refuse.
+    pub substitutions: Vec<RecipeSubstitution>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
@@ -666,6 +669,7 @@ async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> Api
             Some(family) => Some(families::family(conn, family, viewer).await?),
             None => None,
         },
+        substitutions: substitutions::rules(conn, id).await?,
         updated_at: recipe.updated_at,
     };
     if let Some(household_id) = viewer {
