@@ -28,6 +28,7 @@ use crate::{
     AppState,
     auth::{Author, Caller},
     error::{ApiError, ApiResult, ErrorBody},
+    feedback::{self, Feedback, RatingCounts},
     ingredients::{self, NewIngredient},
     members,
     menus::{self, MenuInput, Warning},
@@ -282,11 +283,45 @@ pub struct Recipe {
     pub ingredients: Vec<RecipeLine>,
     /// La variante par défaut d'abord, puis dans l'ordre de publication.
     pub variants: Vec<Variant>,
+    /// Les notes ouvertes du cahier du foyer qui lit la recette.
+    pub notes: Vec<Feedback>,
+    /// « Comment c'était ? », compté.
+    pub ratings: RatingCounts,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
 
+/// Un élément d'une recette, désigné par sa clé.
+pub(crate) enum Element<'a> {
+    Line(&'a RecipeLine),
+    /// Une variante : une note peut la viser, rien ne s'y change.
+    Variant,
+    Phase(&'a Phase),
+    Step(&'a Step),
+}
+
 impl Recipe {
+    /// L'élément de cette clé, s'il existe dans la version courante.
+    pub(crate) fn element(&self, key: Uuid) -> Option<Element<'_>> {
+        if let Some(line) = self.ingredients.iter().find(|l| l.key == key) {
+            return Some(Element::Line(line));
+        }
+        for variant in &self.variants {
+            if variant.key == key {
+                return Some(Element::Variant);
+            }
+            for phase in &variant.phases {
+                if phase.key == key {
+                    return Some(Element::Phase(phase));
+                }
+                if let Some(step) = phase.steps.iter().find(|s| s.key == key) {
+                    return Some(Element::Step(step));
+                }
+            }
+        }
+        None
+    }
+
     /// La recette telle qu'on la publie (contenu d'une version), clés comprises.
     pub fn to_input(&self) -> RecipeInput {
         RecipeInput {
@@ -535,7 +570,7 @@ async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> Api
                 day_offset: p.day_offset,
             });
     }
-    Ok(Recipe {
+    let mut loaded = Recipe {
         slug: recipe.slug,
         community: recipe.household_id.is_none(),
         retired: recipe.retired,
@@ -581,8 +616,15 @@ async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> Api
                 is_default: v.is_default,
             })
             .collect(),
+        notes: Vec::new(),
+        ratings: RatingCounts::default(),
         updated_at: recipe.updated_at,
-    })
+    };
+    if let Some(household_id) = viewer {
+        loaded.notes = feedback::open_notes(conn, household_id, id, &loaded).await?;
+        loaded.ratings = feedback::counts(conn, id).await?;
+    }
+    Ok(loaded)
 }
 
 // Écriture

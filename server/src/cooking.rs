@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
@@ -19,6 +19,7 @@ use crate::{
     AppState,
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
+    feedback::{self, Feedback, FeedbackKind, FeedbackStatus, NewFeedback, Visibility},
     menus::{self, Day, MenuSlot},
     recipes::{self, Recipe},
     types::{IngredientState, Meal, Scope, Unit, text_enum},
@@ -28,10 +29,12 @@ use crate::{
 const ACTIVE_HOURS: i32 = 6;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route(
-        "/households/{id}/cooking",
-        get(read_cooking).put(put_cooking).delete(end_cooking),
-    )
+    Router::new()
+        .route(
+            "/households/{id}/cooking",
+            get(read_cooking).put(put_cooking).delete(end_cooking),
+        )
+        .route("/households/{id}/cooking/remark", post(remark))
 }
 
 text_enum! {
@@ -103,6 +106,11 @@ pub struct Cooking {
     pub step_count: i16,
     pub current: CookingStep,
     pub ingredients: Vec<CookingLine>,
+    /// Notes du cahier du foyer sur l'écran en cours : la phase (et ses gestes) en mode rapide, le geste au pas à
+    /// pas. Lues à la demande (« Alexa, les notes »), jamais d'office.
+    pub step_notes: Vec<Feedback>,
+    /// Notes sur la recette entière.
+    pub recipe_notes: Vec<Feedback>,
     #[serde(with = "time::serde::rfc3339")]
     pub started_at: OffsetDateTime,
     #[serde(with = "time::serde::rfc3339")]
@@ -146,6 +154,33 @@ fn clamp(
         _ => None,
     };
     (phase, step, phase_count, step_count)
+}
+
+/// Les clés de l'écran en cours : celle où va une remarque (le geste au pas à pas, sinon la phase), et toutes celles
+/// dont on lit les notes (en mode rapide, la phase et ses gestes).
+fn screen(
+    recipe: &Recipe,
+    variant: &str,
+    phase: i16,
+    step: Option<i16>,
+) -> (Option<Uuid>, Vec<Uuid>) {
+    let Some(phase) = recipe
+        .variants
+        .iter()
+        .find(|v| v.label == variant)
+        .and_then(|v| v.phases.get(phase as usize))
+    else {
+        return (None, Vec::new());
+    };
+    match step.and_then(|s| phase.steps.get(s as usize)) {
+        Some(step) => (Some(step.key), vec![step.key]),
+        None => (
+            Some(phase.key),
+            std::iter::once(phase.key)
+                .chain(phase.steps.iter().map(|s| s.key))
+                .collect(),
+        ),
+    }
 }
 
 /// La variante nommée si elle existe encore, sinon celle du créneau, sinon celle par défaut (la première).
@@ -243,8 +278,23 @@ async fn view(db: &PgPool, household_id: Uuid, row: CookingRow) -> ApiResult<Coo
             note: l.note.clone(),
         })
         .collect();
+    let (_, keys) = screen(&recipe, &variant, phase, step);
+    let step_notes = recipe
+        .notes
+        .iter()
+        .filter(|n| n.element_key.is_some_and(|k| keys.contains(&k)))
+        .cloned()
+        .collect();
+    let recipe_notes = recipe
+        .notes
+        .iter()
+        .filter(|n| n.element_key.is_none())
+        .cloned()
+        .collect();
     Ok(Cooking {
         variant,
+        step_notes,
+        recipe_notes,
         date,
         meal,
         servings,
@@ -259,6 +309,18 @@ async fn view(db: &PgPool, household_id: Uuid, row: CookingRow) -> ApiResult<Coo
         updated_at: row.updated_at,
         recipe,
     })
+}
+
+async fn active(db: &PgPool, household_id: Uuid) -> ApiResult<Option<CookingRow>> {
+    Ok(sqlx::query_as(
+        "SELECT c.recipe_id, c.variant_label, c.date, c.meal, c.mode, c.phase, c.step, c.started_at, c.updated_at
+         FROM cooking_sessions c
+         WHERE c.household_id = $1 AND c.updated_at > now() - make_interval(hours => $2)",
+    )
+    .bind(household_id)
+    .bind(ACTIVE_HOURS)
+    .fetch_optional(db)
+    .await?)
 }
 
 /// La cuisson en cours ; 204 s'il n'y en a pas (ou plus : 6 h sans nouvelles).
@@ -279,15 +341,7 @@ pub async fn read_cooking(
     Path(id): Path<Uuid>,
 ) -> ApiResult<Response> {
     caller.require(&state.db, id, Scope::Read).await?;
-    let row: Option<CookingRow> = sqlx::query_as(
-        "SELECT c.recipe_id, c.variant_label, c.date, c.meal, c.mode, c.phase, c.step, c.started_at, c.updated_at
-         FROM cooking_sessions c
-         WHERE c.household_id = $1 AND c.updated_at > now() - make_interval(hours => $2)",
-    )
-    .bind(id)
-    .bind(ACTIVE_HOURS)
-    .fetch_optional(&state.db)
-    .await?;
+    let row = active(&state.db, id).await?;
     Ok(match row {
         Some(row) => Json(view(&state.db, id, row).await?).into_response(),
         None => StatusCode::NO_CONTENT.into_response(),
@@ -396,4 +450,75 @@ pub async fn end_cooking(
         state.notify(id, "cooking", None, None);
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Une remarque à la voix (« Alexa, remarque : ça rentre pas dans le Cookeo »).
+#[derive(Deserialize, ToSchema)]
+pub struct RemarkInput {
+    pub text: String,
+}
+
+/// Note du cahier du foyer à l'étape en cours de la cuisson : le geste au pas à pas, sinon la phase. Signée du compte
+/// qui a lié Alexa. 409 `no_cooking` sans cuisson en cours.
+#[utoipa::path(
+    post,
+    path = "/api/v1/households/{id}/cooking/remark",
+    tag = "cuisson",
+    params(("id" = Uuid, Path)),
+    request_body = RemarkInput,
+    responses(
+        (status = 201, body = Feedback),
+        (status = 403, body = ErrorBody),
+        (status = 404, body = ErrorBody),
+        (status = 409, description = "Pas de cuisson en cours", body = ErrorBody),
+        (status = 422, body = ErrorBody),
+    )
+)]
+pub async fn remark(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path(id): Path<Uuid>,
+    Json(input): Json<RemarkInput>,
+) -> ApiResult<(StatusCode, Json<Feedback>)> {
+    caller.require(&state.db, id, Scope::CookingWrite).await?;
+    let text = input.text.trim();
+    if text.is_empty() || text.chars().count() > 2000 {
+        return Err(ApiError::invalid(
+            "La remarque fait entre 1 et 2 000 caractères.",
+        ));
+    }
+    let row = active(&state.db, id).await?.ok_or_else(|| {
+        ApiError::conflict(
+            "no_cooking",
+            "Pas de cuisson en cours : ouvre une recette, la remarque ira à l'étape.",
+        )
+    })?;
+    let recipe_id = row.recipe_id;
+    let cooking = view(&state.db, id, row).await?;
+    let (key, _) = screen(
+        &cooking.recipe,
+        &cooking.variant,
+        cooking.phase,
+        cooking.step,
+    );
+    let author = caller.author(&state.db).await?;
+    let mut conn = state.db.acquire().await?;
+    let note = feedback::insert(
+        &mut conn,
+        NewFeedback {
+            recipe_id,
+            household_id: id,
+            author: &author,
+            element_key: key,
+            kind: FeedbackKind::Comment,
+            visibility: Visibility::Household,
+            status: FeedbackStatus::Open,
+            body: text.to_owned(),
+            changes: None,
+            base_version: cooking.recipe.version,
+        },
+    )
+    .await?;
+    state.notify(id, "cooking", None, None);
+    Ok((StatusCode::CREATED, Json(note)))
 }

@@ -37,7 +37,9 @@ function appel(base, jeton, methode, chemin, corps) {
           }
           if (res.statusCode === 401) return reject(new NonLie('jeton refusé'));
           if (res.statusCode >= 400) {
-            return reject(new Error(`${methode} ${chemin} : ${res.statusCode} ${texte.slice(0, 200)}`));
+            const err = new Error(`${methode} ${chemin} : ${res.statusCode} ${texte.slice(0, 200)}`);
+            err.status = res.statusCode;
+            return reject(err);
           }
           resolve({ status: res.statusCode, body });
         });
@@ -60,6 +62,14 @@ function client(base, jeton) {
     cuisson: (foyer) => get(`/households/${foyer}/cooking`),
     cuisiner: (foyer, place) => appel(base, jeton, 'PUT', `/households/${foyer}/cooking`, place).then((r) => r.body),
     terminer: (foyer) => appel(base, jeton, 'DELETE', `/households/${foyer}/cooking`),
+    /** Une note du cahier à l'étape en cours ; `null` sans cuisson en cours. */
+    remarquer: (foyer, texte) =>
+      appel(base, jeton, 'POST', `/households/${foyer}/cooking/remark`, { text: texte })
+        .then((r) => r.body)
+        .catch((err) => {
+          if (err.status === 409) return null;
+          throw err;
+        }),
   };
 }
 

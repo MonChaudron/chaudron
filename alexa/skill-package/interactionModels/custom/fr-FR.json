@@ -163,6 +163,42 @@
           ]
         },
         {
+          "name": "RemarkIntent",
+          "slots": [
+            {
+              "name": "texte",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "remarque {texte}",
+            "remarque que {texte}",
+            "note {texte}",
+            "note que {texte}",
+            "prends note {texte}",
+            "prends note que {texte}",
+            "j'ai une remarque {texte}",
+            "remarque",
+            "j'ai une remarque"
+          ]
+        },
+        {
+          "name": "ReadNotesIntent",
+          "slots": [],
+          "samples": [
+            "les retours",
+            "lis les retours",
+            "les notes",
+            "lis les notes",
+            "lis-moi les notes",
+            "les remarques",
+            "lis les remarques",
+            "qu'est-ce qu'on a noté",
+            "il y a des notes",
+            "il y a des remarques"
+          ]
+        },
+        {
           "name": "MusicIntent",
           "slots": [
             {

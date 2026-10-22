@@ -241,6 +241,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/cooking/remark": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Note du cahier du foyer à l'étape en cours de la cuisson : le geste au pas à pas, sinon la phase. Signée du compte
+         *     qui a lié Alexa. 409 `no_cooking` sans cuisson en cours.
+         */
+        post: operations["remark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/equipment": {
         parameters: {
             query?: never;
@@ -277,6 +297,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/feedback/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Supprime une note du cahier (tout compte du foyer). */
+        delete: operations["delete_feedback"];
+        options?: never;
+        head?: never;
+        /** Modifie, ferme ou rouvre une note du cahier (tout compte du foyer). */
+        patch: operations["update_feedback"];
         trace?: never;
     };
     "/api/v1/households/{id}/import": {
@@ -496,6 +534,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/ratings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Note un repas (une note par foyer, recette et repas : la dernière remplace la précédente). */
+        put: operations["rate_meal"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/recipes": {
         parameters: {
             query?: never;
@@ -529,6 +584,24 @@ export interface paths {
         put: operations["put_recipe"];
         post?: never;
         delete: operations["delete_recipe"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les notes du cahier du foyer sur cette recette (les ouvertes ; avec `closed`, aussi les fermées). */
+        get: operations["list_feedback"];
+        put?: never;
+        /** Écrit une note dans le cahier du foyer : visible du foyer seul, jamais relue par personne d'autre. */
+        post: operations["create_feedback"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -939,6 +1012,8 @@ export interface components {
             /** Format: int32 */
             phase_count: number;
             recipe: components["schemas"]["Recipe"];
+            /** @description Notes sur la recette entière. */
+            recipe_notes: components["schemas"]["Feedback"][];
             /**
              * Format: int32
              * @description Portions : celles du créneau, sinon les présents au repas (au dîner du jour sans créneau).
@@ -953,6 +1028,11 @@ export interface components {
              * @description Gestes de la phase en cours (0 : la phase n'en a pas).
              */
             step_count: number;
+            /**
+             * @description Notes du cahier du foyer sur l'écran en cours : la phase (et ses gestes) en mode rapide, le geste au pas à
+             *     pas. Lues à la demande (« Alexa, les notes »), jamais d'office.
+             */
+            step_notes: components["schemas"]["Feedback"][];
             /** Format: date-time */
             updated_at: string;
             variant: string;
@@ -1052,6 +1132,58 @@ export interface components {
          * @enum {string}
          */
         ExclusionKind: "allergy" | "dislike";
+        /** @description Un retour sur une recette. */
+        Feedback: {
+            author_name: string;
+            /**
+             * Format: int32
+             * @description Version de la recette sur laquelle il a été écrit.
+             */
+            base_version: number;
+            body: string;
+            /** @description Par champ, l'ancienne et la nouvelle valeur : `{"timer_s": {"from": 720, "to": 840}}`. */
+            changes?: Record<string, never> | null;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: uuid
+             * @description La phase, le geste ou la ligne visés ; nul : la recette entière (ou un élément qui n'existe plus).
+             */
+            element_key?: string | null;
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["FeedbackKind"];
+            status: components["schemas"]["FeedbackStatus"];
+            visibility: components["schemas"]["Visibility"];
+        };
+        /** @description Une note à écrire. */
+        FeedbackInput: {
+            body: string;
+            /** @description Par champ, la nouvelle valeur (« chez nous : 14 min » : `{"timer_s": 840}`). */
+            changes?: Record<string, never> | null;
+            /**
+             * Format: uuid
+             * @description La phase, le geste ou la ligne ; sans : la recette entière.
+             */
+            element_key?: string | null;
+        };
+        /**
+         * @description Sorte de retour.
+         * @enum {string}
+         */
+        FeedbackKind: "comment" | "proposal" | "tried";
+        /**
+         * @description Où en est le retour. Cahier du foyer : `open`, `closed`. Communauté : `pending` (vu du foyer de l'auteur),
+         *     `published`, `applied`, `closed`, `refused`.
+         * @enum {string}
+         */
+        FeedbackStatus: "open" | "closed" | "pending" | "published" | "applied" | "refused";
+        /** @description Ce qu'on change sur une note. */
+        FeedbackUpdate: {
+            body?: string | null;
+            /** @description Fermer (pris en compte, ou plus d'actualité) ou rouvrir. */
+            closed?: boolean | null;
+        };
         /** @description Aliment de la table Ciqual, apports pour 100 g (nuls si non renseignés). */
         Food: {
             /** Format: float */
@@ -1407,6 +1539,7 @@ export interface components {
              * @description Jours d'avance d'une phase faite avant (1 : la veille).
              */
             prep_days_before: number;
+            rating?: components["schemas"]["Rating"] | null;
             recipe: components["schemas"]["RecipeRef"];
             /**
              * @description Multiplicateur de chaque rôle d'ingrédient : la somme des barèmes de ceux qui mangent (au prorata quand un
@@ -1590,12 +1723,44 @@ export interface components {
             client_id?: string | null;
             id: components["schemas"]["ProviderId"];
         };
+        /**
+         * @description « Comment c'était ? »
+         * @enum {string}
+         */
+        Rating: "top" | "bof" | "flop";
+        /**
+         * @description Combien de fois la recette a été notée, par note (le foyer pour une recette du foyer, toute l'instance pour une
+         *     recette de la communauté).
+         */
+        RatingCounts: {
+            /** Format: int64 */
+            bof: number;
+            /** Format: int64 */
+            flop: number;
+            /** Format: int64 */
+            top: number;
+        };
+        /** @description « Comment c'était ? » après un repas. */
+        RatingInput: {
+            /** Format: date */
+            date: string;
+            meal: components["schemas"]["Meal"];
+            rating: components["schemas"]["Rating"];
+            /** @description Slug de la recette. */
+            recipe: string;
+            /** @description Un mot, gardé comme note du cahier sur la recette. */
+            word?: string | null;
+        };
         /** @description Recette complète. */
         Recipe: {
             /** @description Recette de la communauté (modifiée par l'admin de l'instance), sinon du foyer. */
             community: boolean;
             description: string;
             ingredients: components["schemas"]["RecipeLine"][];
+            /** @description Les notes ouvertes du cahier du foyer qui lit la recette. */
+            notes: components["schemas"]["Feedback"][];
+            /** @description « Comment c'était ? », compté. */
+            ratings: components["schemas"]["RatingCounts"];
             /** @description Retirée du catalogue de la communauté : gardée par les menus qui l'utilisent. */
             retired: boolean;
             season_months: number[];
@@ -1682,6 +1847,10 @@ export interface components {
             code: string;
             message: string;
             slug: string;
+        };
+        /** @description Une remarque à la voix (« Alexa, remarque : ça rentre pas dans le Cookeo »). */
+        RemarkInput: {
+            text: string;
         };
         /**
          * @description Rôle d'un compte dans un foyer.
@@ -1969,6 +2138,11 @@ export interface components {
             /** Format: int32 */
             number: number;
         };
+        /**
+         * @description Qui voit le retour.
+         * @enum {string}
+         */
+        Visibility: "household" | "community";
         Warning: {
             /**
              * Format: date
@@ -2619,6 +2793,64 @@ export interface operations {
             };
         };
     };
+    remark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemarkInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Pas de cuisson en cours */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     household_equipment: {
         parameters: {
             query?: never;
@@ -2711,6 +2943,76 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    delete_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    update_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3426,6 +3728,45 @@ export interface operations {
             };
         };
     };
+    rate_meal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RatingInput"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     list_recipes: {
         parameters: {
             query?: {
@@ -3598,6 +3939,81 @@ export interface operations {
             };
             /** @description Prévue dans un menu */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_feedback: {
+        parameters: {
+            query?: {
+                /** @description Avec les notes fermées. */
+                closed?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    create_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

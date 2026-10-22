@@ -49,6 +49,8 @@ function vueEtape(c) {
       : `Étape ${c.phase + 1} / ${c.phase_count}`,
     texte: c.current.text,
     minuteur: c.current.timer_s ? `⏱ ${Math.round(c.current.timer_s / 60)} min` : '',
+    // Un badge discret : les notes ne se lisent que si on les demande.
+    notes: (c.step_notes || []).length ? `${c.step_notes.length} note${c.step_notes.length > 1 ? 's' : ''}` : '',
     mode: pasAPas ? 'Pas à pas' : 'Rapide',
     etapes: variante.phases.map((phase, i) => ({
       n: i + 1,

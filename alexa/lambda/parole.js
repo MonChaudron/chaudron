@@ -191,6 +191,41 @@ function direEtape(c, prefixe = '') {
   return `${prefixe}${position} ${texte}${minuteur}${fin}`;
 }
 
+/** Où on en est, pour dire où va une remarque : « à l’étape 2 », « au geste 1 de la viande ». */
+function ouOnEst(c) {
+  if (c.mode === 'guided' && c.step !== null) {
+    return `au geste ${c.step + 1} de ${c.current.title.charAt(0).toLowerCase()}${c.current.title.slice(1)}`;
+  }
+  return `à l’étape ${c.phase + 1}`;
+}
+
+const NOMBRES = ['aucune', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
+const nombreF = (n) => (n < NOMBRES.length ? NOMBRES[n] : String(n));
+const phrase = (texte) => (/[.!?…]$/.test(texte.trim()) ? texte.trim() : `${texte.trim()}.`);
+
+/**
+ * Les notes du cahier, à la demande (« Alexa, les notes ») : trois au plus sur l'étape à l'écran, puis celles de la
+ * recette entière.
+ */
+function direNotes(c) {
+  const etape = c.step_notes || [];
+  const recette = c.recipe_notes || [];
+  if (!etape.length && !recette.length) return 'Aucune note sur cette recette.';
+  const n = etape.length;
+  let texte = n
+    ? `${nombreF(n).charAt(0).toUpperCase()}${nombreF(n).slice(1)} note${n > 1 ? 's' : ''} sur cette étape. ${etape
+        .slice(0, 3)
+        .map((note) => phrase(note.body))
+        .join(' Et : ')}`
+    : 'Rien sur cette étape.';
+  if (n > 3) {
+    const reste = n - 3;
+    return `${texte} Et ${nombreF(reste)} autre${reste > 1 ? 's' : ''}, sur le téléphone.`;
+  }
+  if (recette.length) texte += ` Sur la recette : ${recette.slice(0, 2).map((note) => phrase(note.body)).join(' Et : ')}`;
+  return texte;
+}
+
 /** Les ingrédients, dits. */
 function direIngredients(lignes) {
   return lignes
@@ -238,6 +273,8 @@ module.exports = {
   estDerniere,
   direEtape,
   direIngredients,
+  direNotes,
+  ouOnEst,
   direService,
   ssml,
 };

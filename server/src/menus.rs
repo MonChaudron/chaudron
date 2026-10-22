@@ -20,6 +20,7 @@ use crate::{
     AppState,
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
+    feedback::Rating,
     members::{self, Member, Portions},
     recipes::{self, Recipe},
     types::{Aisle, ExclusionKind, IngredientState, Meal, Scope, Unit},
@@ -311,6 +312,8 @@ pub struct MenuSlot {
     pub note: Option<String>,
     /// Ingrédients congelés pour ce plat : à sortir la veille.
     pub thaw: Vec<ThawItem>,
+    /// « Comment c'était ? », une fois le repas noté.
+    pub rating: Option<Rating>,
 }
 
 crate::types::text_enum! {
@@ -492,6 +495,8 @@ struct Context {
     owned: HashSet<String>,
     exclusive: HashSet<String>,
     recipes: HashMap<Uuid, RecipeBrief>,
+    /// Repas notés : (recette, jour, repas).
+    ratings: HashMap<(Uuid, Date, Meal), Rating>,
 }
 
 async fn context(db: &PgPool, household_id: Uuid, recipe_ids: &[Uuid]) -> ApiResult<Context> {
@@ -579,11 +584,27 @@ async fn context(db: &PgPool, household_id: Uuid, recipe_ids: &[Uuid]) -> ApiRes
             });
         }
     }
+    let ratings = sqlx::query_as::<_, (Uuid, Date, String, String)>(
+        "SELECT recipe_id, date, meal, rating FROM meal_ratings WHERE household_id = $1 AND recipe_id = ANY($2)",
+    )
+    .bind(household_id)
+    .bind(recipe_ids)
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .filter_map(|(recipe, date, meal, rating)| {
+        Some((
+            (recipe, date, Meal::try_from(meal).ok()?),
+            Rating::try_from(rating).ok()?,
+        ))
+    })
+    .collect();
     Ok(Context {
         members,
         owned,
         exclusive,
         recipes,
+        ratings,
     })
 }
 
@@ -812,6 +833,10 @@ fn slot_view(row: &SlotRow, week_start: Day, ctx: &Context) -> MenuSlot {
                     .unwrap_or_else(|| code.clone()),
             })
             .collect(),
+        rating: ctx
+            .ratings
+            .get(&(row.recipe_id, row.date, row.meal))
+            .copied(),
     }
 }
 

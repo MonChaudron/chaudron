@@ -364,3 +364,31 @@ async fn read(response: axum::response::Response) -> Response {
         json,
     }
 }
+
+/// Lie Alexa au foyer comme le ferait Amazon (écran « Autoriser », puis échange du code) : le jeton d'accès.
+pub async fn link_alexa(app: &TestApp, user: &mut Browser, home: Uuid) -> String {
+    let response = user
+        .post(
+            "/api/v1/oauth/authorize",
+            serde_json::json!({"client_id": ALEXA_ID, "redirect_uri": ALEXA_REDIRECT, "state": "s", "household_id": home}),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.text);
+    let target = response.json["redirect_to"].as_str().unwrap();
+    let (_, query) = target.split_once('?').unwrap();
+    let params: Vec<(String, String)> = serde_urlencoded::from_str(query).unwrap();
+    let code = params.iter().find(|(k, _)| k == "code").unwrap().1.clone();
+    let token = app
+        .form(
+            "/api/v1/oauth/token",
+            &[
+                ("grant_type", "authorization_code"),
+                ("code", &code),
+                ("redirect_uri", ALEXA_REDIRECT),
+            ],
+            Some((ALEXA_ID, ALEXA_SECRET)),
+        )
+        .await;
+    assert_eq!(token.status, StatusCode::OK, "{}", token.text);
+    token.json["access_token"].as_str().unwrap().to_owned()
+}

@@ -1,4 +1,4 @@
-import type { Member, MenuSlot, Recipe, RecipeLine, Variant, Warning } from '@chaudron/api';
+import type { Feedback, Member, MenuSlot, Recipe, RecipeLine, Variant, Warning } from '@chaudron/api';
 import {
   dayLabel,
   type Eater,
@@ -26,8 +26,9 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useCached } from '../../lib/useCached';
-import { Back, Body, Card, Clamped, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
+import { Back, Body, Button, Card, Clamped, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
+import { changeText, NoteForm, Notes, RateMeal } from '../../ui/notes';
 
 export default function RecipeScreen() {
   const { slug, slot, menu } = useLocalSearchParams<{ slug: string; slot?: string; menu?: string }>();
@@ -99,12 +100,31 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
         <Meta recipe={data} />
       </Stack>
       {slot ? <Planned slot={slot} warnings={slotWarnings} /> : null}
+      {slot && slot.date <= todayIso() ? (
+        <Card>
+          <Title level={2}>Comment c’était ?</Title>
+          <RateMeal
+            householdId={householdId}
+            slug={data.slug}
+            date={slot.date}
+            meal={slot.meal}
+            current={slot.rating}
+            onDone={() => {
+              void planned.reload();
+              void recipe.reload();
+            }}
+          />
+        </Card>
+      ) : null}
 
       <Variants recipe={data} variant={variant} base={base} onChoose={setChosen} />
 
       <Columns weights={[2, 3]}>
-        <Ingredients lines={data.ingredients} members={members.data} slot={slot} />
-        <Steps variant={variant} />
+        <Stack gap={space[5]}>
+          <Ingredients lines={data.ingredients} members={members.data} slot={slot} />
+          <Cahier householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
+        </Stack>
+        <Steps variant={variant} householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
       </Columns>
     </Screen>
   );
@@ -112,7 +132,9 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
 
 function Meta({ recipe }: { recipe: Recipe }) {
   const season = seasonText(recipe.season_months);
-  if (!recipe.community && !recipe.tags.length && !season && !recipe.source) return null;
+  const { top, bof, flop } = recipe.ratings;
+  const rated = [top ? `${top} Top` : null, bof ? `${bof} Bof` : null, flop ? `${flop} Raté` : null].filter(Boolean).join(' · ');
+  if (!recipe.community && !recipe.tags.length && !season && !recipe.source && !rated) return null;
   return (
     <Row gap={space[3]}>
       {recipe.community ? <Tag tone="strong" icon="people">Communauté</Tag> : null}
@@ -122,6 +144,7 @@ function Meta({ recipe }: { recipe: Recipe }) {
       ))}
       {season ? <Body tone="muted" size={15}>De saison {season}</Body> : null}
       {recipe.source ? <Body tone="muted" size={15}>{recipe.source}</Body> : null}
+      {rated ? <Body tone="muted" size={15}>{rated}</Body> : null}
     </Row>
   );
 }
@@ -247,10 +270,47 @@ function IngredientRow({ line, eaters, slot, detail, last }: { line: RecipeLine;
   );
 }
 
-/** Le déroulé : les phases du mode rapide, numérotées, et leurs gestes à déplier. */
-function Steps({ variant }: { variant: Variant }) {
+/** Le cahier du foyer : les notes sur la recette entière (celles d'une étape sont sous l'étape). */
+function Cahier({ householdId, recipe, onChange }: { householdId: string; recipe: Recipe; onChange: () => void }) {
+  const [writing, setWriting] = useState(false);
+  const notes = recipe.notes.filter((n) => !n.element_key);
+  return (
+    <Card>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Title level={2}>Le cahier du foyer</Title>
+        {!writing ? <Button kind="quiet" label="Noter" onPress={() => setWriting(true)} /> : null}
+      </Row>
+      {!notes.length && !writing ? (
+        <Body tone="muted" size={15}>
+          Vos notes sur la recette, pour le foyer seulement. Sur une étape : « Noter » sous l’étape, ou « Alexa, remarque » en
+          cuisinant.
+        </Body>
+      ) : null}
+      <Notes notes={notes} householdId={householdId} onChange={onChange} />
+      {writing ? (
+        <NoteForm
+          householdId={householdId}
+          slug={recipe.slug}
+          onDone={() => {
+            setWriting(false);
+            onChange();
+          }}
+        />
+      ) : null}
+    </Card>
+  );
+}
+
+/** Notes d'une phase et de ses gestes. */
+function notesOf(notes: Feedback[], keys: string[]): Feedback[] {
+  return notes.filter((n) => n.element_key && keys.includes(n.element_key));
+}
+
+/** Le déroulé : les phases du mode rapide, numérotées, et leurs gestes à déplier ; les notes du cahier sous l'étape. */
+function Steps({ variant, householdId, recipe, onChange }: { variant: Variant; householdId: string; recipe: Recipe; onChange: () => void }) {
   const { palette, fonts, weights } = useTheme();
   const [open, setOpen] = useState<number | null>(null);
+  const [writing, setWriting] = useState<string | null>(null);
   return (
     <Card>
       <Title level={2}>Déroulé</Title>
@@ -263,8 +323,33 @@ function Steps({ variant }: { variant: Variant }) {
                 <Text style={{ fontFamily: fonts.title, fontWeight: weights.title, fontSize: 19, lineHeight: 25, color: palette.text }}>{phase.title}</Text>
                 {phase.day_offset < 0 ? <Tag>{phase.day_offset === -1 ? 'La veille' : `${-phase.day_offset} jours avant`}</Tag> : null}
                 {phase.timer_s ? <Tag>{formatDuration(Math.round(phase.timer_s / 60))}</Tag> : null}
+                {notesOf(recipe.notes, [phase.key])
+                  .map((n) => changeText(n.changes))
+                  .filter(Boolean)
+                  .map((c) => (
+                    <Tag key={c} tone="warn" icon="note">
+                      {c}
+                    </Tag>
+                  ))}
               </Row>
               <Body size={17}>{phase.text}</Body>
+              <Notes notes={notesOf(recipe.notes, [phase.key, ...phase.steps.map((s) => s.key)])} householdId={householdId} onChange={onChange} />
+              {writing === phase.key ? (
+                <NoteForm
+                  householdId={householdId}
+                  slug={recipe.slug}
+                  elementKey={phase.key}
+                  timer={!!phase.timer_s}
+                  onDone={() => {
+                    setWriting(null);
+                    onChange();
+                  }}
+                />
+              ) : (
+                <Pressable onPress={() => setWriting(phase.key)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: space[1] }}>
+                  <Body tone="muted" size={15} style={{ textDecorationLine: 'underline' }}>Noter sur cette étape</Body>
+                </Pressable>
+              )}
               {phase.steps.length ? (
                 <Pressable onPress={() => setOpen(open === i ? null : i)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: space[1] }}>
                   <Body tone="muted" size={15} style={{ textDecorationLine: 'underline' }}>

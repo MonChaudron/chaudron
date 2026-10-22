@@ -8,6 +8,7 @@ pub mod cooking;
 pub mod crypto;
 pub mod error;
 pub mod events;
+pub mod feedback;
 pub mod households;
 pub mod http;
 pub mod ingredients;
@@ -138,6 +139,12 @@ impl AppState {
         cooking::read_cooking,
         cooking::put_cooking,
         cooking::end_cooking,
+        cooking::remark,
+        feedback::list_feedback,
+        feedback::create_feedback,
+        feedback::update_feedback,
+        feedback::delete_feedback,
+        feedback::rate_meal,
         events::events,
         oauth::client_info,
         oauth::authorize,
@@ -238,6 +245,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(menus::router())
         .merge(shopping::router())
         .merge(cooking::router())
+        .merge(feedback::router())
         .merge(events::router())
         .merge(tokens::router())
         .merge(oauth::router())

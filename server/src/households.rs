@@ -270,10 +270,19 @@ async fn remove(
     Path(id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
     require_owner(&state.db, id, user_id).await?;
+    let mut tx = state.db.begin().await?;
+    // Le cahier du foyer et ses retours encore en attente partent avec lui ; ses retours publiés restent.
+    sqlx::query(
+        "DELETE FROM recipe_feedback WHERE household_id = $1 AND (visibility = 'household' OR status = 'pending')",
+    )
+    .bind(id)
+    .execute(&mut *tx)
+    .await?;
     sqlx::query("DELETE FROM households WHERE id = $1")
         .bind(id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

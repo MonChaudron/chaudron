@@ -820,6 +820,84 @@
         }
       }
     },
+    "/api/v1/households/{id}/cooking/remark": {
+      "post": {
+        "tags": [
+          "cuisson"
+        ],
+        "summary": "Note du cahier du foyer à l'étape en cours de la cuisson : le geste au pas à pas, sinon la phase. Signée du compte\nqui a lié Alexa. 409 `no_cooking` sans cuisson en cours.",
+        "operationId": "remark",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemarkInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pas de cuisson en cours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/equipment": {
       "get": {
         "tags": [
@@ -943,6 +1021,113 @@
             }
           },
           "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/feedback/{feedback_id}": {
+      "delete": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Supprime une note du cahier (tout compte du foyer).",
+        "operationId": "delete_feedback",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Modifie, ferme ou rouvre une note du cahier (tout compte du foyer).",
+        "operationId": "update_feedback",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1975,6 +2160,57 @@
         }
       }
     },
+    "/api/v1/households/{id}/ratings": {
+      "put": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Note un repas (une note par foyer, recette et repas : la dernière remplace la précédente).",
+        "operationId": "rate_meal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RatingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes": {
       "get": {
         "tags": [
@@ -2239,6 +2475,131 @@
           },
           "409": {
             "description": "Prévue dans un menu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/feedback": {
+      "get": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Les notes du cahier du foyer sur cette recette (les ouvertes ; avec `closed`, aussi les fermées).",
+        "operationId": "list_feedback",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "closed",
+            "in": "query",
+            "description": "Avec les notes fermées.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Feedback"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Écrit une note dans le cahier du foyer : visible du foyer seul, jamais relue par personne d'autre.",
+        "operationId": "create_feedback",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3563,6 +3924,8 @@
           "step_count",
           "current",
           "ingredients",
+          "step_notes",
+          "recipe_notes",
           "started_at",
           "updated_at"
         ],
@@ -3607,6 +3970,13 @@
           "recipe": {
             "$ref": "#/components/schemas/Recipe"
           },
+          "recipe_notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Feedback"
+            },
+            "description": "Notes sur la recette entière."
+          },
           "servings": {
             "type": "integer",
             "format": "int32",
@@ -3627,6 +3997,13 @@
             "type": "integer",
             "format": "int32",
             "description": "Gestes de la phase en cours (0 : la phase n'en a pas)."
+          },
+          "step_notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Feedback"
+            },
+            "description": "Notes du cahier du foyer sur l'écran en cours : la phase (et ses gestes) en mode rapide, le geste au pas à\npas. Lues à la demande (« Alexa, les notes »), jamais d'office."
           },
           "updated_at": {
             "type": "string",
@@ -3895,6 +4272,132 @@
           "allergy",
           "dislike"
         ]
+      },
+      "Feedback": {
+        "type": "object",
+        "description": "Un retour sur une recette.",
+        "required": [
+          "id",
+          "kind",
+          "visibility",
+          "status",
+          "body",
+          "author_name",
+          "base_version",
+          "created_at"
+        ],
+        "properties": {
+          "author_name": {
+            "type": "string"
+          },
+          "base_version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Version de la recette sur laquelle il a été écrit."
+          },
+          "body": {
+            "type": "string"
+          },
+          "changes": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Par champ, l'ancienne et la nouvelle valeur : `{\"timer_s\": {\"from\": 720, \"to\": 840}}`."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "element_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "La phase, le geste ou la ligne visés ; nul : la recette entière (ou un élément qui n'existe plus)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FeedbackKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FeedbackStatus"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        }
+      },
+      "FeedbackInput": {
+        "type": "object",
+        "description": "Une note à écrire.",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "changes": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Par champ, la nouvelle valeur (« chez nous : 14 min » : `{\"timer_s\": 840}`)."
+          },
+          "element_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "La phase, le geste ou la ligne ; sans : la recette entière."
+          }
+        }
+      },
+      "FeedbackKind": {
+        "type": "string",
+        "description": "Sorte de retour.",
+        "enum": [
+          "comment",
+          "proposal",
+          "tried"
+        ]
+      },
+      "FeedbackStatus": {
+        "type": "string",
+        "description": "Où en est le retour. Cahier du foyer : `open`, `closed`. Communauté : `pending` (vu du foyer de l'auteur),\n`published`, `applied`, `closed`, `refused`.",
+        "enum": [
+          "open",
+          "closed",
+          "pending",
+          "published",
+          "applied",
+          "refused"
+        ]
+      },
+      "FeedbackUpdate": {
+        "type": "object",
+        "description": "Ce qu'on change sur une note.",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "closed": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Fermer (pris en compte, ou plus d'actualité) ou rouvrir."
+          }
+        }
       },
       "Food": {
         "type": "object",
@@ -4953,6 +5456,17 @@
             "format": "int32",
             "description": "Jours d'avance d'une phase faite avant (1 : la veille)."
           },
+          "rating": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Rating",
+                "description": "« Comment c'était ? », une fois le repas noté."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "recipe": {
             "$ref": "#/components/schemas/RecipeRef"
           },
@@ -5464,6 +5978,71 @@
           }
         }
       },
+      "Rating": {
+        "type": "string",
+        "description": "« Comment c'était ? »",
+        "enum": [
+          "top",
+          "bof",
+          "flop"
+        ]
+      },
+      "RatingCounts": {
+        "type": "object",
+        "description": "Combien de fois la recette a été notée, par note (le foyer pour une recette du foyer, toute l'instance pour une\nrecette de la communauté).",
+        "required": [
+          "top",
+          "bof",
+          "flop"
+        ],
+        "properties": {
+          "bof": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "flop": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "top": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "RatingInput": {
+        "type": "object",
+        "description": "« Comment c'était ? » après un repas.",
+        "required": [
+          "recipe",
+          "date",
+          "meal",
+          "rating"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "meal": {
+            "$ref": "#/components/schemas/Meal"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "recipe": {
+            "type": "string",
+            "description": "Slug de la recette."
+          },
+          "word": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Un mot, gardé comme note du cahier sur la recette."
+          }
+        }
+      },
       "Recipe": {
         "type": "object",
         "description": "Recette complète.",
@@ -5478,6 +6057,8 @@
           "season_months",
           "ingredients",
           "variants",
+          "notes",
+          "ratings",
           "updated_at"
         ],
         "properties": {
@@ -5493,6 +6074,17 @@
             "items": {
               "$ref": "#/components/schemas/RecipeLine"
             }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Feedback"
+            },
+            "description": "Les notes ouvertes du cahier du foyer qui lit la recette."
+          },
+          "ratings": {
+            "$ref": "#/components/schemas/RatingCounts",
+            "description": "« Comment c'était ? », compté."
           },
           "retired": {
             "type": "boolean",
@@ -5776,6 +6368,18 @@
             "type": "string"
           },
           "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "RemarkInput": {
+        "type": "object",
+        "description": "Une remarque à la voix (« Alexa, remarque : ça rentre pas dans le Cookeo »).",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
             "type": "string"
           }
         }
@@ -6609,6 +7213,14 @@
             "format": "int32"
           }
         }
+      },
+      "Visibility": {
+        "type": "string",
+        "description": "Qui voit le retour.",
+        "enum": [
+          "household",
+          "community"
+        ]
       },
       "Warning": {
         "type": "object",

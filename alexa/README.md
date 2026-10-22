@@ -21,6 +21,7 @@ Le code tourne sur Node 16 (Lambda Alexa-hosted) : `https` plutôt que `fetch`.
 | Recette | « on commence », « les ingrédients », « comment je sers », « je n'ai pas le Cookeo » |
 | Cuisine | « Alexa, suivant / précédent / répète / étape 3 », « détaille », « accélère », « lance le minuteur » |
 | Musique | « mets la radio », « Alexa, pause » : la skill rend la main à Alexa ; « Alexa, ouvre le chaudron » pour reprendre |
+| Cahier | « Alexa, remarque : ça déborde » : une note privée du foyer, à l'étape en cours ; « Alexa, les notes » les lit (trois au plus). Jamais lues d'office : un badge « 2 notes » à l'écran |
 
 L'écran est tactile : plats du menu, *Commencer*, *Suivante*, *Précédente*, liste des étapes.
 

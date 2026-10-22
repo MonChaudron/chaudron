@@ -322,6 +322,32 @@ function creer(outils = { client: chaudron.client, maintenant: () => new Date() 
     },
   );
 
+  /** « Alexa, remarque : ça déborde » : une note du cahier du foyer, à l'étape en cours. Jamais une proposition. */
+  const Remarque = avec(
+    (hi) => intention(hi, 'RemarkIntent'),
+    async (hi, f) => {
+      const texte = (Alexa.getSlotValue(hi.requestEnvelope, 'texte') || '').trim();
+      if (!texte) {
+        const c = await f.api.cuisson(f.id);
+        return repondre(hi, 'Dis par exemple : Alexa, remarque : ça déborde.', c ? e.vueEtape(c) : null);
+      }
+      const note = await f.api.remarquer(f.id, texte);
+      if (!note) return repondre(hi, 'Ouvre d’abord une recette, et je note à l’étape où on en est.', null);
+      const c = await f.api.cuisson(f.id);
+      return repondre(hi, `C’est noté dans le cahier, ${p.ouOnEst(c)}.`, e.vueEtape(c));
+    },
+  );
+
+  /** « Alexa, les notes » : lues à la demande, jamais d'office. */
+  const LireNotes = avec(
+    (hi) => intention(hi, 'ReadNotesIntent'),
+    async (hi, f) => {
+      const { c, sans } = await enCours(hi, f);
+      if (!c) return sans;
+      return repondre(hi, p.direNotes(c), e.vueEtape(c));
+    },
+  );
+
   /**
    * Une skill ne peut ni piloter le lecteur d'Alexa ni lui relayer une commande : on rend la main (session fermée),
    * la place reste sur le serveur. « Alexa, pause » est traité pareil : rien à mettre en pause dans une recette.
@@ -414,7 +440,7 @@ function creer(outils = { client: chaudron.client, maintenant: () => new Date() 
     handle: (hi) =>
       repondre(
         hi,
-        'Dis : le menu, ou le nom d’un plat, ou : celle de ce soir. Pendant la recette : Alexa, suivant. Alexa, précédent. Alexa, répète. Alexa, détaille. Alexa, les ingrédients.',
+        'Dis : le menu, ou le nom d’un plat, ou : celle de ce soir. Pendant la recette : Alexa, suivant. Alexa, précédent. Alexa, répète. Alexa, détaille. Alexa, les ingrédients. Alexa, remarque, suivi de ce que tu veux noter. Alexa, les notes.',
         null,
         { question: true },
       ),
@@ -468,6 +494,8 @@ function creer(outils = { client: chaudron.client, maintenant: () => new Date() 
       Ingredients,
       Service,
       ChangerVariante,
+      Remarque,
+      LireNotes,
       Musique,
       LancerMinuteur,
       PermissionMinuteur,

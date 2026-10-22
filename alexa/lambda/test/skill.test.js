@@ -61,7 +61,8 @@ const creneau = (date, recette, variant, servings, eaters) => ({
 
 /** Fausse API : l'agenda du 18 octobre, et `/cooking` qui ramène la place dans les bornes, comme le serveur. */
 function fausseApi({ lie = true } = {}) {
-  const etat = { cuisson: null, appels: [] };
+  // Notes du cahier : `{ body, phase, step }` (step nul : la phase), ou `{ body }` sur la recette entière.
+  const etat = { cuisson: null, appels: [], notes: [] };
   const agenda = {
     slots: [
       creneau('2026-10-18', chili, 'Cocotte', 6, [
@@ -96,6 +97,10 @@ function fausseApi({ lie = true } = {}) {
         ? { title: p.title, text: g.text, spoken_text: g.spoken_text || null, timer_s: g.timer_s || null }
         : { title: p.title, text: p.text, spoken_text: p.spoken_text || null, timer_s: p.timer_s || null },
       ingredients: recette.ingredients.map((l) => ({ ...l, qty: l.per_batch ? l.qty : l.qty * 6 })),
+      step_notes: etat.notes
+        .filter((n) => n.phase === phase && (step === null || n.step === step))
+        .map((n) => ({ body: n.body })),
+      recipe_notes: etat.notes.filter((n) => n.phase === undefined).map((n) => ({ body: n.body })),
     };
   };
   const client = (base, jeton) => {
@@ -125,6 +130,12 @@ function fausseApi({ lie = true } = {}) {
       }),
       terminer: garde(function terminer() {
         etat.cuisson = null;
+      }),
+      remarquer: garde(function remarquer(foyer, texte) {
+        if (!etat.cuisson) return null;
+        const note = { body: texte, phase: etat.cuisson.phase, step: etat.cuisson.step };
+        etat.notes.push(note);
+        return { body: texte };
       }),
     };
   };
@@ -311,4 +322,71 @@ test('sans écran : on garde le micro ouvert', async () => {
   const r = await conversation(fausseApi(), { ecran: false }).lancer();
   assert.equal(r.vue, undefined);
   assert.equal(r.micro, true);
+});
+
+test('« Alexa, remarque » : dans le cahier, à l’étape en cours', async () => {
+  const api = fausseApi();
+  const c = conversation(api);
+  await c.lancer();
+  await c.dire('StartCookingIntent');
+  await c.dire('AMAZON.NextIntent');
+  const r = await c.dire('RemarkIntent', { texte: 'ça déborde, moins de bouillon' });
+  assert.match(r.texte, /^C’est noté dans le cahier, à l’étape 2\./);
+  assert.deepEqual(api.etat.notes, [{ body: 'ça déborde, moins de bouillon', phase: 1, step: null }]);
+  assert.equal(r.vue.notes, '1 note');
+  assert.equal(r.fin, undefined);
+
+  await c.dire('GuidedModeIntent');
+  const geste = await c.dire('RemarkIntent', { texte: 'feu moins vif' });
+  assert.match(geste.texte, /au geste 1 de la viande/);
+});
+
+test('remarque sans cuisson, ou sans texte', async () => {
+  const api = fausseApi();
+  const c = conversation(api);
+  await c.lancer();
+  const sans = await c.dire('RemarkIntent', { texte: 'trop salé' });
+  assert.match(sans.texte, /Ouvre d’abord une recette/);
+  assert.deepEqual(api.etat.notes, []);
+  await c.dire('StartCookingIntent');
+  const vide = await c.dire('RemarkIntent');
+  assert.match(vide.texte, /Dis par exemple : Alexa, remarque : ça déborde/);
+});
+
+test('les notes : un badge à l’écran, lues seulement quand on les demande', async () => {
+  const api = fausseApi();
+  api.etat.notes.push(
+    { body: 'Chez nous : 14 minutes.', phase: 0, step: null },
+    { body: 'Émincer plus fin.', phase: 0, step: null },
+    { body: 'Les enfants adorent.' },
+  );
+  const c = conversation(api);
+  await c.lancer();
+  const etape = await c.dire('StartCookingIntent');
+  assert.equal(etape.vue.notes, '2 notes');
+  for (const r of [etape, await c.dire('AMAZON.RepeatIntent'), await c.lancer()]) {
+    assert.doesNotMatch(r.texte, /14 minutes|plus fin|adorent/, 'jamais d’office');
+  }
+  const lues = await c.dire('ReadNotesIntent');
+  assert.equal(lues.texte, 'Deux notes sur cette étape. Chez nous : 14 minutes. Et : Émincer plus fin. Sur la recette : Les enfants adorent.');
+
+  await c.dire('AMAZON.NextIntent');
+  const ailleurs = await c.dire('ReadNotesIntent');
+  assert.equal(ailleurs.texte, 'Rien sur cette étape. Sur la recette : Les enfants adorent.');
+  assert.equal(ailleurs.vue.notes, '');
+});
+
+test('les notes : trois au plus, le reste sur le téléphone', async () => {
+  const api = fausseApi();
+  for (const body of ['Un.', 'Deux.', 'Trois.', 'Quatre.', 'Cinq.']) api.etat.notes.push({ body, phase: 0, step: null });
+  const c = conversation(api);
+  await c.lancer();
+  await c.dire('StartCookingIntent');
+  const r = await c.dire('ReadNotesIntent');
+  assert.equal(r.texte, 'Cinq notes sur cette étape. Un. Et : Deux. Et : Trois. Et deux autres, sur le téléphone.');
+  const rien = fausseApi();
+  const c2 = conversation(rien);
+  await c2.lancer();
+  await c2.dire('StartCookingIntent');
+  assert.equal((await c2.dire('ReadNotesIntent')).texte, 'Aucune note sur cette recette.');
 });

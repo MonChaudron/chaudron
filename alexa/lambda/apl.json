@@ -326,6 +326,14 @@
                         "fontWeight": "bold",
                         "color": "#DAF76C",
                         "spacing": 24
+                      },
+                      {
+                        "type": "Text",
+                        "when": "${donnees.d.notes != ''}",
+                        "text": "${donnees.d.notes}",
+                        "fontSize": 22,
+                        "color": "#AEB78F",
+                        "spacing": 24
                       }
                     ]
                   },
