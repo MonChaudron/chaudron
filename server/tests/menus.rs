@@ -739,6 +739,8 @@ async fn importer_un_menu(db: PgPool) {
             "recipes_created": ["tajine"],
             "recipes_updated": [],
             "recipe_warnings": [],
+            // Le tajine du lot a les ingrédients du curry : signalé, rien de plus.
+            "similar": [{"slug": "tajine", "similar_to": ["curry"]}],
             "menu_imported": true,
             "warnings": response.json["warnings"],
         })

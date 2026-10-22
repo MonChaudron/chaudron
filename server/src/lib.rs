@@ -9,6 +9,7 @@ pub mod cooking;
 pub mod crypto;
 pub mod error;
 pub mod events;
+pub mod families;
 pub mod feedback;
 pub mod households;
 pub mod http;
@@ -19,6 +20,7 @@ pub mod notifications;
 pub mod oauth;
 pub mod recipes;
 pub mod shopping;
+pub mod similar;
 pub mod text;
 pub mod tokens;
 pub mod types;
@@ -155,6 +157,10 @@ impl AppState {
         feedback::close,
         feedback::refuse,
         community::propose_changes,
+        families::similar_recipes,
+        families::join_family,
+        families::leave_family,
+        families::prefer,
         community::submit_recipe,
         community::copy_recipe,
         community::take_upstream,
@@ -266,6 +272,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(cooking::router())
         .merge(feedback::router())
         .merge(community::router())
+        .merge(families::router())
         .merge(notifications::router())
         .merge(events::router())
         .merge(tokens::router())

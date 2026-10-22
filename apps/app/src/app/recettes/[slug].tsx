@@ -30,6 +30,7 @@ import { Back, Body, Button, Card, Clamped, Columns, ErrorText, LinkButton, Load
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 import { CommunityCard } from '../../ui/community';
 import { Discussion, ProposalForm } from '../../ui/discussion';
+import { FamilyCard } from '../../ui/similar';
 import { changeText, NoteForm, Notes, RateMeal } from '../../ui/notes';
 
 export default function RecipeScreen() {
@@ -120,6 +121,7 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
       ) : null}
 
       <Variants recipe={data} variant={variant} base={base} onChoose={setChosen} />
+      <FamilyCard householdId={householdId} recipe={data} editable={!data.community || !!me?.instance_admin} onChange={() => void recipe.reload()} />
 
       <Columns weights={[2, 3]}>
         <Stack gap={space[5]}>

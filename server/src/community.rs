@@ -20,6 +20,7 @@ use crate::{
     AppState,
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
+    families,
     feedback::{
         self, Feedback, FeedbackKind, FeedbackStatus, NewFeedback, ReviewRecipe, Visibility,
     },
@@ -109,6 +110,8 @@ fn message(text: Option<&str>) -> ApiResult<String> {
 #[derive(Deserialize, ToSchema)]
 pub struct SubmitInput {
     pub message: Option<String>,
+    /// Une autre déclinaison de cette recette de la communauté (slug) : l'admin les range ensemble en acceptant.
+    pub family_with: Option<String>,
 }
 
 /// Propose une recette du foyer à la communauté (tout compte du foyer). Une seule proposition en attente par recette ;
@@ -165,10 +168,22 @@ pub async fn submit_recipe(
             "Cette recette attend déjà la réponse de l'admin.",
         ));
     }
+    let family_with = match input.family_with.as_deref() {
+        Some(with) => match recipes::find(&mut tx, id, with).await? {
+            Some((with, None)) => Some(with),
+            _ => {
+                return Err(ApiError::invalid(format!(
+                    "{with} : une déclinaison se range avec une recette de la communauté."
+                )));
+            }
+        },
+        None => None,
+    };
     let submission_id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO recipe_submissions (id, recipe_id, household_id, author_id, author_name, message, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending')",
+        "INSERT INTO recipe_submissions (id, recipe_id, household_id, author_id, author_name, message, status,
+                                         family_with)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)",
     )
     .bind(submission_id)
     .bind(recipe_id)
@@ -176,6 +191,7 @@ pub async fn submit_recipe(
     .bind(author.id)
     .bind(&author.name)
     .bind(message(input.message.as_deref())?)
+    .bind(family_with)
     .execute(&mut *tx)
     .await?;
     let created = submission(&mut tx, submission_id).await?;
@@ -364,6 +380,14 @@ pub async fn accept_submission(
             .await?;
         }
     }
+    let family_with: Option<Uuid> =
+        sqlx::query_scalar("SELECT family_with FROM recipe_submissions WHERE id = $1")
+            .bind(submission_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if let Some(with) = family_with {
+        families::join(&mut tx, recipe_id, with).await?;
+    }
     let word = message(input.message.as_deref())?;
     sqlx::query(
         "UPDATE recipe_submissions SET status = 'accepted', review_message = nullif($2, ''), reviewed_by = $3,
@@ -455,6 +479,9 @@ pub async fn refuse_submission(
 #[derive(Deserialize, ToSchema)]
 pub struct CopyInput {
     pub slug: Option<String>,
+    /// « La même en mieux » : la recette telle que le foyer l'a écrite, rattachée à l'originale élément par élément
+    /// (variante de même nom, même place, même ingrédient). Ses différences se proposent ensuite à l'originale.
+    pub recipe: Option<RecipeInput>,
 }
 
 /// Copie une recette de la communauté dans le foyer : une recette du foyer, modifiable librement, qui garde le lien
@@ -504,7 +531,14 @@ pub async fn copy_recipe(
             format!("Le foyer voit déjà une recette « {target} » : choisis un autre slug."),
         ));
     }
-    let mut content = original.to_input();
+    let source = original.to_input();
+    let mut content = match input.recipe {
+        Some(mut draft) => {
+            align_keys(&mut draft, &source);
+            draft
+        }
+        None => source,
+    };
     content.slug = None;
     content.message = Some(format!(
         "Copie de « {} », v{}",
@@ -967,4 +1001,41 @@ pub async fn propose_changes(
                 .collect(),
         ),
     ))
+}
+
+/// Donne aux éléments d'un brouillon sans clés celles de l'originale, par leur place : variante de même nom (sinon de
+/// même rang), phase et geste de même rang, ligne du même ingrédient.
+fn align_keys(draft: &mut RecipeInput, original: &RecipeInput) {
+    let mut taken: Vec<bool> = vec![false; original.ingredients.len()];
+    for line in draft.ingredients.iter_mut().filter(|l| l.key.is_none()) {
+        if let Some(i) = original
+            .ingredients
+            .iter()
+            .enumerate()
+            .position(|(i, o)| !taken[i] && o.ingredient == line.ingredient)
+        {
+            taken[i] = true;
+            line.key = original.ingredients[i].key;
+        }
+    }
+    for (v, variant) in draft.variants.iter_mut().enumerate() {
+        let Some(source) = original
+            .variants
+            .iter()
+            .find(|o| o.label == variant.label)
+            .or_else(|| original.variants.get(v))
+        else {
+            continue;
+        };
+        variant.key = variant.key.or(source.key);
+        for (p, phase) in variant.phases.iter_mut().enumerate() {
+            let Some(source) = source.phases.get(p) else {
+                continue;
+            };
+            phase.key = phase.key.or(source.key);
+            for (s, step) in phase.steps.iter_mut().enumerate() {
+                step.key = step.key.or(source.steps.get(s).and_then(|o| o.key));
+            }
+        }
+    }
 }

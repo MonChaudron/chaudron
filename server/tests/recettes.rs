@@ -482,6 +482,7 @@ async fn importer_un_lot(db: PgPool) {
             "recipes_created": ["chili-con-carne", "dahl"],
             "recipes_updated": [],
             "recipe_warnings": [],
+            "similar": [],
             "menu_imported": false,
             "warnings": [],
         })
@@ -501,6 +502,7 @@ async fn importer_un_lot(db: PgPool) {
             "recipes_created": [],
             "recipes_updated": ["chili-con-carne", "dahl"],
             "recipe_warnings": [],
+            "similar": [],
             "menu_imported": false,
             "warnings": [],
         })

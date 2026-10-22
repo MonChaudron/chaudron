@@ -28,6 +28,7 @@ use crate::{
     AppState,
     auth::{Author, Caller},
     error::{ApiError, ApiResult, ErrorBody},
+    families::{self, Family},
     feedback::{self, Feedback, RatingCounts},
     ingredients::{self, NewIngredient},
     members,
@@ -291,6 +292,8 @@ pub struct Recipe {
     pub copied_from: Option<CopiedFrom>,
     /// La dernière proposition de cette recette à la communauté par le foyer qui la lit.
     pub submission: Option<SubmissionState>,
+    /// Ses déclinaisons, et la préférée du foyer.
+    pub family: Option<Family>,
     #[serde(with = "time::serde::rfc3339")]
     pub updated_at: OffsetDateTime,
 }
@@ -419,6 +422,7 @@ impl Recipe {
 struct RecipeRow {
     id: Uuid,
     household_id: Option<Uuid>,
+    family_id: Option<Uuid>,
     version: i32,
     retired: bool,
     slug: String,
@@ -524,8 +528,8 @@ pub(crate) async fn load_plain(conn: &mut PgConnection, id: Uuid) -> ApiResult<R
 /// `viewer` : le foyer dont on compare le matériel (aucun : tout manque).
 async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> ApiResult<Recipe> {
     let recipe: RecipeRow = sqlx::query_as(
-        "SELECT id, household_id, version, retired_at IS NOT NULL AS retired, slug, title, description, tags,
-                season_months, source, updated_at
+        "SELECT id, household_id, family_id, version, retired_at IS NOT NULL AS retired, slug, title, description,
+                tags, season_months, source, updated_at
          FROM recipes WHERE id = $1",
     )
     .bind(id)
@@ -658,6 +662,10 @@ async fn load_id(conn: &mut PgConnection, viewer: Option<Uuid>, id: Uuid) -> Api
         .fetch_optional(&mut *conn)
         .await?,
         submission: None,
+        family: match recipe.family_id {
+            Some(family) => Some(families::family(conn, family, viewer).await?),
+            None => None,
+        },
         updated_at: recipe.updated_at,
     };
     if let Some(household_id) = viewer {
@@ -1236,6 +1244,10 @@ pub struct RecipeSummary {
     pub title: String,
     /// Recette de la communauté.
     pub community: bool,
+    /// Sa famille de déclinaisons.
+    pub family_id: Option<Uuid>,
+    /// La préférée du foyer dans sa famille.
+    pub preferred: bool,
     pub description: String,
     pub tags: Vec<String>,
     pub season_months: Vec<i16>,
@@ -1248,6 +1260,8 @@ struct SummaryRow {
     slug: String,
     title: String,
     community: bool,
+    family_id: Option<Uuid>,
+    preferred: bool,
     description: String,
     tags: Vec<String>,
     season_months: Vec<i16>,
@@ -1298,7 +1312,10 @@ pub async fn list_recipes(
     caller.require(&state.db, id, Scope::Read).await?;
     let patterns = like_patterns(query.q.as_deref().unwrap_or(""));
     let rows: Vec<SummaryRow> = sqlx::query_as(
-        "SELECT r.slug, r.title, r.household_id IS NULL AS community, r.description, r.tags, r.season_months,
+        "SELECT r.slug, r.title, r.household_id IS NULL AS community, r.family_id,
+                EXISTS (SELECT 1 FROM family_preferences p WHERE p.household_id = $1 AND p.recipe_id = r.id)
+                    AS preferred,
+                r.description, r.tags, r.season_months,
                 (SELECT count(*) FROM recipe_variants c WHERE c.recipe_id = r.id) AS variant_count,
                 d.label, d.equipment_codes AS equipment, d.active_min, d.total_min, d.vessels
          FROM recipes r JOIN recipe_variants d ON d.recipe_id = r.id AND d.is_default
@@ -1323,6 +1340,8 @@ pub async fn list_recipes(
                 slug: r.slug,
                 title: r.title,
                 community: r.community,
+                family_id: r.family_id,
+                preferred: r.preferred,
                 description: r.description,
                 tags: r.tags,
                 season_months: r.season_months,
@@ -1673,6 +1692,13 @@ pub struct RecipeWarning {
     pub message: String,
 }
 
+/// Une recette créée par l'import, et celles qui lui ressemblent.
+#[derive(Serialize, ToSchema)]
+pub struct ImportSimilar {
+    pub slug: String,
+    pub similar_to: Vec<String>,
+}
+
 /// Ce que l'import a fait.
 #[derive(Serialize, ToSchema)]
 pub struct ImportResult {
@@ -1682,6 +1708,8 @@ pub struct ImportResult {
     pub recipes_updated: Vec<String>,
     /// Recettes du lot laissées de côté.
     pub recipe_warnings: Vec<RecipeWarning>,
+    /// Recettes créées qui ressemblent à d'autres (rien n'en est fait : à l'auteur de décider).
+    pub similar: Vec<ImportSimilar>,
     /// Le lot avait un menu, et il est publié.
     pub menu_imported: bool,
     /// Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions…
@@ -1729,6 +1757,7 @@ pub async fn import(
         recipes_created: Vec::new(),
         recipes_updated: Vec::new(),
         recipe_warnings: Vec::new(),
+        similar: Vec::new(),
         menu_imported: false,
         warnings: Vec::new(),
     };
@@ -1790,6 +1819,13 @@ pub async fn import(
             .await
             .map_err(|e| e.context(slug))?;
         if saved.created {
+            let close = families::similar_to(&mut tx, id, recipe, Some(slug)).await?;
+            if !close.is_empty() {
+                result.similar.push(ImportSimilar {
+                    slug: slug.to_owned(),
+                    similar_to: close.into_iter().map(|s| s.slug).collect(),
+                });
+            }
             result.recipes_created.push(slug.to_owned());
         } else {
             result.recipes_updated.push(slug.to_owned());

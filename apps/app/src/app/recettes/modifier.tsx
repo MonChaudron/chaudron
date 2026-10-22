@@ -1,4 +1,4 @@
-import { type Aisle, errorMessage, type Ingredient, type IngredientState, type PortionRole, type RecipeInput, type Unit } from '@chaudron/api';
+import { type Aisle, errorMessage, type Ingredient, type IngredientState, type PortionRole, type RecipeInput, type Similar, type Unit } from '@chaudron/api';
 import {
   aisles,
   equipment as equipmentLabels,
@@ -22,6 +22,7 @@ import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Button, Card, Choice, Columns, ErrorText, Field, Loading, Pill, Row, Screen, Stack, Title, useWide } from '../../ui';
+import { type Answer, sameButBetter, SimilarQuestion } from '../../ui/similar';
 
 type Draft = RecipeInput & { slug: string };
 type Line = Draft['ingredients'][number];
@@ -107,24 +108,64 @@ function Editor({ householdId, initial, editing, community }: { householdId: str
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [message, setMessage] = useState('');
+  // Recettes proches d'une recette nouvelle : la question est posée une fois, avant de publier.
+  const [matches, setMatches] = useState<Similar[] | null>(null);
   const catalog = useLoad(() => api.GET('/api/v1/ingredients'), []);
   const equipment = useLoad(() => api.GET('/api/v1/equipment'), []);
   const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
   const slug = editing ? draft.slug : slugify(draft.title);
   const names = useMemo(() => new Map((catalog.data ?? []).map((i) => [i.code, i])), [catalog.data]);
 
+  const body = (): RecipeInput => ({
+    ...draft,
+    slug,
+    tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+    message: message.trim() || null,
+  });
+
   const save = async () => {
+    if (!editing && matches === null) {
+      setBusy(true);
+      const { data: close } = await api.POST('/api/v1/households/{id}/recipes/similar', { params: { path: { id: householdId } }, body: body() });
+      setBusy(false);
+      if (close?.length) return setMatches(close);
+    }
+    await publish();
+  };
+
+  const answer = async (choice: Answer, target: string) => {
+    const close = matches?.find((m) => m.slug === target);
+    if (choice === 'better' && close?.community) {
+      setBusy(true);
+      const result = await sameButBetter(householdId, target, slug, { ...body(), slug: undefined });
+      setBusy(false);
+      if (!result.slug) return setError(result.error ?? null);
+      return router.replace(`/recettes/${result.slug}`);
+    }
+    if (choice === 'better') {
+      setBusy(true);
+      const { data, error: failure } = await api.PUT('/api/v1/households/{id}/recipes/{slug}', {
+        params: { path: { id: householdId, slug: target } },
+        body: { ...body(), slug: target, message: 'La même en mieux' },
+      });
+      setBusy(false);
+      if (!data) return setError(errorMessage(failure));
+      return router.replace(`/recettes/${data.slug}`);
+    }
+    await publish(choice === 'variant' ? target : undefined);
+  };
+
+  /** Publie ; `family` : rangée avec cette recette (une autre déclinaison). */
+  const publish = async (family?: string) => {
     setBusy(true);
-    const body: RecipeInput = {
-      ...draft,
-      slug,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-      message: message.trim() || null,
-    };
+    const payload = body();
     // Une recette de la communauté : seul l'admin de l'instance arrive ici.
     const { data, error: failure } = community
-      ? await api.PUT('/api/v1/community/recipes/{slug}', { params: { path: { slug } }, body })
-      : await api.PUT('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } }, body });
+      ? await api.PUT('/api/v1/community/recipes/{slug}', { params: { path: { slug } }, body: payload })
+      : await api.PUT('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } }, body: payload });
+    if (data && family) {
+      await api.PUT('/api/v1/households/{id}/recipes/{slug}/family', { params: { path: { id: householdId, slug } }, body: { with: family } });
+    }
     setBusy(false);
     if (!data) return setError(errorMessage(failure));
     router.replace(`/recettes/${data.slug}`);
@@ -211,6 +252,7 @@ function Editor({ householdId, initial, editing, community }: { householdId: str
             maxLength={300}
           />
         ) : null}
+        {matches?.length ? <SimilarQuestion matches={matches} busy={busy} onAnswer={answer} /> : null}
         <ErrorText>{error}</ErrorText>
         <Button kind="primary" label={editing ? 'Enregistrer' : 'Publier la recette'} busy={busy} disabled={!draft.title.trim() || !slug} onPress={save} />
         {editing ? (

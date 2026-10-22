@@ -446,6 +446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/families/{family_id}/preferred": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** La déclinaison préférée du foyer dans cette famille : proposée en premier (catalogue, composition du menu). */
+        put: operations["prefer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/feedback/{feedback_id}": {
         parameters: {
             query?: never;
@@ -756,6 +773,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/recipes/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Les recettes proches d'un brouillon (avant de le publier, ou de le proposer à la communauté). Rien n'est fait :
+         *     l'auteur décide.
+         */
+        post: operations["similar_recipes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/recipes/{slug}": {
         parameters: {
             query?: never;
@@ -792,6 +829,24 @@ export interface paths {
          */
         post: operations["copy_recipe"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/family": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Range la recette avec ses déclinaisons. Une recette de la communauté : l'admin seulement. */
+        put: operations["join_family"];
+        post?: never;
+        /** Sort la recette de sa famille. */
+        delete: operations["leave_family"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1423,6 +1478,7 @@ export interface components {
         };
         /** @description La copie : son slug ; par défaut, celui de l'originale suivi de `-maison`. */
         CopyInput: {
+            recipe?: components["schemas"]["RecipeInput"] | null;
             slug?: string | null;
         };
         /** @description Jeton créé : sa valeur n'est montrée qu'ici. */
@@ -1468,6 +1524,21 @@ export interface components {
          * @enum {string}
          */
         ExclusionKind: "allergy" | "dislike";
+        /** @description La famille d'une recette, vue par un foyer. */
+        Family: {
+            /** Format: uuid */
+            id: string;
+            /** @description Les déclinaisons que le foyer voit (la recette comprise). */
+            members: components["schemas"]["FamilyMember"][];
+            /** @description Slug de la préférée du foyer. */
+            preferred?: string | null;
+            title: string;
+        };
+        FamilyMember: {
+            community: boolean;
+            slug: string;
+            title: string;
+        };
         /** @description Un retour sur une recette. */
         Feedback: {
             author_name: string;
@@ -1653,8 +1724,15 @@ export interface components {
             recipe_warnings: components["schemas"]["RecipeWarning"][];
             recipes_created: string[];
             recipes_updated: string[];
+            /** @description Recettes créées qui ressemblent à d'autres (rien n'en est fait : à l'auteur de décider). */
+            similar: components["schemas"]["ImportSimilar"][];
             /** @description Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions… */
             warnings: components["schemas"]["Warning"][];
+        };
+        /** @description Une recette créée par l'import, et celles qui lui ressemblent. */
+        ImportSimilar: {
+            similar_to: string[];
+            slug: string;
         };
         /** @description Ingrédient du référentiel. */
         Ingredient: {
@@ -1722,6 +1800,11 @@ export interface components {
          * @enum {string}
          */
         InviteStatus: "pending" | "used" | "expired";
+        /** @description Une autre déclinaison de quelle recette. */
+        JoinInput: {
+            /** @description Slug de la recette dont celle-ci est une déclinaison. */
+            with: string;
+        };
         Joined: {
             /** Format: uuid */
             household_id: string;
@@ -2094,6 +2177,10 @@ export interface components {
             /** Format: float */
             veg: number;
         };
+        /** @description La préférée. */
+        PreferInput: {
+            slug: string;
+        };
         /** @description Présence aux repas, du lundi (indice 0) au dimanche (indice 6). */
         Presence: {
             dinner: boolean[];
@@ -2148,6 +2235,7 @@ export interface components {
             community: boolean;
             copied_from?: components["schemas"]["CopiedFrom"] | null;
             description: string;
+            family?: components["schemas"]["Family"] | null;
             ingredients: components["schemas"]["RecipeLine"][];
             /** @description Les notes ouvertes du cahier du foyer qui lit la recette. */
             notes: components["schemas"]["Feedback"][];
@@ -2217,6 +2305,13 @@ export interface components {
             community: boolean;
             default_variant: components["schemas"]["VariantSummary"];
             description: string;
+            /**
+             * Format: uuid
+             * @description Sa famille de déclinaisons.
+             */
+            family_id?: string | null;
+            /** @description La préférée du foyer dans sa famille. */
+            preferred: boolean;
             season_months: number[];
             slug: string;
             tags: string[];
@@ -2368,6 +2463,19 @@ export interface components {
         SignupInfo: {
             signup: components["schemas"]["Signup"];
         };
+        /** @description Une recette proche d'un brouillon. */
+        Similar: {
+            community: boolean;
+            /** @description Pourquoi : « Pomme de terre, Ail, Crème en commun ». */
+            reasons: string[];
+            /**
+             * Format: int64
+             * @description De 0 à 100.
+             */
+            score: number;
+            slug: string;
+            title: string;
+        };
         /** @description Un membre qui mange ce plat : au repas même (`dinner` ou `lunch`), ou en boîte le lendemain midi (`box`). */
         SlotEater: {
             /** @description `meal` : au repas ; `box` : boîte du lendemain. */
@@ -2485,6 +2593,8 @@ export interface components {
         SubmissionStatus: "pending" | "accepted" | "refused";
         /** @description Un mot pour l'admin. */
         SubmitInput: {
+            /** @description Une autre déclinaison de cette recette de la communauté (slug) : l'admin les range ensemble en acceptant. */
+            family_with?: string | null;
             message?: string | null;
         };
         /** @description Autre variante qui lève un conflit. */
@@ -3807,6 +3917,38 @@ export interface operations {
             };
         };
     };
+    prefer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                family_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferInput"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     delete_feedback: {
         parameters: {
             query?: never;
@@ -4772,6 +4914,39 @@ export interface operations {
             };
         };
     };
+    similar_recipes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipeInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Similar"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     read_recipe: {
         parameters: {
             query?: never;
@@ -4958,6 +5133,92 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    join_family: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    leave_family: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

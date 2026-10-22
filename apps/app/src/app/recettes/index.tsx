@@ -54,7 +54,28 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
   const community = (all.data ?? []).filter((r) => r.community).length;
   const own = (all.data?.length ?? 0) - community;
   const tags = useMemo(() => [...new Set((all.data ?? []).flatMap((r) => r.tags))].sort((a, b) => a.localeCompare(b, 'fr')), [all.data]);
-  const list = filtered.data;
+  // Une famille de déclinaisons tient en une tuile : la préférée du foyer, sinon la première ; « + 2 déclinaisons ».
+  const list = useMemo(() => {
+    const shown: (RecipeSummary & { others: number })[] = [];
+    const seen = new Map<string, RecipeSummary & { others: number }>();
+    for (const r of filtered.data ?? []) {
+      if (!r.family_id) {
+        shown.push({ ...r, others: 0 });
+        continue;
+      }
+      const first = seen.get(r.family_id);
+      if (!first) {
+        const tile = { ...r, others: 0 };
+        seen.set(r.family_id, tile);
+        shown.push(tile);
+      } else if (r.preferred && !first.preferred) {
+        Object.assign(first, r, { others: first.others + 1 });
+      } else {
+        first.others += 1;
+      }
+    }
+    return filtered.data ? shown : undefined;
+  }, [filtered.data]);
   const empty = all.data?.length === 0;
 
   return (
@@ -125,7 +146,7 @@ function Catalog({ householdId, owner }: { householdId: string; owner: boolean }
  * Une recette de la liste : sa vignette, son nom, le temps actif et l'appareil. Deux par ligne sur téléphone, en
  * grille sur bureau. Les étiquettes restent dans les filtres.
  */
-function RecipeTile({ recipe, wide }: { recipe: RecipeSummary; wide: boolean }) {
+function RecipeTile({ recipe, wide }: { recipe: RecipeSummary & { others: number }; wide: boolean }) {
   const router = useRouter();
   const { palette, radius, fonts } = useTheme();
   const variant = recipe.default_variant;
@@ -164,6 +185,7 @@ function RecipeTile({ recipe, wide }: { recipe: RecipeSummary; wide: boolean }) 
         <Row gap={space[1]}>
           {express ? <Tag tone="strong" icon="bolt">Express</Tag> : null}
           {recipe.community ? <Tag icon="people">Communauté</Tag> : null}
+          {recipe.others ? <Tag>{`+ ${recipe.others} déclinaison${recipe.others > 1 ? 's' : ''}`}</Tag> : null}
         </Row>
       </View>
     </Pressable>

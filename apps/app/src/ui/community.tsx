@@ -1,14 +1,14 @@
 // La recette et la communauté, sur la fiche : proposer une recette du foyer, copier une recette de la communauté,
 // suivre l'originale d'une copie.
-import type { Recipe } from '@chaudron/api';
-import { errorMessage } from '@chaudron/api';
-import { space } from '@chaudron/domain';
+import { errorMessage, type Recipe, type Similar } from '@chaudron/api';
+import { recipeToInput, space } from '@chaudron/domain';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
 import { api } from '../lib/api';
 import { Body, Button, Card, ErrorText, Field, Row, Title } from './index';
+import { SimilarQuestion } from './similar';
 
 export function CommunityCard({ householdId, recipe, onChange }: { householdId: string; recipe: Recipe; onChange: () => void }) {
   if (recipe.community) return <CopyCard householdId={householdId} recipe={recipe} />;
@@ -99,11 +99,24 @@ function SubmitCard({ householdId, recipe, onChange }: { householdId: string; re
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const status = recipe.submission?.status;
-  const submit = async () => {
+  // Avant de proposer : une recette proche dans la communauté ? Une autre déclinaison, ou une recette à part.
+  const [matches, setMatches] = useState<Similar[] | null>(null);
+  const check = async () => {
+    setBusy(true);
+    const { data } = await api.POST('/api/v1/households/{id}/recipes/similar', {
+      params: { path: { id: householdId } },
+      body: recipeToInput(recipe) as never,
+    });
+    setBusy(false);
+    const close = (data ?? []).filter((s) => s.community);
+    if (close.length) return setMatches(close);
+    await submit();
+  };
+  const submit = async (familyWith?: string) => {
     setBusy(true);
     const { data, error: failure } = await api.POST('/api/v1/households/{id}/recipes/{slug}/submit', {
       params: { path: { id: householdId, slug: recipe.slug } },
-      body: { message: message.trim() || null },
+      body: { message: message.trim() || null, family_with: familyWith ?? null },
     });
     setBusy(false);
     if (!data) return setError(errorMessage(failure));
@@ -129,9 +142,10 @@ function SubmitCard({ householdId, recipe, onChange }: { householdId: string; re
       {open ? (
         <View style={{ gap: space[2] }}>
           <Field label="Un mot pour l’admin" hint="Facultatif : ce qui la rend bonne, combien de fois vous l’avez faite." value={message} onChangeText={setMessage} multiline maxLength={2000} style={{ minHeight: 72, paddingTop: 12, textAlignVertical: 'top' }} />
+          {matches?.length ? <SimilarQuestion matches={matches} busy={busy} better={false} onAnswer={(answer, slug) => submit(answer === 'variant' ? slug : undefined)} /> : null}
           <ErrorText>{error}</ErrorText>
           <Row>
-            <Button kind="primary" label="Proposer" busy={busy} onPress={submit} />
+            <Button kind="primary" label="Proposer" busy={busy} onPress={check} />
             <Button kind="quiet" label="Annuler" onPress={() => setOpen(false)} />
           </Row>
         </View>

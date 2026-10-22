@@ -1521,6 +1521,57 @@
         }
       }
     },
+    "/api/v1/households/{id}/families/{family_id}/preferred": {
+      "put": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "La déclinaison préférée du foyer dans cette famille : proposée en premier (catalogue, composition du menu).",
+        "operationId": "prefer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "family_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/feedback/{feedback_id}": {
       "delete": {
         "tags": [
@@ -2941,6 +2992,59 @@
         }
       }
     },
+    "/api/v1/households/{id}/recipes/similar": {
+      "post": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Les recettes proches d'un brouillon (avant de le publier, ou de le proposer à la communauté). Rien n'est fait :\nl'auteur décide.",
+        "operationId": "similar_recipes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Similar"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes/{slug}": {
       "get": {
         "tags": [
@@ -3206,6 +3310,129 @@
             }
           },
           "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/family": {
+      "put": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Range la recette avec ses déclinaisons. Une recette de la communauté : l'admin seulement.",
+        "operationId": "join_family",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Sort la recette de sa famille.",
+        "operationId": "leave_family",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -5232,6 +5459,17 @@
         "type": "object",
         "description": "La copie : son slug ; par défaut, celui de l'originale suivi de `-maison`.",
         "properties": {
+          "recipe": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecipeInput",
+                "description": "« La même en mieux » : la recette telle que le foyer l'a écrite, rattachée à l'originale élément par élément\n(variante de même nom, même place, même ingrédient). Ses différences se proposent ensuite à l'originale."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "slug": {
             "type": [
               "string",
@@ -5355,6 +5593,57 @@
           "allergy",
           "dislike"
         ]
+      },
+      "Family": {
+        "type": "object",
+        "description": "La famille d'une recette, vue par un foyer.",
+        "required": [
+          "id",
+          "title",
+          "members"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FamilyMember"
+            },
+            "description": "Les déclinaisons que le foyer voit (la recette comprise)."
+          },
+          "preferred": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Slug de la préférée du foyer."
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "FamilyMember": {
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "community"
+        ],
+        "properties": {
+          "community": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
       },
       "Feedback": {
         "type": "object",
@@ -5891,6 +6180,7 @@
           "recipes_created",
           "recipes_updated",
           "recipe_warnings",
+          "similar",
           "menu_imported",
           "warnings"
         ],
@@ -5925,12 +6215,38 @@
               "type": "string"
             }
           },
+          "similar": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportSimilar"
+            },
+            "description": "Recettes créées qui ressemblent à d'autres (rien n'en est fait : à l'auteur de décider)."
+          },
           "warnings": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Warning"
             },
             "description": "Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions…"
+          }
+        }
+      },
+      "ImportSimilar": {
+        "type": "object",
+        "description": "Une recette créée par l'import, et celles qui lui ressemblent.",
+        "required": [
+          "slug",
+          "similar_to"
+        ],
+        "properties": {
+          "similar_to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "slug": {
+            "type": "string"
           }
         }
       },
@@ -6098,6 +6414,19 @@
           "used",
           "expired"
         ]
+      },
+      "JoinInput": {
+        "type": "object",
+        "description": "Une autre déclinaison de quelle recette.",
+        "required": [
+          "with"
+        ],
+        "properties": {
+          "with": {
+            "type": "string",
+            "description": "Slug de la recette dont celle-ci est une déclinaison."
+          }
+        }
       },
       "Joined": {
         "type": "object",
@@ -7157,6 +7486,18 @@
           }
         }
       },
+      "PreferInput": {
+        "type": "object",
+        "description": "La préférée.",
+        "required": [
+          "slug"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
       "Presence": {
         "type": "object",
         "description": "Présence aux repas, du lundi (indice 0) au dimanche (indice 6).",
@@ -7324,6 +7665,17 @@
           },
           "description": {
             "type": "string"
+          },
+          "family": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Family",
+                "description": "Ses déclinaisons, et la préférée du foyer."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "ingredients": {
             "type": "array",
@@ -7546,6 +7898,7 @@
           "slug",
           "title",
           "community",
+          "preferred",
           "description",
           "tags",
           "season_months",
@@ -7562,6 +7915,18 @@
           },
           "description": {
             "type": "string"
+          },
+          "family_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Sa famille de déclinaisons."
+          },
+          "preferred": {
+            "type": "boolean",
+            "description": "La préférée du foyer dans sa famille."
           },
           "season_months": {
             "type": "array",
@@ -8016,6 +8381,40 @@
           }
         }
       },
+      "Similar": {
+        "type": "object",
+        "description": "Une recette proche d'un brouillon.",
+        "required": [
+          "slug",
+          "title",
+          "community",
+          "score",
+          "reasons"
+        ],
+        "properties": {
+          "community": {
+            "type": "boolean"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pourquoi : « Pomme de terre, Ail, Crème en commun »."
+          },
+          "score": {
+            "type": "integer",
+            "format": "int64",
+            "description": "De 0 à 100."
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "SlotEater": {
         "type": "object",
         "description": "Un membre qui mange ce plat : au repas même (`dinner` ou `lunch`), ou en boîte le lendemain midi (`box`).",
@@ -8357,6 +8756,13 @@
         "type": "object",
         "description": "Un mot pour l'admin.",
         "properties": {
+          "family_with": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Une autre déclinaison de cette recette de la communauté (slug) : l'admin les range ensemble en acceptant."
+          },
           "message": {
             "type": [
               "string",
