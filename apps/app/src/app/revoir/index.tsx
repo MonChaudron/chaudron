@@ -7,6 +7,7 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
 import { Body, Card, ErrorText, LinkButton, Loading, Row, Screen, Stack, Title } from '../../ui';
+import { ReviewFeedback } from '../../ui/review';
 
 const when = (iso: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(iso));
 
@@ -22,7 +23,7 @@ export default function Review() {
       <Router.Screen options={{ title: 'À revoir · Chaudron' }} />
       <Stack gap={space[1]}>
         <Title>À revoir</Title>
-        <Body tone="muted" size={16}>Les recettes proposées à la communauté. Le foyer est prévenu de ta réponse.</Body>
+        <Body tone="muted" size={16}>Les recettes proposées et les retours de la communauté. L’auteur est prévenu de ta réponse.</Body>
       </Stack>
       <ErrorText>{review.error}</ErrorText>
       {!data ? <Loading /> : null}
@@ -33,6 +34,13 @@ export default function Review() {
           <View style={{ gap: space[3], maxWidth: 820 }}>
             {data.submissions.map((s) => (
               <SubmissionCard key={s.id} submission={s} />
+            ))}
+          </View>
+          <Title level={2}>{`Retours (${data.recipes.reduce((n, r) => n + r.feedback.length, 0)})`}</Title>
+          {data.recipes.length === 0 ? <Body tone="muted">Aucun retour à revoir.</Body> : null}
+          <View style={{ gap: space[3], maxWidth: 820 }}>
+            {data.recipes.map((group) => (
+              <ReviewFeedback key={group.slug} group={group} householdId={me?.households[0]?.id} onChange={() => void review.reload()} />
             ))}
           </View>
         </Stack>

@@ -255,6 +255,272 @@
         ]
       }
     },
+    "/api/v1/community/feedback/{feedback_id}/apply": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Applique une proposition (admin) : une nouvelle version de la recette, et la discussion se ferme. Si l'étape a\nchangé depuis, 409 `step_changed` : l'admin la revoit et envoie la recette modifiée (« Modifier puis appliquer »).",
+        "operationId": "apply",
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recipe"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/feedback/{feedback_id}/close": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Ferme un retour (admin) : pris en compte dans une modification, ou rien à faire. La discussion disparaît de\nl'affichage (on la revoit avec les fermées).",
+        "operationId": "close",
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/feedback/{feedback_id}/publish": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Publie un retour en attente (admin) : visible par tous ceux qui voient la recette, ouvert aux réponses et aux\n« +1 ».",
+        "operationId": "publish",
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/feedback/{feedback_id}/refuse": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Refuse un retour (admin), avec un mot ; son foyer peut le garder comme note du cahier.",
+        "operationId": "refuse",
+        "parameters": [
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {},
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/community/recipes/{slug}": {
       "put": {
         "tags": [
@@ -1260,7 +1526,7 @@
         "tags": [
           "retours"
         ],
-        "summary": "Supprime une note du cahier (tout compte du foyer).",
+        "summary": "Supprime une note du cahier, ou retire un retour encore en attente (tout compte du foyer).",
         "operationId": "delete_feedback",
         "parameters": [
           {
@@ -1292,6 +1558,15 @@
                 }
               }
             }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       },
@@ -1299,7 +1574,7 @@
         "tags": [
           "retours"
         ],
-        "summary": "Modifie, ferme ou rouvre une note du cahier (tout compte du foyer).",
+        "summary": "Modifie, ferme ou rouvre une note du cahier (tout compte du foyer) ; l'envoie à la communauté ; garde un retour\nrefusé comme note.",
         "operationId": "update_feedback",
         "parameters": [
           {
@@ -1351,6 +1626,163 @@
             }
           },
           "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/feedback/{feedback_id}/replies": {
+      "post": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Répond dans un fil. Dans la communauté, la réponse d'un autre foyer attend l'admin, comme un premier retour ; celle\ndu foyer de l'auteur, ou de l'admin, est publiée d'emblée.",
+        "operationId": "reply",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/feedback/{feedback_id}/support": {
+      "post": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Appuie un retour publié de la communauté (« +1 », « pareil chez nous ») : un par foyer.",
+        "operationId": "support",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "retours"
+        ],
+        "summary": "Retire son appui.",
+        "operationId": "unsupport",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "feedback_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {},
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2790,7 +3222,7 @@
         "tags": [
           "retours"
         ],
-        "summary": "Les notes du cahier du foyer sur cette recette (les ouvertes ; avec `closed`, aussi les fermées).",
+        "summary": "Les retours que le foyer voit sur cette recette, fils compris (`parent_id`) : son cahier et, sur une recette de la\ncommunauté, les retours publiés et les siens (en attente, refusés). Les fermés avec `closed`.",
         "operationId": "list_feedback",
         "parameters": [
           {
@@ -2813,7 +3245,7 @@
           {
             "name": "closed",
             "in": "query",
-            "description": "Avec les notes fermées.",
+            "description": "Avec les discussions fermées (et les propositions appliquées).",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -2848,7 +3280,7 @@
         "tags": [
           "retours"
         ],
-        "summary": "Écrit une note dans le cahier du foyer : visible du foyer seul, jamais relue par personne d'autre.",
+        "summary": "Écrit un retour : une note du cahier du foyer (visible du foyer seul), ou, sur une recette de la communauté, un\ncommentaire, une proposition de changement ou une variante tentée, en attente de l'admin.",
         "operationId": "create_feedback",
         "parameters": [
           {
@@ -2885,6 +3317,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/recipes/{slug}/propose-changes": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Depuis une copie, propose ses changements à l'originale : une proposition par étape, geste ou ligne changés, et\nle reste (titre, étapes ajoutées ou retirées…) en un commentaire. Tout arrive dans « À revoir ».",
+        "operationId": "propose_changes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Feedback"
+                  }
                 }
               }
             }
@@ -4864,6 +5366,10 @@
           "status",
           "body",
           "author_name",
+          "mine",
+          "supports",
+          "supported",
+          "stale",
           "base_version",
           "created_at"
         ],
@@ -4898,6 +5404,13 @@
             "format": "uuid",
             "description": "La phase, le geste ou la ligne visés ; nul : la recette entière (ou un élément qui n'existe plus)."
           },
+          "household_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Le foyer de l'auteur (nul : foyer supprimé)."
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -4905,8 +5418,47 @@
           "kind": {
             "$ref": "#/components/schemas/FeedbackKind"
           },
+          "mine": {
+            "type": "boolean",
+            "description": "Écrit par le foyer qui lit."
+          },
+          "parent_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Le retour auquel celui-ci répond (fil de discussion)."
+          },
+          "review_message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Le mot de l'admin (refus, fermeture)."
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "Proposition écrite sur une étape qui a changé depuis : à revoir avant de l'appliquer."
+          },
           "status": {
             "$ref": "#/components/schemas/FeedbackStatus"
+          },
+          "supported": {
+            "type": "boolean",
+            "description": "Le foyer qui lit a appuyé."
+          },
+          "supports": {
+            "type": "integer",
+            "format": "int64",
+            "description": "« +1 » des foyers."
+          },
+          "tried": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Variante tentée : `{\"replaced\": code, \"by\": code, \"verdict\": \"good\" | \"bad\"}`."
           },
           "visibility": {
             "$ref": "#/components/schemas/Visibility"
@@ -4915,7 +5467,7 @@
       },
       "FeedbackInput": {
         "type": "object",
-        "description": "Une note à écrire.",
+        "description": "Un retour à écrire.",
         "required": [
           "body"
         ],
@@ -4937,6 +5489,38 @@
             ],
             "format": "uuid",
             "description": "La phase, le geste ou la ligne ; sans : la recette entière."
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FeedbackKind",
+                "description": "`comment` par défaut ; `proposal` (communauté, une étape et ses changements) ; `tried`."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tried": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TriedInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Visibility",
+                "description": "`household` (le cahier du foyer, par défaut) ou `community` (une recette de la communauté : relu par\nl'admin avant d'être publié)."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -4963,7 +5547,7 @@
       },
       "FeedbackUpdate": {
         "type": "object",
-        "description": "Ce qu'on change sur une note.",
+        "description": "Ce qu'on change sur un retour du foyer.",
         "properties": {
           "body": {
             "type": [
@@ -4976,7 +5560,18 @@
               "boolean",
               "null"
             ],
-            "description": "Fermer (pris en compte, ou plus d'actualité) ou rouvrir."
+            "description": "Fermer (pris en compte, ou plus d'actualité) ou rouvrir une note du cahier."
+          },
+          "visibility": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Visibility",
+                "description": "`community` : envoyer une note du cahier à la communauté (en attente de l'admin) ; `household` : garder un\nretour refusé comme note du cahier."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -6588,6 +7183,18 @@
           }
         }
       },
+      "ProposeInput": {
+        "type": "object",
+        "description": "Un mot pour l'admin, avec les changements d'une copie.",
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ProviderId": {
         "type": "string",
         "description": "Fournisseur d'identité.",
@@ -7056,19 +7663,87 @@
           }
         }
       },
+      "ReplyInput": {
+        "type": "object",
+        "description": "Une réponse dans un fil.",
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        }
+      },
       "Review": {
         "type": "object",
         "description": "Ce qui attend l'admin.",
         "required": [
-          "submissions"
+          "submissions",
+          "recipes"
         ],
         "properties": {
+          "recipes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewRecipe"
+            },
+            "description": "Recettes de la communauté qui ont des retours à revoir."
+          },
           "submissions": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Submission"
             },
             "description": "Recettes proposées, de la plus ancienne à la plus récente."
+          }
+        }
+      },
+      "ReviewInput": {
+        "type": "object",
+        "description": "Ce que l'admin répond.",
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Un mot pour l'auteur (obligatoire pour refuser)."
+          },
+          "recipe": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecipeInput",
+                "description": "« Modifier puis appliquer » : la recette telle que l'admin la publie."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ReviewRecipe": {
+        "type": "object",
+        "description": "Une recette de la communauté et ses retours qui attendent l'admin.",
+        "required": [
+          "slug",
+          "title",
+          "feedback"
+        ],
+        "properties": {
+          "feedback": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Feedback"
+            },
+            "description": "Retours en attente (premiers retours et réponses), et propositions publiées pas encore appliquées."
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
           }
         }
       },
@@ -7834,6 +8509,27 @@
           "token_type": {
             "type": "string",
             "description": "`Bearer`."
+          }
+        }
+      },
+      "TriedInput": {
+        "type": "object",
+        "description": "Une variante tentée : l'ingrédient remplacé, le remplaçant (codes du référentiel), et si c'était bien.",
+        "required": [
+          "replaced",
+          "by",
+          "verdict"
+        ],
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "replaced": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "description": "`good` ou `bad`."
           }
         }
       },

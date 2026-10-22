@@ -113,6 +113,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/community/feedback/{feedback_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Applique une proposition (admin) : une nouvelle version de la recette, et la discussion se ferme. Si l'étape a
+         *     changé depuis, 409 `step_changed` : l'admin la revoit et envoie la recette modifiée (« Modifier puis appliquer »).
+         */
+        post: operations["apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/feedback/{feedback_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ferme un retour (admin) : pris en compte dans une modification, ou rien à faire. La discussion disparaît de
+         *     l'affichage (on la revoit avec les fermées).
+         */
+        post: operations["close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/feedback/{feedback_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publie un retour en attente (admin) : visible par tous ceux qui voient la recette, ouvert aux réponses et aux
+         *     « +1 ».
+         */
+        post: operations["publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/feedback/{feedback_id}/refuse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refuse un retour (admin), avec un mot ; son foyer peut le garder comme note du cahier. */
+        post: operations["refuse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/community/recipes/{slug}": {
         parameters: {
             query?: never;
@@ -379,12 +456,53 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Supprime une note du cahier (tout compte du foyer). */
+        /** Supprime une note du cahier, ou retire un retour encore en attente (tout compte du foyer). */
         delete: operations["delete_feedback"];
         options?: never;
         head?: never;
-        /** Modifie, ferme ou rouvre une note du cahier (tout compte du foyer). */
+        /**
+         * Modifie, ferme ou rouvre une note du cahier (tout compte du foyer) ; l'envoie à la communauté ; garde un retour
+         *     refusé comme note.
+         */
         patch: operations["update_feedback"];
+        trace?: never;
+    };
+    "/api/v1/households/{id}/feedback/{feedback_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Répond dans un fil. Dans la communauté, la réponse d'un autre foyer attend l'admin, comme un premier retour ; celle
+         *     du foyer de l'auteur, ou de l'admin, est publiée d'emblée.
+         */
+        post: operations["reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/feedback/{feedback_id}/support": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Appuie un retour publié de la communauté (« +1 », « pareil chez nous ») : un par foyer. */
+        post: operations["support"];
+        /** Retire son appui. */
+        delete: operations["unsupport"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/households/{id}/import": {
@@ -686,11 +804,37 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Les notes du cahier du foyer sur cette recette (les ouvertes ; avec `closed`, aussi les fermées). */
+        /**
+         * Les retours que le foyer voit sur cette recette, fils compris (`parent_id`) : son cahier et, sur une recette de la
+         *     communauté, les retours publiés et les siens (en attente, refusés). Les fermés avec `closed`.
+         */
         get: operations["list_feedback"];
         put?: never;
-        /** Écrit une note dans le cahier du foyer : visible du foyer seul, jamais relue par personne d'autre. */
+        /**
+         * Écrit un retour : une note du cahier du foyer (visible du foyer seul), ou, sur une recette de la communauté, un
+         *     commentaire, une proposition de changement ou une variante tentée, en attente de l'admin.
+         */
         post: operations["create_feedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/recipes/{slug}/propose-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Depuis une copie, propose ses changements à l'originale : une proposition par étape, geste ou ligne changés, et
+         *     le reste (titre, étapes ajoutées ou retirées…) en un commentaire. Tout arrive dans « À revoir ».
+         */
+        post: operations["propose_changes"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1342,13 +1486,35 @@ export interface components {
              * @description La phase, le geste ou la ligne visés ; nul : la recette entière (ou un élément qui n'existe plus).
              */
             element_key?: string | null;
+            /** @description Le foyer de l'auteur (nul : foyer supprimé). */
+            household_name?: string | null;
             /** Format: uuid */
             id: string;
             kind: components["schemas"]["FeedbackKind"];
+            /** @description Écrit par le foyer qui lit. */
+            mine: boolean;
+            /**
+             * Format: uuid
+             * @description Le retour auquel celui-ci répond (fil de discussion).
+             */
+            parent_id?: string | null;
+            /** @description Le mot de l'admin (refus, fermeture). */
+            review_message?: string | null;
+            /** @description Proposition écrite sur une étape qui a changé depuis : à revoir avant de l'appliquer. */
+            stale: boolean;
             status: components["schemas"]["FeedbackStatus"];
+            /** @description Le foyer qui lit a appuyé. */
+            supported: boolean;
+            /**
+             * Format: int64
+             * @description « +1 » des foyers.
+             */
+            supports: number;
+            /** @description Variante tentée : `{"replaced": code, "by": code, "verdict": "good" | "bad"}`. */
+            tried?: Record<string, never> | null;
             visibility: components["schemas"]["Visibility"];
         };
-        /** @description Une note à écrire. */
+        /** @description Un retour à écrire. */
         FeedbackInput: {
             body: string;
             /** @description Par champ, la nouvelle valeur (« chez nous : 14 min » : `{"timer_s": 840}`). */
@@ -1358,6 +1524,9 @@ export interface components {
              * @description La phase, le geste ou la ligne ; sans : la recette entière.
              */
             element_key?: string | null;
+            kind?: components["schemas"]["FeedbackKind"] | null;
+            tried?: components["schemas"]["TriedInput"] | null;
+            visibility?: components["schemas"]["Visibility"] | null;
         };
         /**
          * @description Sorte de retour.
@@ -1370,11 +1539,12 @@ export interface components {
          * @enum {string}
          */
         FeedbackStatus: "open" | "closed" | "pending" | "published" | "applied" | "refused";
-        /** @description Ce qu'on change sur une note. */
+        /** @description Ce qu'on change sur un retour du foyer. */
         FeedbackUpdate: {
             body?: string | null;
-            /** @description Fermer (pris en compte, ou plus d'actualité) ou rouvrir. */
+            /** @description Fermer (pris en compte, ou plus d'actualité) ou rouvrir une note du cahier. */
             closed?: boolean | null;
+            visibility?: components["schemas"]["Visibility"] | null;
         };
         /** @description Aliment de la table Ciqual, apports pour 100 g (nuls si non renseignés). */
         Food: {
@@ -1929,6 +2099,10 @@ export interface components {
             dinner: boolean[];
             lunch: boolean[];
         };
+        /** @description Un mot pour l'admin, avec les changements d'une copie. */
+        ProposeInput: {
+            message?: string | null;
+        };
         /**
          * @description Fournisseur d'identité.
          * @enum {string}
@@ -2075,10 +2249,29 @@ export interface components {
         RemarkInput: {
             text: string;
         };
+        /** @description Une réponse dans un fil. */
+        ReplyInput: {
+            body: string;
+        };
         /** @description Ce qui attend l'admin. */
         Review: {
+            /** @description Recettes de la communauté qui ont des retours à revoir. */
+            recipes: components["schemas"]["ReviewRecipe"][];
             /** @description Recettes proposées, de la plus ancienne à la plus récente. */
             submissions: components["schemas"]["Submission"][];
+        };
+        /** @description Ce que l'admin répond. */
+        ReviewInput: {
+            /** @description Un mot pour l'auteur (obligatoire pour refuser). */
+            message?: string | null;
+            recipe?: components["schemas"]["RecipeInput"] | null;
+        };
+        /** @description Une recette de la communauté et ses retours qui attendent l'admin. */
+        ReviewRecipe: {
+            /** @description Retours en attente (premiers retours et réponses), et propositions publiées pas encore appliquées. */
+            feedback: components["schemas"]["Feedback"][];
+            slug: string;
+            title: string;
         };
         /**
          * @description Rôle d'un compte dans un foyer.
@@ -2346,6 +2539,13 @@ export interface components {
             scope: string;
             /** @description `Bearer`. */
             token_type: string;
+        };
+        /** @description Une variante tentée : l'ingrédient remplacé, le remplaçant (codes du référentiel), et si c'était bien. */
+        TriedInput: {
+            by: string;
+            replaced: string;
+            /** @description `good` ou `bad`. */
+            verdict: string;
         };
         /**
          * @description Unité normalisée.
@@ -2631,6 +2831,212 @@ export interface operations {
             };
             /** @description Fournisseur non configuré */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewInput"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewInput"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    refuse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewInput"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3427,6 +3833,14 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
         };
     };
     update_feedback: {
@@ -3462,6 +3876,112 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    support: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    unsupport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4450,7 +4970,7 @@ export interface operations {
     list_feedback: {
         parameters: {
             query?: {
-                /** @description Avec les notes fermées. */
+                /** @description Avec les discussions fermées (et les propositions appliquées). */
                 closed?: boolean;
             };
             header?: never;
@@ -4502,6 +5022,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Feedback"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    propose_changes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feedback"][];
                 };
             };
             404: {

@@ -10,7 +10,7 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value, json};
 use sqlx::{FromRow, PgConnection};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
@@ -20,8 +20,11 @@ use crate::{
     AppState,
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
+    feedback::{
+        self, Feedback, FeedbackKind, FeedbackStatus, NewFeedback, ReviewRecipe, Visibility,
+    },
     notifications,
-    recipes::{self, Recipe, RecipeInput},
+    recipes::{self, Element, Recipe, RecipeInput},
     types::{Scope, text_enum},
 };
 
@@ -35,6 +38,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/households/{id}/recipes/{slug}/upstream/take",
             post(take_upstream),
+        )
+        .route(
+            "/households/{id}/recipes/{slug}/propose-changes",
+            post(propose_changes),
         )
         .route("/community/review", get(review_queue))
         .route(
@@ -181,6 +188,8 @@ pub async fn submit_recipe(
 pub struct Review {
     /// Recettes proposées, de la plus ancienne à la plus récente.
     pub submissions: Vec<Submission>,
+    /// Recettes de la communauté qui ont des retours à revoir.
+    pub recipes: Vec<ReviewRecipe>,
 }
 
 /// « À revoir » (admin de l'instance).
@@ -203,7 +212,11 @@ pub async fn review_queue(
     )))
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(Review { submissions }))
+    let recipes = feedback::review_list(&mut *state.db.acquire().await?).await?;
+    Ok(Json(Review {
+        submissions,
+        recipes,
+    }))
 }
 
 /// Une proposition et la recette telle qu'elle est proposée.
@@ -725,4 +738,233 @@ pub async fn take_upstream(
     }
     tx.commit().await?;
     Ok(Json(recipes::load_by_id(&state.db, id, copy_id).await?))
+}
+
+/// Un mot pour l'admin, avec les changements d'une copie.
+#[derive(Deserialize, ToSchema)]
+pub struct ProposeInput {
+    pub message: Option<String>,
+}
+
+type Proposals = Vec<(Uuid, Map<String, Value>)>;
+
+/// Les différences d'une copie avec son originale : des propositions (une par étape, geste ou ligne changés : texte,
+/// texte lu, minuteur, quantité), et le reste en mots.
+fn differences(copy: &Recipe, original: &Recipe) -> (Proposals, Vec<String>) {
+    let mut proposals = Vec::new();
+    let mut others = Vec::new();
+    if copy.title != original.title {
+        others.push(format!("titre : « {} »", copy.title));
+    }
+    for line in &copy.ingredients {
+        match original.element(line.key) {
+            Some(Element::Line(o)) => {
+                if line.qty != o.qty {
+                    match line.qty {
+                        Some(qty) => {
+                            let mut change = Map::new();
+                            change.insert("qty".into(), json!(qty));
+                            proposals.push((line.key, change));
+                        }
+                        None => others.push(format!("{} : au goût", line.name)),
+                    }
+                }
+                if line.unit != o.unit
+                    || line.state != o.state
+                    || line.note != o.note
+                    || line.optional != o.optional
+                {
+                    others.push(format!("{} : forme, unité ou note changées", line.name));
+                }
+            }
+            _ => others.push(format!("ingrédient ajouté : {}", line.name)),
+        }
+    }
+    for line in &original.ingredients {
+        if copy.element(line.key).is_none() {
+            others.push(format!("ingrédient retiré : {}", line.name));
+        }
+    }
+    for variant in &copy.variants {
+        if !matches!(original.element(variant.key), Some(Element::Variant)) {
+            others.push(format!("façon de cuisiner ajoutée : {}", variant.label));
+            continue;
+        }
+        for phase in &variant.phases {
+            let Some(Element::Phase(o)) = original.element(phase.key) else {
+                others.push(format!(
+                    "étape ajoutée : « {} » : {}",
+                    phase.title, phase.text
+                ));
+                continue;
+            };
+            let change = step_changes(
+                (&phase.text, &phase.spoken_text, phase.timer_s),
+                (&o.text, &o.spoken_text, o.timer_s),
+                &phase.title,
+                &mut others,
+            );
+            if !change.is_empty() {
+                proposals.push((phase.key, change));
+            }
+            if phase.title != o.title || phase.day_offset != o.day_offset {
+                others.push(format!("étape « {} » : titre ou jour changés", phase.title));
+            }
+            for step in &phase.steps {
+                let Some(Element::Step(os)) = original.element(step.key) else {
+                    others.push(format!(
+                        "geste ajouté à « {} » : {}",
+                        phase.title, step.text
+                    ));
+                    continue;
+                };
+                let change = step_changes(
+                    (&step.text, &step.spoken_text, step.timer_s),
+                    (&os.text, &os.spoken_text, os.timer_s),
+                    &phase.title,
+                    &mut others,
+                );
+                if !change.is_empty() {
+                    proposals.push((step.key, change));
+                }
+            }
+        }
+    }
+    for variant in &original.variants {
+        for phase in &variant.phases {
+            if copy.element(phase.key).is_none() {
+                others.push(format!("étape retirée : « {} »", phase.title));
+            }
+        }
+    }
+    (proposals, others)
+}
+
+/// Ce qui change sur une étape ou un geste : texte, texte lu, minuteur (un minuteur retiré se dit en mots).
+fn step_changes(
+    (text, spoken, timer): (&String, &Option<String>, Option<i32>),
+    (o_text, o_spoken, o_timer): (&String, &Option<String>, Option<i32>),
+    title: &str,
+    others: &mut Vec<String>,
+) -> Map<String, Value> {
+    let mut change = Map::new();
+    if text != o_text {
+        change.insert("text".into(), json!(text));
+    }
+    if spoken != o_spoken {
+        change.insert("spoken_text".into(), json!(spoken));
+    }
+    if timer != o_timer {
+        match timer {
+            Some(t) => {
+                change.insert("timer_s".into(), json!(t));
+            }
+            None => others.push(format!("« {title} » : sans minuteur")),
+        }
+    }
+    change
+}
+
+/// Depuis une copie, propose ses changements à l'originale : une proposition par étape, geste ou ligne changés, et
+/// le reste (titre, étapes ajoutées ou retirées…) en un commentaire. Tout arrive dans « À revoir ».
+#[utoipa::path(
+    post,
+    path = "/api/v1/households/{id}/recipes/{slug}/propose-changes",
+    tag = "communauté",
+    params(("id" = Uuid, Path), ("slug" = String, Path)),
+    request_body = ProposeInput,
+    responses(
+        (status = 201, body = Vec<Feedback>),
+        (status = 404, body = ErrorBody),
+        (status = 422, body = ErrorBody),
+    )
+)]
+pub async fn propose_changes(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path((id, slug)): Path<(Uuid, String)>,
+    Json(input): Json<ProposeInput>,
+) -> ApiResult<(StatusCode, Json<Vec<Feedback>>)> {
+    caller.require(&state.db, id, Scope::RecipesWrite).await?;
+    let author = caller.author(&state.db).await?;
+    let mut tx = state.db.begin().await?;
+    let (copy_id, owner) = recipes::find(&mut tx, id, &slug)
+        .await?
+        .ok_or_else(ApiError::not_found)?;
+    let original_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT copied_from FROM recipes WHERE id = $1")
+            .bind(copy_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    let (Some(_), Some(original_id)) = (owner, original_id) else {
+        return Err(ApiError::invalid(
+            "Ce n'est pas une copie d'une recette de la communauté.",
+        ));
+    };
+    let copy = recipes::load_plain(&mut tx, copy_id).await?;
+    let original = recipes::load_plain(&mut tx, original_id).await?;
+    let (proposals, others) = differences(&copy, &original);
+    if proposals.is_empty() && others.is_empty() {
+        return Err(ApiError::invalid(
+            "Rien à proposer : ta version est celle de l'originale.",
+        ));
+    }
+    let intro = message(input.message.as_deref())?;
+    let intro = if intro.is_empty() {
+        "Ce qu'on fait chez nous.".to_owned()
+    } else {
+        intro
+    };
+    let mut created = Vec::new();
+    for (key, wanted) in &proposals {
+        let changes = feedback::changes(original.element(*key), wanted)?;
+        created.push(
+            feedback::insert(
+                &mut tx,
+                NewFeedback {
+                    recipe_id: original_id,
+                    household_id: id,
+                    author: &author,
+                    element_key: Some(*key),
+                    kind: FeedbackKind::Proposal,
+                    visibility: Visibility::Community,
+                    status: FeedbackStatus::Pending,
+                    body: intro.clone(),
+                    changes: Some(changes),
+                    base_version: original.version,
+                },
+            )
+            .await?,
+        );
+    }
+    if !others.is_empty() {
+        created.push(
+            feedback::insert(
+                &mut tx,
+                NewFeedback {
+                    recipe_id: original_id,
+                    household_id: id,
+                    author: &author,
+                    element_key: None,
+                    kind: FeedbackKind::Comment,
+                    visibility: Visibility::Community,
+                    status: FeedbackStatus::Pending,
+                    body: format!("{intro} Autres changements : {}.", others.join(" ; ")),
+                    changes: None,
+                    base_version: original.version,
+                },
+            )
+            .await?,
+        );
+    }
+    tx.commit().await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(
+            created
+                .into_iter()
+                .map(|f| feedback::finish(&original, f))
+                .collect(),
+        ),
+    ))
 }

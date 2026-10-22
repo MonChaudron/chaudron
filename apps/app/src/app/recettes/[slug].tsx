@@ -29,6 +29,7 @@ import { useCached } from '../../lib/useCached';
 import { Back, Body, Button, Card, Clamped, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 import { CommunityCard } from '../../ui/community';
+import { Discussion, ProposalForm } from '../../ui/discussion';
 import { changeText, NoteForm, Notes, RateMeal } from '../../ui/notes';
 
 export default function RecipeScreen() {
@@ -125,6 +126,7 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
           <Ingredients lines={data.ingredients} members={members.data} slot={slot} />
           <Cahier householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
           <CommunityCard householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
+          {data.community ? <Discussion householdId={householdId} recipe={data} onChange={() => void recipe.reload()} /> : null}
         </Stack>
         <Steps variant={variant} householdId={householdId} recipe={data} onChange={() => void recipe.reload()} />
       </Columns>
@@ -275,7 +277,8 @@ function IngredientRow({ line, eaters, slot, detail, last }: { line: RecipeLine;
 /** Le cahier du foyer : les notes sur la recette entière (celles d'une étape sont sous l'étape). */
 function Cahier({ householdId, recipe, onChange }: { householdId: string; recipe: Recipe; onChange: () => void }) {
   const [writing, setWriting] = useState(false);
-  const notes = recipe.notes.filter((n) => !n.element_key);
+  // Le cahier : les notes privées du foyer ; les commentaires de la communauté sont dans « Discussions ».
+  const notes = recipe.notes.filter((n) => !n.element_key && n.visibility === 'household');
   return (
     <Card>
       <Row style={{ justifyContent: 'space-between' }}>
@@ -288,7 +291,7 @@ function Cahier({ householdId, recipe, onChange }: { householdId: string; recipe
           cuisinant.
         </Body>
       ) : null}
-      <Notes notes={notes} householdId={householdId} onChange={onChange} />
+      <Notes notes={notes} householdId={householdId} community={recipe.community} onChange={onChange} />
       {writing ? (
         <NoteForm
           householdId={householdId}
@@ -313,6 +316,7 @@ function Steps({ variant, householdId, recipe, onChange }: { variant: Variant; h
   const { palette, fonts, weights } = useTheme();
   const [open, setOpen] = useState<number | null>(null);
   const [writing, setWriting] = useState<string | null>(null);
+  const [proposing, setProposing] = useState<string | null>(null);
   return (
     <Card>
       <Title level={2}>Déroulé</Title>
@@ -335,8 +339,24 @@ function Steps({ variant, householdId, recipe, onChange }: { variant: Variant; h
                   ))}
               </Row>
               <Body size={17}>{phase.text}</Body>
-              <Notes notes={notesOf(recipe.notes, [phase.key, ...phase.steps.map((s) => s.key)])} householdId={householdId} onChange={onChange} />
-              {writing === phase.key ? (
+              <Notes notes={notesOf(recipe.notes, [phase.key, ...phase.steps.map((s) => s.key)])} householdId={householdId} community={recipe.community} onChange={onChange} />
+              {proposing === phase.key ? (
+                <ProposalForm
+                  householdId={householdId}
+                  recipe={recipe}
+                  phase={phase}
+                  onDone={() => {
+                    setProposing(null);
+                    onChange();
+                  }}
+                />
+              ) : null}
+              {recipe.community && proposing !== phase.key && writing !== phase.key ? (
+                <Pressable onPress={() => setProposing(phase.key)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: space[1] }}>
+                  <Body tone="muted" size={15} style={{ textDecorationLine: 'underline' }}>Proposer un changement à la communauté</Body>
+                </Pressable>
+              ) : null}
+              {proposing === phase.key ? null : writing === phase.key ? (
                 <NoteForm
                   householdId={householdId}
                   slug={recipe.slug}

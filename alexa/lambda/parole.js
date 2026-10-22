@@ -202,6 +202,8 @@ function ouOnEst(c) {
 const NOMBRES = ['aucune', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix'];
 const nombreF = (n) => (n < NOMBRES.length ? NOMBRES[n] : String(n));
 const phrase = (texte) => (/[.!?…]$/.test(texte.trim()) ? texte.trim() : `${texte.trim()}.`);
+/** Une note lue : celles de la communauté sont dites comme telles. */
+const dite = (note) => `${note.visibility === 'community' ? 'De la communauté : ' : ''}${phrase(note.body)}`;
 
 /**
  * Les notes du cahier, à la demande (« Alexa, les notes ») : trois au plus sur l'étape à l'écran, puis celles de la
@@ -215,14 +217,14 @@ function direNotes(c) {
   let texte = n
     ? `${nombreF(n).charAt(0).toUpperCase()}${nombreF(n).slice(1)} note${n > 1 ? 's' : ''} sur cette étape. ${etape
         .slice(0, 3)
-        .map((note) => phrase(note.body))
+        .map(dite)
         .join(' Et : ')}`
     : 'Rien sur cette étape.';
   if (n > 3) {
     const reste = n - 3;
     return `${texte} Et ${nombreF(reste)} autre${reste > 1 ? 's' : ''}, sur le téléphone.`;
   }
-  if (recette.length) texte += ` Sur la recette : ${recette.slice(0, 2).map((note) => phrase(note.body)).join(' Et : ')}`;
+  if (recette.length) texte += ` Sur la recette : ${recette.slice(0, 2).map(dite).join(' Et : ')}`;
   return texte;
 }
 

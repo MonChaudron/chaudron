@@ -26,29 +26,30 @@ export function changeText(changes: Feedback['changes']): string | null {
 }
 
 /** Les notes d'une étape ou de la recette, à fermer quand elles ne servent plus. */
-export function Notes({ notes, householdId, onChange }: { notes: Feedback[]; householdId: string; onChange: () => void }) {
+export function Notes({ notes, householdId, community = false, onChange }: { notes: Feedback[]; householdId: string; community?: boolean; onChange: () => void }) {
   if (!notes.length) return null;
   return (
     <View style={{ gap: space[2] }}>
       {notes.map((note) => (
-        <NoteRow key={note.id} note={note} householdId={householdId} onChange={onChange} />
+        <NoteRow key={note.id} note={note} householdId={householdId} community={community} onChange={onChange} />
       ))}
     </View>
   );
 }
 
-function NoteRow({ note, householdId, onChange }: { note: Feedback; householdId: string; onChange: () => void }) {
+function NoteRow({ note, householdId, community, onChange }: { note: Feedback; householdId: string; community: boolean; onChange: () => void }) {
   const { palette, fonts, weights, radius } = useTheme();
   const [error, setError] = useState<string | null>(null);
   const change = changeText(note.changes);
-  const close = async () => {
+  const update = async (body: { closed?: boolean; visibility?: 'community' }) => {
     const { data, error: failure } = await api.PATCH('/api/v1/households/{id}/feedback/{feedback_id}', {
       params: { path: { id: householdId, feedback_id: note.id } },
-      body: { closed: note.status !== 'closed' },
+      body,
     });
     if (!data) return setError(errorMessage(failure));
     onChange();
   };
+  const fromCommunity = note.visibility === 'community';
   return (
     <View style={{ flexDirection: 'row', gap: space[2], padding: space[3], borderRadius: radius.button, backgroundColor: palette.chip }}>
       <Icon name="note" size={18} color={palette.muted} />
@@ -56,10 +57,21 @@ function NoteRow({ note, householdId, onChange }: { note: Feedback; householdId:
         {change ? <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: 15, color: palette.text }}>{change}</Text> : null}
         <Body size={15}>{note.body}</Body>
         <Row gap={space[3]}>
-          <Body tone="muted" size={13}>{`${note.author_name} · ${when(note.created_at)}`}</Body>
-          <Pressable onPress={close} accessibilityRole="button">
-            <Body tone="muted" size={13} style={{ textDecorationLine: 'underline' }}>{note.status === 'closed' ? 'Rouvrir' : 'Fermer'}</Body>
-          </Pressable>
+          <Body tone="muted" size={13}>
+            {fromCommunity
+              ? `De la communauté : ${note.author_name}${note.household_name ? ` (${note.household_name})` : ''}${note.status === 'pending' ? ', en attente de l’admin' : ''}`
+              : `${note.author_name} · ${when(note.created_at)}`}
+          </Body>
+          {!fromCommunity ? (
+            <Pressable onPress={() => update({ closed: note.status !== 'closed' })} accessibilityRole="button">
+              <Body tone="muted" size={13} style={{ textDecorationLine: 'underline' }}>{note.status === 'closed' ? 'Rouvrir' : 'Fermer'}</Body>
+            </Pressable>
+          ) : null}
+          {!fromCommunity && community ? (
+            <Pressable onPress={() => update({ visibility: 'community' })} accessibilityRole="button">
+              <Body tone="muted" size={13} style={{ textDecorationLine: 'underline' }}>Envoyer à la communauté</Body>
+            </Pressable>
+          ) : null}
         </Row>
         <ErrorText>{error}</ErrorText>
       </View>

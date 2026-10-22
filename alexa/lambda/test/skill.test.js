@@ -99,8 +99,8 @@ function fausseApi({ lie = true } = {}) {
       ingredients: recette.ingredients.map((l) => ({ ...l, qty: l.per_batch ? l.qty : l.qty * 6 })),
       step_notes: etat.notes
         .filter((n) => n.phase === phase && (step === null || n.step === step))
-        .map((n) => ({ body: n.body })),
-      recipe_notes: etat.notes.filter((n) => n.phase === undefined).map((n) => ({ body: n.body })),
+        .map((n) => ({ body: n.body, visibility: n.visibility })),
+      recipe_notes: etat.notes.filter((n) => n.phase === undefined).map((n) => ({ body: n.body, visibility: n.visibility })),
     };
   };
   const client = (base, jeton) => {
@@ -359,6 +359,7 @@ test('les notes : un badge à l’écran, lues seulement quand on les demande', 
     { body: 'Chez nous : 14 minutes.', phase: 0, step: null },
     { body: 'Émincer plus fin.', phase: 0, step: null },
     { body: 'Les enfants adorent.' },
+    { body: 'Bien égoutter les pois chiches', visibility: 'community' },
   );
   const c = conversation(api);
   await c.lancer();
@@ -368,11 +369,11 @@ test('les notes : un badge à l’écran, lues seulement quand on les demande', 
     assert.doesNotMatch(r.texte, /14 minutes|plus fin|adorent/, 'jamais d’office');
   }
   const lues = await c.dire('ReadNotesIntent');
-  assert.equal(lues.texte, 'Deux notes sur cette étape. Chez nous : 14 minutes. Et : Émincer plus fin. Sur la recette : Les enfants adorent.');
+  assert.equal(lues.texte, 'Deux notes sur cette étape. Chez nous : 14 minutes. Et : Émincer plus fin. Sur la recette : Les enfants adorent. Et : De la communauté : Bien égoutter les pois chiches.');
 
   await c.dire('AMAZON.NextIntent');
   const ailleurs = await c.dire('ReadNotesIntent');
-  assert.equal(ailleurs.texte, 'Rien sur cette étape. Sur la recette : Les enfants adorent.');
+  assert.equal(ailleurs.texte, 'Rien sur cette étape. Sur la recette : Les enfants adorent. Et : De la communauté : Bien égoutter les pois chiches.');
   assert.equal(ailleurs.vue.notes, '');
 });
 

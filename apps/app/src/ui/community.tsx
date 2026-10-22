@@ -12,7 +12,7 @@ import { Body, Button, Card, ErrorText, Field, Row, Title } from './index';
 
 export function CommunityCard({ householdId, recipe, onChange }: { householdId: string; recipe: Recipe; onChange: () => void }) {
   if (recipe.community) return <CopyCard householdId={householdId} recipe={recipe} />;
-  if (recipe.copied_from) return <CopiedCard recipe={recipe} />;
+  if (recipe.copied_from) return <CopiedCard householdId={householdId} recipe={recipe} />;
   return <SubmitCard householdId={householdId} recipe={recipe} onChange={onChange} />;
 }
 
@@ -46,9 +46,19 @@ function CopyCard({ householdId, recipe }: { householdId: string; recipe: Recipe
   );
 }
 
-/** Une copie : d'après quelle recette, et ce qui y a changé depuis. */
-function CopiedCard({ recipe }: { recipe: Recipe }) {
+/** Une copie : d'après quelle recette, ce qui y a changé depuis ; proposer ses changements à l'originale. */
+function CopiedCard({ householdId, recipe }: { householdId: string; recipe: Recipe }) {
   const from = recipe.copied_from;
+  const [sent, setSent] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const propose = async () => {
+    const { data, error: failure } = await api.POST('/api/v1/households/{id}/recipes/{slug}/propose-changes', {
+      params: { path: { id: householdId, slug: recipe.slug } },
+      body: {},
+    });
+    if (!data) return setError(errorMessage(failure));
+    setSent(`${data.length} retour${data.length > 1 ? 's' : ''} envoyé${data.length > 1 ? 's' : ''} à l’admin.`);
+  };
   if (!from) return null;
   return (
     <Card>
@@ -69,6 +79,14 @@ function CopiedCard({ recipe }: { recipe: Recipe }) {
         </Row>
       ) : (
         <Body tone="muted" size={15}>Elle suit la version courante de l’originale.</Body>
+      )}
+      <ErrorText>{error}</ErrorText>
+      {sent ? (
+        <Body size={15}>{sent}</Body>
+      ) : (
+        <View style={{ alignSelf: 'flex-start' }}>
+          <Button kind="quiet" label="Proposer mes changements à la communauté" onPress={propose} />
+        </View>
       )}
     </Card>
   );
