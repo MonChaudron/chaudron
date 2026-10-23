@@ -3,6 +3,9 @@
 //! recettes multiplient par leurs quantités. Pas de prix saisi à la main : seul un rattachement se corrige.
 
 pub mod crossing;
+pub mod insee;
+pub mod open_prices;
+pub mod run;
 
 use std::collections::HashMap;
 

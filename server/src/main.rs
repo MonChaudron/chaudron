@@ -92,7 +92,10 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     });
     tracing::info!(%addr, web_dir = %web_dir.display(), "Chaudron démarré");
 
-    axum::serve(listener, app(AppState::new(db, config), &web_dir))
+    let state = AppState::new(db, config);
+    // Prix estimés : un passage complet par mois, contrôlé au démarrage puis toutes les 6 h.
+    chaudron_server::prices::run::schedule(state.clone());
+    axum::serve(listener, app(state, &web_dir))
         .with_graceful_shutdown(shutdown())
         .await?;
     Ok(())

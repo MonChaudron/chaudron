@@ -1,4 +1,4 @@
-//! Client HTTP(S) sortant, pour parler aux fournisseurs OAuth.
+//! Client HTTP(S) sortant : fournisseurs OAuth, sources des prix estimés.
 //!
 //! hyper (déjà présent via axum) + rustls/ring, avec les racines Mozilla embarquées dans le binaire :
 //! l'image `FROM scratch` n'a pas de magasin de certificats.
@@ -9,7 +9,7 @@ use axum::body::Bytes;
 use http_body_util::{BodyExt, Full, Limited};
 use hyper::{
     Request,
-    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
+    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderValue, USER_AGENT},
 };
 use hyper_rustls::HttpsConnector;
 use hyper_util::{
@@ -22,6 +22,12 @@ pub type HttpClient = Client<HttpsConnector<HttpConnector>, Full<Bytes>>;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_BODY: usize = 256 * 1024;
+/// Qui appelle : les services publics (Open Prices, INSEE) demandent qu'on se présente.
+const AGENT: &str = concat!(
+    "Chaudron/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/MonChaudron/chaudron)"
+);
 
 pub fn client() -> HttpClient {
     let https = hyper_rustls::HttpsConnectorBuilder::new()
@@ -40,7 +46,8 @@ pub async fn post_form(client: &HttpClient, url: &str, form: String) -> Result<V
         .header(ACCEPT, "application/json")
         .body(Full::new(Bytes::from(form)))
         .map_err(|err| err.to_string())?;
-    send(client, request).await
+    let body = send(client, request).await?;
+    serde_json::from_slice(&body).map_err(|err| err.to_string())
 }
 
 /// GET, avec un jeton `Bearer` si donné, réponse JSON attendue.
@@ -56,10 +63,23 @@ pub async fn get_json(
     let request = request
         .body(Full::default())
         .map_err(|err| err.to_string())?;
-    send(client, request).await
+    let body = send(client, request).await?;
+    serde_json::from_slice(&body).map_err(|err| err.to_string())
 }
 
-async fn send(client: &HttpClient, request: Request<Full<Bytes>>) -> Result<Value, String> {
+/// GET, réponse texte (le XML SDMX de l'INSEE).
+pub async fn get_text(client: &HttpClient, url: &str) -> Result<String, String> {
+    let request = Request::get(url)
+        .body(Full::default())
+        .map_err(|err| err.to_string())?;
+    let body = send(client, request).await?;
+    String::from_utf8(body.to_vec()).map_err(|err| err.to_string())
+}
+
+async fn send(client: &HttpClient, mut request: Request<Full<Bytes>>) -> Result<Bytes, String> {
+    request
+        .headers_mut()
+        .insert(USER_AGENT, HeaderValue::from_static(AGENT));
     let exchange = async {
         let response = client
             .request(request)
@@ -75,7 +95,7 @@ async fn send(client: &HttpClient, request: Request<Full<Bytes>>) -> Result<Valu
             let extract = String::from_utf8_lossy(&body[..body.len().min(300)]).into_owned();
             return Err(format!("HTTP {status} : {extract}"));
         }
-        serde_json::from_slice(&body).map_err(|err| err.to_string())
+        Ok(body)
     };
     tokio::time::timeout(TIMEOUT, exchange)
         .await

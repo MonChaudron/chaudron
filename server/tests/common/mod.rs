@@ -3,20 +3,28 @@
 
 #![allow(dead_code)]
 
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
+    extract::{Path, Query, State},
     http::{
         HeaderMap, Request, StatusCode,
         header::{AUTHORIZATION, CONTENT_TYPE, COOKIE, LOCATION, ORIGIN, SET_COOKIE},
     },
+    response::{IntoResponse, Response as AxumResponse},
+    routing::get,
 };
 use chaudron_server::{
     AppState, app,
     auth::{fake::FakeOAuth, providers::Provider},
-    config::{Config, OAuthClient, SignupPolicy},
+    config::{Config, OAuthClient, PriceSources, SignupPolicy},
 };
 use http_body_util::BodyExt;
 use serde_json::Value;
@@ -56,6 +64,11 @@ pub fn config(fake_base: &str, signup: SignupPolicy) -> Config {
         dev_web_origin: None,
         oauth_clients: vec![alexa_client()],
         admin_emails: Vec::new(),
+        prices: PriceSources {
+            open_prices_url: format!("{fake_base}/prix/open-prices"),
+            insee_url: format!("{fake_base}/prix/insee"),
+            pause: Duration::ZERO,
+        },
     }
 }
 
@@ -79,17 +92,136 @@ pub fn offline_app(db: PgPool) -> Router {
 pub struct Fake {
     pub base: String,
     oauth: FakeOAuth,
+    /// Sources de prix factices (Open Prices, INSEE), réglées par le test.
+    pub prices: FakePrices,
 }
 
 impl Fake {
     pub async fn start() -> Self {
         let oauth = FakeOAuth::default();
+        let prices = FakePrices::default();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let base = format!("http://{}", listener.local_addr().unwrap());
-        let router: Router = oauth.router();
+        let router: Router = oauth.router().nest("/prix", prices.router());
         tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-        Self { base, oauth }
+        Self {
+            base,
+            oauth,
+            prices,
+        }
     }
+}
+
+/// Open Prices et l'INSEE factices : des relevés (au format de l'API Open Prices) et des séries (idbank → mois,
+/// valeur), et une panne à la demande.
+#[derive(Clone, Default)]
+pub struct FakePrices(Arc<Mutex<PriceData>>);
+
+#[derive(Default)]
+struct PriceData {
+    items: Vec<Value>,
+    series: HashMap<String, Vec<(String, f64)>>,
+    down: bool,
+}
+
+impl FakePrices {
+    /// Un relevé en vrac (`category_tag`), au kilo, en France sauf mention.
+    pub fn raw(&self, category: &str, euros: f64, days_ago: i64, country: &str, labels: &[&str]) {
+        self.0.lock().unwrap().items.push(serde_json::json!({
+            "price": euros, "price_per": "KILOGRAM", "price_is_discounted": false, "date": date_ago(days_ago),
+            "category_tag": category, "labels_tags": labels, "location": {"osm_address_country": country},
+        }));
+    }
+
+    /// Un relevé de produit à code-barres de cette catégorie, de `grams` grammes.
+    pub fn product(&self, category: &str, euros: f64, grams: f64, days_ago: i64) {
+        self.0.lock().unwrap().items.push(serde_json::json!({
+            "price": euros, "price_is_discounted": false, "date": date_ago(days_ago), "category_tag": null,
+            "product": {"categories_tags": ["en:food", category], "product_quantity": grams,
+                        "product_quantity_unit": "g", "labels_tags": []},
+            "location": {"osm_address_country": "France"},
+        }));
+    }
+
+    /// Une série INSEE (mois `AAAA-MM`, valeur), du plus récent au plus ancien.
+    pub fn series(&self, idbank: &str, points: &[(&str, f64)]) {
+        self.0.lock().unwrap().series.insert(
+            idbank.to_owned(),
+            points.iter().map(|(m, v)| ((*m).to_owned(), *v)).collect(),
+        );
+    }
+
+    /// Les deux sources répondent 500.
+    pub fn set_down(&self, down: bool) {
+        self.0.lock().unwrap().down = down;
+    }
+
+    fn router(&self) -> Router {
+        Router::new()
+            .route("/open-prices/prices", get(fake_open_prices))
+            .route("/insee/data/SERIES_BDM/{idbank}", get(fake_insee))
+            .with_state(self.clone())
+    }
+}
+
+pub fn date_ago(days: i64) -> String {
+    (time::OffsetDateTime::now_utc().date() - time::Duration::days(days)).to_string()
+}
+
+async fn fake_open_prices(
+    State(fake): State<FakePrices>,
+    Query(q): Query<HashMap<String, String>>,
+) -> AxumResponse {
+    let data = fake.0.lock().unwrap();
+    if data.down {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    let since = q.get("date__gte").cloned().unwrap_or_default();
+    let matching: Vec<&Value> = data
+        .items
+        .iter()
+        .filter(|i| i["date"].as_str().unwrap_or_default() >= since.as_str())
+        .filter(|i| {
+            match (
+                q.get("category_tag"),
+                q.get("product__categories_tags__contains"),
+            ) {
+                (Some(tag), _) => i["category_tag"] == tag.as_str(),
+                (None, Some(tag)) => i["product"]["categories_tags"]
+                    .as_array()
+                    .is_some_and(|tags| tags.iter().any(|t| t == tag.as_str())),
+                (None, None) => false,
+            }
+        })
+        .collect();
+    let size: usize = q.get("size").and_then(|s| s.parse().ok()).unwrap_or(50);
+    let page: usize = q.get("page").and_then(|s| s.parse().ok()).unwrap_or(1);
+    let pages = matching.len().div_ceil(size).max(1);
+    let items: Vec<&Value> = matching
+        .into_iter()
+        .skip((page - 1) * size)
+        .take(size)
+        .collect();
+    Json(serde_json::json!({"items": items, "page": page, "size": size, "pages": pages}))
+        .into_response()
+}
+
+async fn fake_insee(State(fake): State<FakePrices>, Path(idbank): Path<String>) -> AxumResponse {
+    let data = fake.0.lock().unwrap();
+    if data.down {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    let obs: String = data
+        .series
+        .get(&idbank)
+        .into_iter()
+        .flatten()
+        .map(|(m, v)| format!(r#"<Obs TIME_PERIOD="{m}" OBS_VALUE="{v}" OBS_STATUS="A"/>"#))
+        .collect();
+    format!(
+        r#"<?xml version='1.0' encoding='UTF-8'?><message:StructureSpecificData><message:DataSet><Series IDBANK="{idbank}">{obs}</Series></message:DataSet></message:StructureSpecificData>"#
+    )
+    .into_response()
 }
 
 pub struct TestApp {

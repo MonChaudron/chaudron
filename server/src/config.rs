@@ -71,6 +71,28 @@ pub struct Config {
     /// Admin de l'instance (`ADMIN_EMAILS`, en minuscules) : valide les recettes et les retours de la communauté.
     /// Reconnu à une adresse vérifiée par le fournisseur ; `.env` fait toujours foi.
     pub admin_emails: Vec<String>,
+    /// Sources des prix estimés (`PRICES_OPEN_PRICES_URL`, `PRICES_INSEE_URL`).
+    pub prices: PriceSources,
+}
+
+/// Adresses des sources de prix, et la pause entre deux requêtes (on ne martèle pas un service public).
+#[derive(Clone, Debug)]
+pub struct PriceSources {
+    /// API d'Open Prices, sans `/` final.
+    pub open_prices_url: String,
+    /// API SDMX de la Banque de données macro-économiques de l'INSEE, sans `/` final.
+    pub insee_url: String,
+    pub pause: std::time::Duration,
+}
+
+impl Default for PriceSources {
+    fn default() -> Self {
+        Self {
+            open_prices_url: "https://prices.openfoodfacts.org/api/v1".into(),
+            insee_url: "https://bdm.insee.fr/series/sdmx".into(),
+            pause: std::time::Duration::from_secs(1),
+        }
+    }
 }
 
 impl Config {
@@ -171,6 +193,18 @@ impl Config {
                         .collect()
                 })
                 .unwrap_or_default(),
+            prices: {
+                let defaults = PriceSources::default();
+                PriceSources {
+                    open_prices_url: var("PRICES_OPEN_PRICES_URL")
+                        .map(|u| u.trim_end_matches('/').to_owned())
+                        .unwrap_or(defaults.open_prices_url),
+                    insee_url: var("PRICES_INSEE_URL")
+                        .map(|u| u.trim_end_matches('/').to_owned())
+                        .unwrap_or(defaults.insee_url),
+                    pause: defaults.pause,
+                }
+            },
         })
     }
 
