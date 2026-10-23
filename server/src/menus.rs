@@ -22,6 +22,7 @@ use crate::{
     error::{ApiError, ApiResult, ErrorBody},
     feedback::Rating,
     members::{self, Member, Portions},
+    prices::estimate::{self, SlotPrice, WeekPrice},
     recipes::{self, Recipe},
     types::{Aisle, ExclusionKind, IngredientState, Meal, Scope, Unit},
 };
@@ -314,6 +315,8 @@ pub struct MenuSlot {
     pub thaw: Vec<ThawItem>,
     /// « Comment c'était ? », une fois le repas noté.
     pub rating: Option<Rating>,
+    /// Prix estimé du plat ; rempli à la lecture du menu.
+    pub price: Option<SlotPrice>,
 }
 
 crate::types::text_enum! {
@@ -333,6 +336,8 @@ crate::types::text_enum! {
         UnknownVariant = "unknown_variant",
         /// Un ingrédient frais ne tiendra pas jusqu'au jour du plat : le congeler, ou avancer le plat.
         Freshness = "freshness",
+        /// Le total estimé de la semaine dépasse le plafond du foyer.
+        Budget = "budget",
     }
 }
 
@@ -383,6 +388,8 @@ pub struct Menu {
     /// Par date, repas (midi puis soir) et rang.
     pub slots: Vec<MenuSlot>,
     pub warnings: Vec<Warning>,
+    /// Prix estimé de la semaine (le total des courses) ; rempli à la lecture du menu.
+    pub price: Option<WeekPrice>,
 }
 
 /// Menu, dans l'historique.
@@ -724,6 +731,56 @@ fn part(mix: &[&Member], fixed: Option<i32>) -> (i32, Portions) {
     (count, scale)
 }
 
+/// Mangeurs et boîtes fixés d'un créneau publié : ceux donnés, ou l'écart entre `servings` (format des lots) et la
+/// présence ; nuls : selon la présence.
+pub(crate) fn slot_counts(
+    members: &[Member],
+    slot: &SlotInput,
+) -> ApiResult<(Option<i16>, Option<i16>)> {
+    let mut diners = count(slot.diners, "Mangeurs")?;
+    let mut boxes = count(slot.next_lunch_covers, "Boîtes du lendemain")?;
+    let servings = count(slot.servings, "Portions")?;
+    if let Some(servings) = servings.map(i32::from)
+        && diners.is_none()
+        && boxes.is_none()
+    {
+        let day = slot.portions_date.unwrap_or(slot.date);
+        let (d, b) = presence_counts(members, day, slot.meal, slot.covers_next_lunch);
+        if servings != d + b {
+            if !slot.covers_next_lunch {
+                diners = Some(servings as i16);
+            } else if servings >= d {
+                boxes = Some((servings - d) as i16);
+            } else {
+                diners = Some(servings as i16);
+                boxes = Some(0);
+            }
+        }
+    }
+    Ok((diners, boxes))
+}
+
+/// Mangeurs, boîtes et barème d'un repas, depuis la présence ou des nombres fixés (comme `slot_view`).
+pub(crate) fn slot_scale(
+    members: &[Member],
+    day: Day,
+    meal: Meal,
+    covers: bool,
+    diners: Option<i16>,
+    boxes: Option<i16>,
+) -> (i32, i32, Portions) {
+    let (d, diners_scale) = part(&present(members, day, meal), diners.map(i32::from));
+    let (b, boxes_scale) = if covers {
+        part(
+            &present(members, day.plus(1), Meal::Lunch),
+            boxes.map(i32::from),
+        )
+    } else {
+        (0, uniform(0.0))
+    };
+    (d, b, add(diners_scale, boxes_scale))
+}
+
 /// Portions calculées depuis la présence : mangeurs du repas et boîtes du lendemain.
 fn presence_counts(members: &[Member], day: Day, meal: Meal, covers: bool) -> (i32, i32) {
     let diners = present(members, day, meal).len() as i32;
@@ -837,6 +894,7 @@ fn slot_view(row: &SlotRow, week_start: Day, ctx: &Context) -> MenuSlot {
             .ratings
             .get(&(row.recipe_id, row.date, row.meal))
             .copied(),
+        price: None,
     }
 }
 
@@ -1181,7 +1239,32 @@ async fn compute(db: &PgPool, household_id: Uuid, menu: MenuRow) -> ApiResult<Me
             .map(|r| slot_view(r, week_start, &ctx))
             .collect(),
         warnings: warnings(&rows, &ctx, &overlaps, &purchases, week_start),
+        price: None,
     })
+}
+
+/// Le menu tel que l'API le rend : chiffré, avec l'avertissement de plafond s'il est dépassé.
+async fn read_priced(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<Menu> {
+    let mut menu = read(db, household_id, week_start).await?;
+    estimate::price_menu(db, household_id, &mut menu).await?;
+    if let Some(price) = menu.price.as_ref().filter(|p| p.over_budget == Some(true))
+        && let (Some(first), Some(budget)) = (menu.slots.first(), price.budget_cents)
+    {
+        let euros = |cents: i32| (f64::from(cents) / 100.0).round();
+        let message = format!(
+            "≈ {} €, au-dessus de votre plafond de {} €.",
+            euros(price.total_cents),
+            euros(budget)
+        );
+        menu.warnings.push(warning(
+            WarningKind::Budget,
+            first.date,
+            first.meal,
+            Vec::new(),
+            message,
+        ));
+    }
+    Ok(menu)
 }
 
 pub async fn read(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<Menu> {
@@ -1324,27 +1407,7 @@ pub(crate) async fn save(
                 "{context} : variante inconnue « {label} »."
             )));
         }
-        let mut diners = count(slot.diners, "Mangeurs").map_err(|e| e.context(&context))?;
-        let mut boxes = count(slot.next_lunch_covers, "Boîtes du lendemain")
-            .map_err(|e| e.context(&context))?;
-        let servings = count(slot.servings, "Portions").map_err(|e| e.context(&context))?;
-        if let Some(servings) = servings.map(i32::from)
-            && diners.is_none()
-            && boxes.is_none()
-        {
-            let day = slot.portions_date.unwrap_or(slot.date);
-            let (d, b) = presence_counts(members, day, slot.meal, slot.covers_next_lunch);
-            if servings != d + b {
-                if !slot.covers_next_lunch {
-                    diners = Some(servings as i16);
-                } else if servings >= d {
-                    boxes = Some((servings - d) as i16);
-                } else {
-                    diners = Some(servings as i16);
-                    boxes = Some(0);
-                }
-            }
-        }
+        let (diners, boxes) = slot_counts(members, slot).map_err(|e| e.context(&context))?;
         if let Some(p) = slot.portions_date {
             in_span(week_start, p).map_err(|e| e.context(&context))?;
         }
@@ -1537,7 +1600,7 @@ pub async fn read_menu(
     Path((id, week_start)): Path<(Uuid, Day)>,
 ) -> ApiResult<Json<Menu>> {
     caller.require(&state.db, id, Scope::Read).await?;
-    read(&state.db, id, week_start).await.map(Json)
+    read_priced(&state.db, id, week_start).await.map(Json)
 }
 
 /// Publie un menu : le crée (201) ou remplace tous ses créneaux (200). Idempotent.
@@ -1572,7 +1635,7 @@ pub async fn put_menu(
     } else {
         StatusCode::OK
     };
-    Ok((status, Json(read(&state.db, id, week_start).await?)))
+    Ok((status, Json(read_priced(&state.db, id, week_start).await?)))
 }
 
 #[utoipa::path(
@@ -1659,7 +1722,7 @@ pub async fn move_slot(
         .await?;
     tx.commit().await?;
     state.notify(id, "menu", Some(week_start), None);
-    read(&state.db, id, week_start).await.map(Json)
+    read_priced(&state.db, id, week_start).await.map(Json)
 }
 
 /// Congeler un ingrédient d'un plat (en rentrant des courses) : l'alerte de fraîcheur tombe, et la veille du plat
@@ -1716,7 +1779,7 @@ pub async fn freeze(
     .execute(&state.db)
     .await?;
     state.notify(id, "menu", Some(week_start), None);
-    read(&state.db, id, week_start).await.map(Json)
+    read_priced(&state.db, id, week_start).await.map(Json)
 }
 
 #[derive(Deserialize, IntoParams)]

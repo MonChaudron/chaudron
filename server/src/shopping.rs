@@ -19,10 +19,16 @@ use crate::{
     AppState,
     auth::Caller,
     error::{ApiError, ApiResult, ErrorBody},
+    households,
+    members::Portions,
     menus::{self, Day},
+    prices::{
+        PriceBook,
+        estimate::{self, WeekPrice},
+    },
     substitutions::{Catalog, Offer},
     text::search_key,
-    types::{Aisle, IngredientState, PortionRole, Scope, Unit},
+    types::{Aisle, IngredientState, Meal, PortionRole, Scope, Unit},
 };
 
 pub fn router() -> Router<AppState> {
@@ -100,6 +106,8 @@ pub struct ShoppingItem {
     pub substitutes: Vec<Offer>,
     /// Le remplacement choisi : l'article dit alors le remplaçant, sa quantité et son rayon.
     pub substitution: Option<Uuid>,
+    /// Prix estimé de la quantité (du remplaçant s'il est choisi) ; nul sans prix connu.
+    pub price_cents: Option<i32>,
     /// Ce qu'il remplace.
     pub replaces: Option<Replaced>,
 }
@@ -110,6 +118,8 @@ pub struct Replaced {
     pub ingredient: String,
     pub label: String,
     pub qty: Option<f32>,
+    /// Son prix estimé, pour revenir à la ligne d'origine hors ligne.
+    pub price_cents: Option<i32>,
 }
 
 /// Un plat dont la part de cet article est à congeler.
@@ -131,6 +141,8 @@ pub struct ShoppingList {
     /// Bloc des recettes (rayons dans l'ordre du magasin, placard à la fin), puis petits-déjeuners et desserts,
     /// puis le reste.
     pub items: Vec<ShoppingItem>,
+    /// Prix estimé de la semaine ; nul s'il n'y a rien à acheter.
+    pub price: Option<WeekPrice>,
 }
 
 /// Opération d'un téléphone, rejouée telle quelle s'il était hors ligne.
@@ -213,7 +225,7 @@ pub struct JournalQuery {
 // Calcul
 
 /// Article calculé, avant fusion avec l'état stocké.
-struct Computed {
+pub(crate) struct Computed {
     key: String,
     ingredient_id: Uuid,
     /// Recettes du menu qui la composent (identifiants).
@@ -229,25 +241,26 @@ struct Computed {
     recipes: Vec<String>,
 }
 
-#[derive(FromRow)]
-struct LineRow {
-    recipe_id: Uuid,
-    slug: String,
-    title: String,
-    ingredient_id: Uuid,
-    code: String,
-    name: String,
+/// Une ligne de recette, avec son ingrédient.
+#[derive(Clone, FromRow)]
+pub(crate) struct LineRow {
+    pub recipe_id: Uuid,
+    pub slug: String,
+    pub title: String,
+    pub ingredient_id: Uuid,
+    pub code: String,
+    pub name: String,
     #[sqlx(try_from = "String")]
-    aisle: Aisle,
+    pub aisle: Aisle,
     #[sqlx(try_from = "String")]
-    state: IngredientState,
-    qty: Option<f32>,
+    pub state: IngredientState,
+    pub qty: Option<f32>,
     #[sqlx(try_from = "String")]
-    unit: Unit,
+    pub unit: Unit,
     #[sqlx(try_from = "String")]
-    role: PortionRole,
-    optional: bool,
-    per_batch: bool,
+    pub role: PortionRole,
+    pub optional: bool,
+    pub per_batch: bool,
 }
 
 fn aisle_order(aisle: Aisle) -> u8 {
@@ -283,11 +296,23 @@ fn aisle_for(state: IngredientState, aisle: Aisle) -> Aisle {
 }
 
 /// Les articles calculés d'un menu, par clé.
+/// Un repas du menu et les lignes de sa recette : de quoi faire les courses et chiffrer le repas.
+pub(crate) struct SlotLines {
+    pub date: Day,
+    pub meal: Meal,
+    pub slug: String,
+    pub title: String,
+    /// Portions du repas, boîtes comprises.
+    pub servings: i32,
+    pub scale: Portions,
+    pub lines: Vec<LineRow>,
+}
+
 async fn compute(
     db: &PgPool,
     household_id: Uuid,
     week_start: Day,
-) -> ApiResult<(Vec<Computed>, menus::Menu)> {
+) -> ApiResult<(Vec<Computed>, menus::Menu, Vec<SlotLines>)> {
     let menu = menus::read(db, household_id, week_start).await?;
     let mut slugs: Vec<&str> = menu.slots.iter().map(|s| s.recipe.slug.as_str()).collect();
     slugs.sort_unstable();
@@ -302,19 +327,42 @@ async fn compute(
     .bind(&slugs)
     .fetch_all(db)
     .await?;
-    let mut by_recipe: HashMap<&str, Vec<&LineRow>> = HashMap::new();
-    for line in &lines {
-        by_recipe.entry(line.slug.as_str()).or_default().push(line);
-    }
+    let slots: Vec<SlotLines> = menu
+        .slots
+        .iter()
+        .map(|slot| SlotLines {
+            date: slot.date,
+            meal: slot.meal,
+            slug: slot.recipe.slug.clone(),
+            title: slot.recipe.title.clone(),
+            servings: slot.servings,
+            scale: slot.scale,
+            lines: lines
+                .iter()
+                .filter(|l| l.slug == slot.recipe.slug)
+                .cloned()
+                .collect(),
+        })
+        .collect();
+    Ok((aggregate(&slots), menu, slots))
+}
 
+/// Prix de chaque article à acheter, sans remplacement (les lignes facultatives et « au goût » n'en sont pas).
+pub(crate) fn bought_cents(items: &[Computed], book: &PriceBook) -> Vec<Option<f64>> {
+    items
+        .iter()
+        .filter(|c| !c.optional && c.qty.is_some())
+        .map(|c| estimate::cents(book, c.ingredient_id, c.state, c.qty, c.unit))
+        .collect()
+}
+
+/// Les articles des repas : quantités additionnées par ingrédient, forme et unité ; pièces arrondies à l'unité,
+/// cuillères, pincées et « au goût » au placard.
+pub(crate) fn aggregate(slots: &[SlotLines]) -> Vec<Computed> {
     let mut items: Vec<Computed> = Vec::new();
     let mut index: HashMap<String, usize> = HashMap::new();
-    for slot in &menu.slots {
-        for line in by_recipe
-            .get(slot.recipe.slug.as_str())
-            .into_iter()
-            .flatten()
-        {
+    for slot in slots {
+        for line in &slot.lines {
             let key = format!(
                 "{}:{}:{}",
                 line.ingredient_id,
@@ -365,7 +413,7 @@ async fn compute(
         item.pantry =
             item.qty.is_none() || matches!(item.unit, Unit::Tbsp | Unit::Tsp | Unit::Pinch);
     }
-    Ok((items, menu))
+    items
 }
 
 /// À congeler : les alertes de fraîcheur du menu sur cet ingrédient, et ce qui est déjà congelé pour un plat.
@@ -462,7 +510,7 @@ async fn cursor(db: &PgPool, household_id: Uuid) -> ApiResult<i64> {
 
 pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<ShoppingList> {
     let menu_id = menu_id(db, household_id, week_start).await?;
-    let (computed, menu) = compute(db, household_id, week_start).await?;
+    let (computed, menu, slots) = compute(db, household_id, week_start).await?;
     let states: Vec<StateRow> = sqlx::query_as(
         "SELECT s.key, s.substitution_id, s.manual, s.label, s.qty, s.unit, s.aisle, s.block, s.checked, u.display_name AS checked_by,
                 s.checked_at, s.qty_at_check, s.removed
@@ -473,12 +521,30 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
     .await?;
     let by_key: HashMap<&str, &StateRow> = states.iter().map(|s| (s.key.as_str(), s)).collect();
     let catalog = catalog(db, &computed).await?;
+    let priced_ids: Vec<Uuid> = computed
+        .iter()
+        .map(|c| c.ingredient_id)
+        .chain(catalog.substitute_ids())
+        .collect();
+    let book = PriceBook::load(db, &priced_ids).await?;
+    // Prix de chaque article à acheter (les lignes facultatives et « au goût » n'en sont pas).
+    let mut bought: Vec<Option<f64>> = Vec::new();
 
     let mut items: Vec<ShoppingItem> = computed
         .into_iter()
         .map(|c| {
             let state = by_key.get(c.key.as_str());
-            let substitutes = catalog.offers(c.ingredient_id, &c.recipe_ids, c.qty);
+            let mut substitutes = catalog.offers(c.ingredient_id, &c.recipe_ids, c.qty);
+            for offer in &mut substitutes {
+                offer.price_cents = estimate::cents(
+                    &book,
+                    offer.substitute_id,
+                    offer.substitute_state.unwrap_or(c.state),
+                    offer.qty,
+                    c.unit,
+                )
+                .map(|cents| cents.round() as i32);
+            }
             // Le remplacement choisi, s'il vaut encore (refusé depuis, ou supprimé : oublié sans bruit).
             let chosen = state
                 .and_then(|s| s.substitution_id)
@@ -490,11 +556,20 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
                 _ => None,
             };
             let freeze = freeze_hints(&menu, &c.ingredient);
+            let own = estimate::cents(&book, c.ingredient_id, c.state, c.qty, c.unit);
             let replaces = chosen.as_ref().map(|_| Replaced {
                 ingredient: c.ingredient.clone(),
                 label: c.label.clone(),
                 qty: c.qty,
+                price_cents: own.map(|cents| cents.round() as i32),
             });
+            let cents = match &chosen {
+                Some(offer) => offer.price_cents.map(f64::from),
+                None => own,
+            };
+            if !c.optional && c.qty.is_some() {
+                bought.push(cents);
+            }
             ShoppingItem {
                 key: c.key,
                 label: chosen.as_ref().map_or(c.label, |o| o.label.clone()),
@@ -523,6 +598,7 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
                 substitution: chosen.as_ref().map(|o| o.id),
                 substitutes,
                 replaces,
+                price_cents: cents.map(|c| c.round() as i32),
             }
         })
         .collect();
@@ -548,6 +624,7 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
             substitutes: Vec::new(),
             substitution: None,
             replaces: None,
+            price_cents: None,
         });
     }
     items.sort_by_cached_key(|i| {
@@ -563,6 +640,12 @@ pub async fn list(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult
         week_start,
         cursor: cursor(db, household_id).await?,
         items,
+        price: estimate::week_price(
+            &bought,
+            &slots,
+            &book,
+            households::weekly_budget(db, household_id).await?,
+        ),
     })
 }
 

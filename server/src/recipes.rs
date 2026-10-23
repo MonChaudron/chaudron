@@ -32,11 +32,14 @@ use crate::{
     feedback::{self, Feedback, RatingCounts},
     ingredients::{self, NewIngredient},
     members,
-    menus::{self, MenuInput, Warning},
-    prices,
+    menus::{self, Day, MenuInput, Warning},
+    prices::{
+        self,
+        estimate::{self, Estimate, RecipePrice},
+    },
     substitutions::{self, RecipeSubstitution},
     text::{code, like_patterns, search_key},
-    types::{IngredientState, PortionRole, Scope, Unit},
+    types::{IngredientState, Meal, PortionRole, Scope, Unit},
 };
 
 pub fn router() -> Router<AppState> {
@@ -63,6 +66,7 @@ pub fn router() -> Router<AppState> {
             put(put_community).delete(delete_community),
         )
         .route("/households/{id}/import", post(import))
+        .route("/households/{id}/estimate", post(estimate))
 }
 
 crate::types::text_enum! {
@@ -95,7 +99,7 @@ impl From<Unit> for InputUnit {
 
 impl InputUnit {
     /// Unité normalisée et facteur de conversion.
-    fn normalize(self) -> (Unit, f32) {
+    pub(crate) fn normalize(self) -> (Unit, f32) {
         match self {
             Self::G => (Unit::G, 1.0),
             Self::Kg => (Unit::G, 1000.0),
@@ -1258,6 +1262,8 @@ pub struct RecipeSummary {
     pub season_months: Vec<i16>,
     pub default_variant: VariantSummary,
     pub variant_count: i64,
+    /// Prix estimé : pour la tablée du repas demandé (`price_date`, `price_meal`), sinon pour une portion standard.
+    pub price: Option<RecipePrice>,
 }
 
 #[derive(FromRow)]
@@ -1295,6 +1301,12 @@ pub struct RecipeQuery {
     /// Un seul niveau ; sans, les deux.
     #[param(inline)]
     pub scope: Option<RecipeScope>,
+    /// Le jour d'un repas : le prix de chaque recette pour sa tablée (présence du foyer).
+    #[param(value_type = Option<String>, format = Date)]
+    pub price_date: Option<Day>,
+    /// Le repas de ce jour (le soir par défaut) ; au dîner, les boîtes du lendemain midi comptent.
+    #[param(inline)]
+    pub price_meal: Option<Meal>,
 }
 
 /// Recettes du foyer et de la communauté (sauf celles qui sont retirées), par titre.
@@ -1339,9 +1351,26 @@ pub async fn list_recipes(
     .bind(query.scope.map(RecipeScope::as_str))
     .fetch_all(&state.db)
     .await?;
+    let costs = estimate::recipe_costs(&state.db, id).await?;
+    let tiers = estimate::tiers(&costs);
+    let scale = match query.price_date {
+        Some(date) => Some(
+            estimate::meal_scale(
+                &state.db,
+                id,
+                date,
+                query.price_meal.unwrap_or(Meal::Dinner),
+            )
+            .await?,
+        ),
+        None => None,
+    };
     Ok(Json(
         rows.into_iter()
             .map(|r| RecipeSummary {
+                price: costs
+                    .get(&r.slug)
+                    .map(|c| c.price(scale.as_ref(), tiers.get(&r.slug).copied())),
                 slug: r.slug,
                 title: r.title,
                 community: r.community,
@@ -1723,6 +1752,32 @@ pub struct ImportResult {
     pub menu_imported: bool,
     /// Avertissements du menu publié : conflits d'appareil, matériel absent, exclusions…
     pub warnings: Vec<Warning>,
+}
+
+/// Chiffre un lot sans rien écrire : le prix de chaque plat de son menu et le total de la semaine, calculés comme
+/// la liste de courses qu'il donnerait (barème, présence, pièces, placard). Les ingrédients nouveaux du lot sont
+/// chiffrés à la volée d'après leurs rattachements. Droit « lire ».
+#[utoipa::path(
+    post,
+    path = "/api/v1/households/{id}/estimate",
+    tag = "recettes",
+    params(("id" = Uuid, Path)),
+    request_body = Lot,
+    responses(
+        (status = 200, body = Estimate),
+        (status = 403, body = ErrorBody),
+        (status = 404, body = ErrorBody),
+        (status = 422, body = ErrorBody),
+    )
+)]
+pub async fn estimate(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path(id): Path<Uuid>,
+    Json(lot): Json<Lot>,
+) -> ApiResult<Json<Estimate>> {
+    caller.require(&state.db, id, Scope::Read).await?;
+    estimate::estimate_lot(&state, id, &lot).await.map(Json)
 }
 
 /// Importe un lot en une transaction : tout ou rien. Idempotent (clé : nom des ingrédients, `slug` des recettes,

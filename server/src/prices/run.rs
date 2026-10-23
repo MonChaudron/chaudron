@@ -27,24 +27,48 @@ const MIN_OBSERVATIONS: usize = 5;
 const DUE_DAYS: i32 = 30;
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
 
+/// Un ingrédient, dans une forme d'achat, à chiffrer.
 #[derive(FromRow)]
-struct Target {
-    ingredient_id: Uuid,
-    code: String,
+pub(crate) struct Target {
+    pub ingredient_id: Uuid,
+    pub code: String,
     #[sqlx(try_from = "String")]
-    state: IngredientState,
+    pub state: IngredientState,
     #[sqlx(try_from = "String")]
-    default_unit: Unit,
-    piece_g: Option<f32>,
-    density: Option<f32>,
-    off_category: Option<String>,
-    off_product_category: Option<String>,
-    insee_series: Option<String>,
-    insee_per: Option<String>,
-    insee_index: Option<String>,
+    pub default_unit: Unit,
+    pub piece_g: Option<f32>,
+    pub density: Option<f32>,
+    pub off_category: Option<String>,
+    pub off_product_category: Option<String>,
+    pub insee_series: Option<String>,
+    pub insee_per: Option<String>,
+    pub insee_index: Option<String>,
 }
 
 impl Target {
+    pub(crate) fn new(
+        ingredient_id: Uuid,
+        code: String,
+        default_unit: Unit,
+        piece_g: Option<f32>,
+        density: Option<f32>,
+        link: &PriceLink,
+    ) -> Self {
+        Self {
+            ingredient_id,
+            code,
+            state: link.state,
+            default_unit,
+            piece_g,
+            density,
+            off_category: link.off_category.clone(),
+            off_product_category: link.off_product_category.clone(),
+            insee_series: link.insee_series.clone(),
+            insee_per: link.insee_per.map(|p| p.as_str().to_owned()),
+            insee_index: link.insee_index.clone(),
+        }
+    }
+
     fn link(&self) -> PriceLink {
         PriceLink {
             state: self.state,
@@ -60,7 +84,7 @@ impl Target {
     }
 
     /// L'unité de référence du prix, d'après l'unité de l'ingrédient dans les recettes.
-    fn reference(&self) -> PriceUnit {
+    pub(crate) fn reference(&self) -> PriceUnit {
         match self.default_unit {
             Unit::G | Unit::Pinch => PriceUnit::Kg,
             Unit::Ml | Unit::Tbsp | Unit::Tsp => PriceUnit::L,
@@ -113,7 +137,7 @@ pub async fn price_ingredients(state: &AppState, ids: Option<&[Uuid]>) -> Result
 }
 
 /// Le croisement pour un ingrédient (design-prix.md, « Le croisement »).
-async fn price_one(
+pub(crate) async fn price_one(
     state: &AppState,
     target: &Target,
     today: Day,

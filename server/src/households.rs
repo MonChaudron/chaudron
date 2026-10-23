@@ -105,6 +105,8 @@ pub struct Household {
     pub role: Role,
     /// Comptes qui ont accès au foyer.
     pub users: Vec<HouseholdUser>,
+    /// Plafond de budget d'une semaine de menu, en centimes ; nul : aucun.
+    pub weekly_budget_cents: Option<i32>,
 }
 
 #[derive(Serialize, ToSchema, FromRow)]
@@ -118,11 +120,13 @@ pub struct HouseholdUser {
 
 async fn load(db: &PgPool, id: Uuid, user_id: Uuid) -> ApiResult<Household> {
     let role = role_in(db, id, user_id).await?;
-    let (name, timezone, locale): (String, String, String) =
-        sqlx::query_as("SELECT name, timezone, locale FROM households WHERE id = $1")
-            .bind(id)
-            .fetch_one(db)
-            .await?;
+    let (name, timezone, locale, weekly_budget_cents): (String, String, String, Option<i32>) =
+        sqlx::query_as(
+            "SELECT name, timezone, locale, weekly_budget_cents FROM households WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_one(db)
+        .await?;
     let users = sqlx::query_as(
         "SELECT u.id AS user_id, u.display_name, u.email, hu.role
          FROM household_users hu JOIN users u ON u.id = hu.user_id
@@ -138,7 +142,19 @@ async fn load(db: &PgPool, id: Uuid, user_id: Uuid) -> ApiResult<Household> {
         locale,
         role,
         users,
+        weekly_budget_cents,
     })
+}
+
+/// Plafond de budget d'une semaine de menu du foyer.
+pub async fn weekly_budget(db: &PgPool, id: Uuid) -> ApiResult<Option<i32>> {
+    Ok(
+        sqlx::query_scalar("SELECT weekly_budget_cents FROM households WHERE id = $1")
+            .bind(id)
+            .fetch_optional(db)
+            .await?
+            .flatten(),
+    )
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -212,6 +228,16 @@ async fn read(
 pub struct HouseholdUpdate {
     pub name: Option<String>,
     pub timezone: Option<String>,
+    /// Plafond d'une semaine de menu, en centimes (de 1 à 10 000 €) ; `null` le retire, absent n'y touche pas.
+    /// Propriétaires seulement.
+    #[serde(default, deserialize_with = "present")]
+    #[schema(value_type = Option<i32>)]
+    pub weekly_budget_cents: Option<Option<i32>>,
+}
+
+/// Un champ présent (même `null`) devient `Some`, un champ absent reste `None`.
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i32>>, D::Error> {
+    Option::<i32>::deserialize(d).map(Some)
 }
 
 #[utoipa::path(
@@ -233,6 +259,19 @@ async fn update(
     Json(update): Json<HouseholdUpdate>,
 ) -> ApiResult<Json<Household>> {
     role_in(&state.db, id, user_id).await?;
+    if let Some(budget) = update.weekly_budget_cents {
+        require_owner(&state.db, id, user_id).await?;
+        if budget.is_some_and(|b| !(100..=1_000_000).contains(&b)) {
+            return Err(ApiError::invalid("Un plafond de 1 à 10 000 € par semaine."));
+        }
+        sqlx::query(
+            "UPDATE households SET weekly_budget_cents = $2, updated_at = now() WHERE id = $1",
+        )
+        .bind(id)
+        .bind(budget)
+        .execute(&state.db)
+        .await?;
+    }
     let name = update.name.as_deref().map(validate::name).transpose()?;
     let timezone = update
         .timezone

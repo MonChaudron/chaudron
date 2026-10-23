@@ -98,10 +98,26 @@ pub struct Offer {
     /// Rayon du remplaçant.
     #[serde(skip)]
     pub(crate) aisle: String,
+    /// Le remplaçant, et sa forme d'achat quand elle diffère de celle de la ligne remplacée.
+    #[serde(skip)]
+    pub(crate) substitute_id: Uuid,
+    #[serde(skip)]
+    pub(crate) substitute_state: Option<IngredientState>,
+    /// Prix estimé de la quantité à prendre.
+    pub price_cents: Option<i32>,
 }
 
-/// Un remplacement d'un ingrédient : (remplacement, code, nom et rayon du remplaçant, coefficient, note).
-type Entry = (Uuid, String, String, String, f32, String);
+/// Un remplacement d'un ingrédient.
+struct Entry {
+    id: Uuid,
+    substitute_id: Uuid,
+    substitute_state: Option<IngredientState>,
+    code: String,
+    name: String,
+    aisle: String,
+    factor: f32,
+    note: String,
+}
 
 /// Les remplacements de ces ingrédients, par ingrédient remplacé ; et ce qu'en disent ces recettes, par (recette,
 /// remplacement).
@@ -116,9 +132,19 @@ impl Catalog {
         ingredients: &[Uuid],
         recipes: &[Uuid],
     ) -> ApiResult<Self> {
-        type Row = (Uuid, Uuid, String, String, String, f32, String);
+        type Row = (
+            Uuid,
+            Uuid,
+            Uuid,
+            Option<String>,
+            String,
+            String,
+            String,
+            f32,
+            String,
+        );
         let rows: Vec<Row> = sqlx::query_as(
-            "SELECT s.id, s.ingredient_id, r.code, r.name, r.aisle, s.factor, s.note
+            "SELECT s.id, s.ingredient_id, s.substitute_id, s.substitute_state, r.code, r.name, r.aisle, s.factor, s.note
              FROM substitutions s JOIN ingredients r ON r.id = s.substitute_id
              WHERE s.ingredient_id = ANY($1) ORDER BY r.search_key",
         )
@@ -126,11 +152,17 @@ impl Catalog {
         .fetch_all(&mut *conn)
         .await?;
         let mut by_ingredient: HashMap<Uuid, Vec<_>> = HashMap::new();
-        for (id, ingredient, code, name, aisle, factor, note) in rows {
-            by_ingredient
-                .entry(ingredient)
-                .or_default()
-                .push((id, code, name, aisle, factor, note));
+        for (id, ingredient, substitute_id, state, code, name, aisle, factor, note) in rows {
+            by_ingredient.entry(ingredient).or_default().push(Entry {
+                id,
+                substitute_id,
+                substitute_state: state.and_then(|s| IngredientState::try_from(s).ok()),
+                code,
+                name,
+                aisle,
+                factor,
+                note,
+            });
         }
         let rules: Vec<(Uuid, Uuid, bool, String)> = sqlx::query_as(
             "SELECT recipe_id, substitution_id, allowed, note FROM recipe_substitutions WHERE recipe_id = ANY($1)",
@@ -156,6 +188,14 @@ impl Catalog {
         })
     }
 
+    /// Les remplaçants de tous les ingrédients du catalogue.
+    pub(crate) fn substitute_ids(&self) -> impl Iterator<Item = Uuid> + '_ {
+        self.by_ingredient
+            .values()
+            .flatten()
+            .map(|e| e.substitute_id)
+    }
+
     /// Les remplacements d'un ingrédient dans ces recettes : aucun qu'une des recettes refuse. `qty` : la quantité
     /// de l'ingrédient, multipliée par le coefficient.
     pub(crate) fn offers(
@@ -168,23 +208,28 @@ impl Catalog {
             .get(&ingredient)
             .into_iter()
             .flatten()
-            .filter(|(id, ..)| {
-                !recipes
-                    .iter()
-                    .any(|r| self.rules.get(&(*r, *id)).is_some_and(|rule| !rule.allowed))
+            .filter(|e| {
+                !recipes.iter().any(|r| {
+                    self.rules
+                        .get(&(*r, e.id))
+                        .is_some_and(|rule| !rule.allowed)
+                })
             })
-            .map(|(id, code, name, aisle, factor, note)| Offer {
-                id: *id,
-                ingredient: code.clone(),
-                label: name.clone(),
-                qty: qty.map(|q| (q * factor * 10.0).round() / 10.0),
+            .map(|e| Offer {
+                id: e.id,
+                ingredient: e.code.clone(),
+                label: e.name.clone(),
+                qty: qty.map(|q| (q * e.factor * 10.0).round() / 10.0),
                 note: recipes
                     .iter()
-                    .filter_map(|r| self.rules.get(&(*r, *id)))
+                    .filter_map(|r| self.rules.get(&(*r, e.id)))
                     .map(|rule| rule.note.clone())
                     .find(|n| !n.is_empty())
-                    .unwrap_or_else(|| note.clone()),
-                aisle: aisle.clone(),
+                    .unwrap_or_else(|| e.note.clone()),
+                aisle: e.aisle.clone(),
+                substitute_id: e.substitute_id,
+                substitute_state: e.substitute_state,
+                price_cents: None,
             })
             .collect()
     }

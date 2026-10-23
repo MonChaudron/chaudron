@@ -190,6 +190,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/community/ingredients/{id}/price-links/{state}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Remplace le rattachement d'un ingrédient pour une forme d'achat (le seul chemin qui le remplace), puis le rechiffre
+         *     en tâche détachée. Admin de l'instance.
+         */
+        put: operations["put_link"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Les ingrédients dont le prix est à revoir, et le dernier passage de la mise à jour. Admin de l'instance. */
+        get: operations["review"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/community/prices/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Relance un passage complet de la mise à jour, en tâche détachée. Admin de l'instance. */
+        post: operations["refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/community/recipes/{slug}": {
         parameters: {
             query?: never;
@@ -453,6 +507,27 @@ export interface paths {
         /** Remplace la liste des équipements du foyer. */
         put: operations["set_household_equipment"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/households/{id}/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chiffre un lot sans rien écrire : le prix de chaque plat de son menu et le total de la semaine, calculés comme
+         *     la liste de courses qu'il donnerait (barème, présence, pièces, placard). Les ingrédients nouveaux du lot sont
+         *     chiffrés à la volée d'après leurs rattachements. Droit « lire ».
+         */
+        post: operations["estimate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1584,6 +1659,14 @@ export interface components {
             /** @description Message en français, affichable tel quel. */
             message: string;
         };
+        /** @description Ce que coûterait un lot publié, sans rien écrire. */
+        Estimate: {
+            /** @description Prix de chaque plat du menu du lot, dans l'ordre du menu. */
+            meals: components["schemas"]["MealPrice"][];
+            /** @description Codes d'ingrédients ni dans le référentiel ni dans le lot (leurs lignes ne sont pas chiffrées). */
+            unknown: string[];
+            week?: components["schemas"]["WeekPrice"] | null;
+        };
         /** @description Ingrédient à éviter pour ce membre. */
         Exclusion: {
             /** Format: uuid */
@@ -1756,6 +1839,11 @@ export interface components {
             timezone: string;
             /** @description Comptes qui ont accès au foyer. */
             users: components["schemas"]["HouseholdUser"][];
+            /**
+             * Format: int32
+             * @description Plafond de budget d'une semaine de menu, en centimes ; nul : aucun.
+             */
+            weekly_budget_cents?: number | null;
         };
         /** @description Équipements que possède le foyer. */
         HouseholdEquipment: {
@@ -1773,6 +1861,12 @@ export interface components {
         HouseholdUpdate: {
             name?: string | null;
             timezone?: string | null;
+            /**
+             * Format: int32
+             * @description Plafond d'une semaine de menu, en centimes (de 1 à 10 000 €) ; `null` le retire, absent n'y touche pas.
+             *     Propriétaires seulement.
+             */
+            weekly_budget_cents?: number | null;
         };
         HouseholdUser: {
             display_name: string;
@@ -1885,6 +1979,11 @@ export interface components {
          * @enum {string}
          */
         InviteStatus: "pending" | "used" | "expired";
+        /**
+         * @description Ce qui ne va pas avec le prix d'un ingrédient.
+         * @enum {string}
+         */
+        IssueKind: "divergent" | "missing" | "unlinked";
         /** @description Une autre déclinaison de quelle recette. */
         JoinInput: {
             /** @description Slug de la recette dont celle-ci est une déclinaison. */
@@ -1950,6 +2049,24 @@ export interface components {
             /** @description Le compte qui l'a autorisée. */
             user: string;
         };
+        /** @description Correction d'un rattachement par l'admin : remplace celui de cette forme d'achat. */
+        LinkUpdate: {
+            /**
+             * Format: float
+             * @description Densité (g/ml) ; remplace l'ancienne si elle est donnée.
+             */
+            density?: number | null;
+            insee_index?: string | null;
+            insee_per?: components["schemas"]["PriceUnit"] | null;
+            insee_series?: string | null;
+            off_category?: string | null;
+            off_product_category?: string | null;
+            /**
+             * Format: float
+             * @description Poids d'une pièce, en grammes ; remplace l'ancien s'il est donné.
+             */
+            piece_g?: number | null;
+        };
         LoggedIn: {
             /** @description Page de l'appli où aller ensuite. */
             return_to: string;
@@ -1991,6 +2108,19 @@ export interface components {
          * @enum {string}
          */
         Meal: "lunch" | "dinner";
+        /** @description Prix estimé d'un repas du menu, boîtes du lendemain comprises. */
+        MealPrice: {
+            /** Format: int32 */
+            cents: number;
+            /** @description Toutes ses lignes ont un prix. */
+            complete: boolean;
+            /** Format: date */
+            date: string;
+            meal: components["schemas"]["Meal"];
+            /** @description Slug de la recette. */
+            recipe: string;
+            title: string;
+        };
         Member: {
             diet: components["schemas"]["Diet"];
             exclusions: components["schemas"]["Exclusion"][];
@@ -2025,6 +2155,7 @@ export interface components {
         /** @description Menu complet, avec portions et avertissements. */
         Menu: {
             notes: string;
+            price?: components["schemas"]["WeekPrice"] | null;
             /** @description Par date, repas (midi puis soir) et rang. */
             slots: components["schemas"]["MenuSlot"][];
             title: string;
@@ -2078,6 +2209,7 @@ export interface components {
              * @description Jours d'avance d'une phase faite avant (1 : la veille).
              */
             prep_days_before: number;
+            price?: components["schemas"]["SlotPrice"] | null;
             rating?: components["schemas"]["Rating"] | null;
             recipe: components["schemas"]["RecipeRef"];
             /**
@@ -2211,6 +2343,11 @@ export interface components {
             /** @description La précision de la recette, sinon celle du remplacement. */
             note: string;
             /**
+             * Format: int32
+             * @description Prix estimé de la quantité à prendre.
+             */
+            price_cents?: number | null;
+            /**
              * Format: float
              * @description Quantité à prendre, pour toute la ligne.
              */
@@ -2304,6 +2441,21 @@ export interface components {
             dinner: boolean[];
             lunch: boolean[];
         };
+        /** @description Un ingrédient à revoir, dans une forme d'achat. */
+        PriceIssue: {
+            /** Format: int32 */
+            cents?: number | null;
+            /** @description Code de l'ingrédient. */
+            ingredient: string;
+            /** Format: uuid */
+            ingredient_id: string;
+            /** Format: int32 */
+            insee_cents?: number | null;
+            kind: components["schemas"]["IssueKind"];
+            link?: components["schemas"]["PriceLink"] | null;
+            name: string;
+            state: components["schemas"]["IngredientState"];
+        };
         /** @description Rattachement d'un ingrédient, pour une forme d'achat, aux sources de prix. */
         PriceLink: {
             /** @description Idbank INSEE de l'indice des prix du poste de l'ingrédient. */
@@ -2317,11 +2469,32 @@ export interface components {
             off_product_category?: string | null;
             state: components["schemas"]["IngredientState"];
         };
+        PriceReview: {
+            issues: components["schemas"]["PriceIssue"][];
+            last_run?: components["schemas"]["PriceRun"] | null;
+        };
+        /** @description Le dernier passage de la mise à jour. */
+        PriceRun: {
+            /** Format: date-time */
+            finished_at?: string | null;
+            message: string;
+            ok: boolean;
+            /** Format: int32 */
+            priced: number;
+            /** Format: date-time */
+            started_at: string;
+        };
         /**
          * @description D'où vient un prix.
          * @enum {string}
          */
         PriceSource: "open_prices" | "insee" | "indexed";
+        /**
+         * @description Où se place un plat parmi les recettes que le foyer peut choisir : le tiers le moins cher, celui du milieu,
+         *     le plus cher (au prix par portion standard).
+         * @enum {string}
+         */
+        PriceTier: "low" | "mid" | "high";
         /**
          * @description Unité de référence d'un prix.
          * @enum {string}
@@ -2438,6 +2611,15 @@ export interface components {
             state: components["schemas"]["IngredientState"];
             unit: components["schemas"]["Unit"];
         };
+        /** @description Prix estimé d'une recette : pour la tablée d'un repas (ou une portion standard), et par portion standard. */
+        RecipePrice: {
+            /** Format: int32 */
+            cents: number;
+            complete: boolean;
+            /** Format: int32 */
+            per_portion_cents: number;
+            tier?: components["schemas"]["PriceTier"] | null;
+        };
         RecipeRef: {
             slug: string;
             title: string;
@@ -2464,6 +2646,7 @@ export interface components {
             family_id?: string | null;
             /** @description La préférée du foyer dans sa famille. */
             preferred: boolean;
+            price?: components["schemas"]["RecipePrice"] | null;
             season_months: number[];
             slug: string;
             tags: string[];
@@ -2500,6 +2683,11 @@ export interface components {
         Replaced: {
             ingredient: string;
             label: string;
+            /**
+             * Format: int32
+             * @description Son prix estimé, pour revenir à la ligne d'origine hors ligne.
+             */
+            price_cents?: number | null;
             /** Format: float */
             qty?: number | null;
         };
@@ -2572,6 +2760,11 @@ export interface components {
             /** @description Cuillères, pincées, « au goût » : au placard, à vérifier plutôt qu'à acheter. */
             pantry: boolean;
             /**
+             * Format: int32
+             * @description Prix estimé de la quantité (du remplaçant s'il est choisi) ; nul sans prix connu.
+             */
+            price_cents?: number | null;
+            /**
              * Format: float
              * @description Nulle : « au goût ». Les pièces sont arrondies à l'unité supérieure.
              */
@@ -2601,6 +2794,7 @@ export interface components {
              *     puis le reste.
              */
             items: components["schemas"]["ShoppingItem"][];
+            price?: components["schemas"]["WeekPrice"] | null;
             /** Format: date */
             week_start: string;
         };
@@ -2696,6 +2890,13 @@ export interface components {
             thaw?: string[];
             /** @description Nom de la variante ; absent : la variante par défaut (ou la première dont le foyer a le matériel). */
             variant?: string | null;
+        };
+        /** @description Prix estimé d'un plat du menu, pour ses portions. */
+        SlotPrice: {
+            /** Format: int32 */
+            cents: number;
+            complete: boolean;
+            tier?: components["schemas"]["PriceTier"] | null;
         };
         /** @description Variante retenue pour le créneau. */
         SlotVariant: {
@@ -3008,7 +3209,45 @@ export interface components {
          * @description Nature d'un avertissement.
          * @enum {string}
          */
-        WarningKind: "equipment_conflict" | "missing_equipment" | "exclusion" | "lunch_without_boxes" | "overlap" | "unknown_variant" | "freshness";
+        WarningKind: "equipment_conflict" | "missing_equipment" | "exclusion" | "lunch_without_boxes" | "overlap" | "unknown_variant" | "freshness" | "budget";
+        /** @description Prix estimé d'une semaine de courses. */
+        WeekPrice: {
+            /**
+             * Format: int32
+             * @description Plafond du foyer.
+             */
+            budget_cents?: number | null;
+            meals: components["schemas"]["MealPrice"][];
+            /**
+             * Format: int32
+             * @description Articles du menu sans prix (ils ne comptent pas dans le total).
+             */
+            missing: number;
+            /** @description Au-dessus du plafond ; nul sans plafond, ou quand des articles n'ont pas de prix (comparaison incomplète). */
+            over_budget?: boolean | null;
+            /** Format: int32 */
+            per_portion_cents: number;
+            /**
+             * Format: int32
+             * @description Portions de tous les repas, boîtes comprises.
+             */
+            portions: number;
+            /**
+             * Format: int32
+             * @description Ce que le total a de plus que la somme des repas : pièces arrondies, articles partagés entre plats.
+             */
+            shared_cents: number;
+            /**
+             * Format: int32
+             * @description Les articles à acheter, aux quantités de la liste, et le placard au prorata.
+             */
+            total_cents: number;
+            /**
+             * Format: date
+             * @description Le plus ancien calcul des prix utilisés.
+             */
+            updated_on?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -3390,6 +3629,109 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    put_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                state: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ingredient"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceReview"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lancée */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4252,6 +4594,55 @@ export interface operations {
                 };
             };
             /** @description Équipement inconnu */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    estimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Lot"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Estimate"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5262,6 +5653,10 @@ export interface operations {
                 tag?: string;
                 /** @description Un seul niveau ; sans, les deux. */
                 scope?: "household" | "community";
+                /** @description Le jour d'un repas : le prix de chaque recette pour sa tablée (présence du foyer). */
+                price_date?: string;
+                /** @description Le repas de ce jour (le soir par défaut) ; au dîner, les boîtes du lendemain midi comptent. */
+                price_meal?: "lunch" | "dinner";
             };
             header?: never;
             path: {

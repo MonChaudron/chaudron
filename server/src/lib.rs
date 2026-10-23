@@ -132,6 +132,10 @@ impl AppState {
         recipes::put_community,
         recipes::delete_community,
         recipes::import,
+        recipes::estimate,
+        prices::review::review,
+        prices::review::put_link,
+        prices::review::refresh,
         menus::list_menus,
         menus::read_menu,
         menus::put_menu,
@@ -274,6 +278,7 @@ pub fn app(state: AppState, web_dir: &Path) -> Router {
         .merge(members::router())
         .merge(catalog::router())
         .merge(ingredients::router())
+        .merge(prices::router())
         .merge(recipes::router())
         .merge(menus::router())
         .merge(shopping::router())

@@ -3,11 +3,18 @@
 //! recettes multiplient par leurs quantités. Pas de prix saisi à la main : seul un rattachement se corrige.
 
 pub mod crossing;
+pub mod estimate;
 pub mod insee;
 pub mod open_prices;
+pub mod review;
 pub mod run;
 
 use std::collections::HashMap;
+
+use axum::{
+    Router,
+    routing::{get, post, put},
+};
 
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgConnection, PgExecutor, PgPool};
@@ -15,7 +22,17 @@ use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{error::ApiResult, menus::Day, types::IngredientState, types::text_enum};
+use crate::{AppState, error::ApiResult, menus::Day, types::IngredientState, types::text_enum};
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/community/prices", get(review::review))
+        .route("/community/prices/refresh", post(review::refresh))
+        .route(
+            "/community/ingredients/{id}/price-links/{state}",
+            put(review::put_link),
+        )
+}
 
 /// Rattachements de départ, complétés au démarrage (jamais remplacés).
 const SEED: &str = include_str!("../../data/prix.tsv");

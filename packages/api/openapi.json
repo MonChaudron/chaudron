@@ -521,6 +521,134 @@
         }
       }
     },
+    "/api/v1/community/ingredients/{id}/price-links/{state}": {
+      "put": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Remplace le rattachement d'un ingrédient pour une forme d'achat (le seul chemin qui le remplace), puis le rechiffre\nen tâche détachée. Admin de l'instance.",
+        "operationId": "put_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "state",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ingredient"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/prices": {
+      "get": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Les ingrédients dont le prix est à revoir, et le dernier passage de la mise à jour. Admin de l'instance.",
+        "operationId": "review",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceReview"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/community/prices/refresh": {
+      "post": {
+        "tags": [
+          "communauté"
+        ],
+        "summary": "Relance un passage complet de la mise à jour, en tâche détachée. Admin de l'instance.",
+        "operationId": "refresh",
+        "responses": {
+          "202": {
+            "description": "Lancée"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/community/recipes/{slug}": {
       "put": {
         "tags": [
@@ -1637,6 +1765,74 @@
           },
           "422": {
             "description": "Équipement inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{id}/estimate": {
+      "post": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Chiffre un lot sans rien écrire : le prix de chaque plat de son menu et le total de la semaine, calculés comme\nla liste de courses qu'il donnerait (barème, présence, pièces, placard). Les ingrédients nouveaux du lot sont\nchiffrés à la volée d'après leurs rattachements. Droit « lire ».",
+        "operationId": "estimate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Estimate"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -3127,6 +3323,30 @@
               "enum": [
                 "household",
                 "community"
+              ]
+            }
+          },
+          {
+            "name": "price_date",
+            "in": "query",
+            "description": "Le jour d'un repas : le prix de chaque recette pour sa tablée (présence du foyer).",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "price_meal",
+            "in": "query",
+            "description": "Le repas de ce jour (le soir par défaut) ; au dîner, les boîtes du lendemain midi comptent.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Repas de la journée.",
+              "enum": [
+                "lunch",
+                "dinner"
               ]
             }
           }
@@ -5904,6 +6124,41 @@
           }
         }
       },
+      "Estimate": {
+        "type": "object",
+        "description": "Ce que coûterait un lot publié, sans rien écrire.",
+        "required": [
+          "meals",
+          "unknown"
+        ],
+        "properties": {
+          "meals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealPrice"
+            },
+            "description": "Prix de chaque plat du menu du lot, dans l'ordre du menu."
+          },
+          "unknown": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Codes d'ingrédients ni dans le référentiel ni dans le lot (leurs lignes ne sont pas chiffrées)."
+          },
+          "week": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WeekPrice",
+                "description": "Total de la semaine, comme la liste de courses le donnerait ; nul sans menu ou sans rien à acheter."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "Exclusion": {
         "type": "object",
         "description": "Ingrédient à éviter pour ce membre.",
@@ -6406,6 +6661,14 @@
               "$ref": "#/components/schemas/HouseholdUser"
             },
             "description": "Comptes qui ont accès au foyer."
+          },
+          "weekly_budget_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Plafond de budget d'une semaine de menu, en centimes ; nul : aucun."
           }
         }
       },
@@ -6461,6 +6724,14 @@
               "string",
               "null"
             ]
+          },
+          "weekly_budget_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Plafond d'une semaine de menu, en centimes (de 1 à 10 000 €) ; `null` le retire, absent n'y touche pas.\nPropriétaires seulement."
           }
         }
       },
@@ -6782,6 +7053,15 @@
           "expired"
         ]
       },
+      "IssueKind": {
+        "type": "string",
+        "description": "Ce qui ne va pas avec le prix d'un ingrédient.",
+        "enum": [
+          "divergent",
+          "missing",
+          "unlinked"
+        ]
+      },
       "JoinInput": {
         "type": "object",
         "description": "Une autre déclinaison de quelle recette.",
@@ -6972,6 +7252,62 @@
           }
         }
       },
+      "LinkUpdate": {
+        "type": "object",
+        "description": "Correction d'un rattachement par l'admin : remplace celui de cette forme d'achat.",
+        "properties": {
+          "density": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Densité (g/ml) ; remplace l'ancienne si elle est donnée."
+          },
+          "insee_index": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "insee_per": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PriceUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "insee_series": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "off_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "off_product_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "piece_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Poids d'une pièce, en grammes ; remplace l'ancien s'il est donné."
+          }
+        }
+      },
       "LoggedIn": {
         "type": "object",
         "required": [
@@ -7096,6 +7432,42 @@
           "dinner"
         ]
       },
+      "MealPrice": {
+        "type": "object",
+        "description": "Prix estimé d'un repas du menu, boîtes du lendemain comprises.",
+        "required": [
+          "date",
+          "meal",
+          "recipe",
+          "title",
+          "cents",
+          "complete"
+        ],
+        "properties": {
+          "cents": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Toutes ses lignes ont un prix."
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "meal": {
+            "$ref": "#/components/schemas/Meal"
+          },
+          "recipe": {
+            "type": "string",
+            "description": "Slug de la recette."
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
       "Member": {
         "type": "object",
         "required": [
@@ -7207,6 +7579,17 @@
         "properties": {
           "notes": {
             "type": "string"
+          },
+          "price": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WeekPrice",
+                "description": "Prix estimé de la semaine (le total des courses) ; rempli à la lecture du menu."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "slots": {
             "type": "array",
@@ -7346,6 +7729,17 @@
             "type": "integer",
             "format": "int32",
             "description": "Jours d'avance d'une phase faite avant (1 : la veille)."
+          },
+          "price": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SlotPrice",
+                "description": "Prix estimé du plat ; rempli à la lecture du menu."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rating": {
             "oneOf": [
@@ -7672,6 +8066,14 @@
             "type": "string",
             "description": "La précision de la recette, sinon celle du remplacement."
           },
+          "price_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Prix estimé de la quantité à prendre."
+          },
           "qty": {
             "type": [
               "number",
@@ -7951,6 +8353,60 @@
           }
         }
       },
+      "PriceIssue": {
+        "type": "object",
+        "description": "Un ingrédient à revoir, dans une forme d'achat.",
+        "required": [
+          "ingredient_id",
+          "ingredient",
+          "name",
+          "state",
+          "kind"
+        ],
+        "properties": {
+          "cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "ingredient": {
+            "type": "string",
+            "description": "Code de l'ingrédient."
+          },
+          "ingredient_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "insee_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IssueKind"
+          },
+          "link": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PriceLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/IngredientState"
+          }
+        }
+      },
       "PriceLink": {
         "type": "object",
         "description": "Rattachement d'un ingrédient, pour une forme d'achat, aux sources de prix.",
@@ -8002,6 +8458,63 @@
           }
         }
       },
+      "PriceReview": {
+        "type": "object",
+        "required": [
+          "issues"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceIssue"
+            }
+          },
+          "last_run": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PriceRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "PriceRun": {
+        "type": "object",
+        "description": "Le dernier passage de la mise à jour.",
+        "required": [
+          "started_at",
+          "ok",
+          "priced",
+          "message"
+        ],
+        "properties": {
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "priced": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "PriceSource": {
         "type": "string",
         "description": "D'où vient un prix.",
@@ -8009,6 +8522,15 @@
           "open_prices",
           "insee",
           "indexed"
+        ]
+      },
+      "PriceTier": {
+        "type": "string",
+        "description": "Où se place un plat parmi les recettes que le foyer peut choisir : le tiers le moins cher, celui du milieu,\nle plus cher (au prix par portion standard).",
+        "enum": [
+          "low",
+          "mid",
+          "high"
         ]
       },
       "PriceUnit": {
@@ -8380,6 +8902,38 @@
           }
         }
       },
+      "RecipePrice": {
+        "type": "object",
+        "description": "Prix estimé d'une recette : pour la tablée d'un repas (ou une portion standard), et par portion standard.",
+        "required": [
+          "cents",
+          "per_portion_cents",
+          "complete"
+        ],
+        "properties": {
+          "cents": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "per_portion_cents": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tier": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PriceTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "RecipeRef": {
         "type": "object",
         "required": [
@@ -8454,6 +9008,17 @@
           "preferred": {
             "type": "boolean",
             "description": "La préférée du foyer dans sa famille."
+          },
+          "price": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecipePrice",
+                "description": "Prix estimé : pour la tablée du repas demandé (`price_date`, `price_meal`), sinon pour une portion standard."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "season_months": {
             "type": "array",
@@ -8568,6 +9133,14 @@
           },
           "label": {
             "type": "string"
+          },
+          "price_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Son prix estimé, pour revenir à la ligne d'origine hors ligne."
           },
           "qty": {
             "type": [
@@ -8786,6 +9359,14 @@
             "type": "boolean",
             "description": "Cuillères, pincées, « au goût » : au placard, à vérifier plutôt qu'à acheter."
           },
+          "price_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Prix estimé de la quantité (du remplaçant s'il est choisi) ; nul sans prix connu."
+          },
           "qty": {
             "type": [
               "number",
@@ -8869,6 +9450,17 @@
               "$ref": "#/components/schemas/ShoppingItem"
             },
             "description": "Bloc des recettes (rayons dans l'ordre du magasin, placard à la fin), puis petits-déjeuners et desserts,\npuis le reste."
+          },
+          "price": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/WeekPrice",
+                "description": "Prix estimé de la semaine ; nul s'il n'y a rien à acheter."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "week_start": {
             "type": "string",
@@ -9116,6 +9708,33 @@
               "null"
             ],
             "description": "Nom de la variante ; absent : la variante par défaut (ou la première dont le foyer a le matériel)."
+          }
+        }
+      },
+      "SlotPrice": {
+        "type": "object",
+        "description": "Prix estimé d'un plat du menu, pour ses portions.",
+        "required": [
+          "cents",
+          "complete"
+        ],
+        "properties": {
+          "cents": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "tier": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PriceTier"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -10021,8 +10640,76 @@
           "lunch_without_boxes",
           "overlap",
           "unknown_variant",
-          "freshness"
+          "freshness",
+          "budget"
         ]
+      },
+      "WeekPrice": {
+        "type": "object",
+        "description": "Prix estimé d'une semaine de courses.",
+        "required": [
+          "total_cents",
+          "per_portion_cents",
+          "portions",
+          "meals",
+          "shared_cents",
+          "missing"
+        ],
+        "properties": {
+          "budget_cents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Plafond du foyer."
+          },
+          "meals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealPrice"
+            }
+          },
+          "missing": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Articles du menu sans prix (ils ne comptent pas dans le total)."
+          },
+          "over_budget": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Au-dessus du plafond ; nul sans plafond, ou quand des articles n'ont pas de prix (comparaison incomplète)."
+          },
+          "per_portion_cents": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "portions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Portions de tous les repas, boîtes comprises."
+          },
+          "shared_cents": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ce que le total a de plus que la somme des repas : pièces arrondies, articles partagés entre plats."
+          },
+          "total_cents": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Les articles à acheter, aux quantités de la liste, et le placard au prorata."
+          },
+          "updated_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "Le plus ancien calcul des prix utilisés."
+          }
+        }
       }
     },
     "securitySchemes": {
