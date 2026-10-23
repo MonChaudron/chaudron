@@ -2,6 +2,8 @@
 //! (Open Prices, INSEE) ; une tâche mensuelle en tire un prix unitaire moyen, que les courses, le menu et les
 //! recettes multiplient par leurs quantités. Pas de prix saisi à la main : seul un rattachement se corrige.
 
+pub mod crossing;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
