@@ -33,6 +33,7 @@ use crate::{
     ingredients::{self, NewIngredient},
     members,
     menus::{self, MenuInput, Warning},
+    prices,
     substitutions::{self, RecipeSubstitution},
     text::{code, like_patterns, search_key},
     types::{IngredientState, PortionRole, Scope, Unit},
@@ -1770,19 +1771,32 @@ pub async fn import(
         warnings: Vec::new(),
     };
     let mut tx = state.db.begin().await?;
+    // Ingrédients dont un rattachement aux sources de prix vient d'être écrit : chiffrés après l'import.
+    let mut to_price: Vec<Uuid> = Vec::new();
     for ingredient in &lot.ingredients {
         let name = ingredient.name.trim();
-        let exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS (SELECT 1 FROM ingredients WHERE search_key = $1 OR code = $2)",
+        let existing: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM ingredients WHERE search_key = $1 OR code = $2 LIMIT 1",
         )
         .bind(search_key(name))
         .bind(code(name))
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
-        if !exists {
-            ingredients::insert(&mut tx, ingredient)
+        if let Some(id) = existing {
+            // Le référentiel est commun à l'instance : le lot complète, il ne remplace rien.
+            ingredient.check_prices().map_err(|e| e.context(name))?;
+            prices::complete_sizes(&mut tx, id, ingredient.piece_g, ingredient.density).await?;
+            if prices::complete_links(&mut tx, id, &ingredient.price_links).await? {
+                to_price.push(id);
+            }
+        }
+        if existing.is_none() {
+            let id = ingredients::insert(&mut tx, ingredient)
                 .await
                 .map_err(|e| e.context(name))?;
+            if !ingredient.price_links.is_empty() {
+                to_price.push(id);
+            }
             result.ingredients_created.push(code(name));
         } else if let Some(days) = ingredient.keeps_days {
             // Un ingrédient connu : le référentiel est commun à l'instance, le lot complète une durée absente
@@ -1847,6 +1861,15 @@ pub async fn import(
         result.menu_imported = true;
     }
     tx.commit().await?;
+    if !to_price.is_empty() {
+        // En tâche détachée : une source lente ou en panne ne retarde ni ne fait échouer l'import.
+        let state = state.clone();
+        tokio::spawn(async move {
+            if let Err(err) = prices::run::price_ingredients(&state, Some(&to_price)).await {
+                tracing::warn!(%err, "chiffrage des ingrédients du lot");
+            }
+        });
+    }
     if let Some(week_start) = menu_start {
         state.notify(id, "menu", Some(week_start), None);
         result.warnings = menus::read(&state.db, id, week_start).await?.warnings;

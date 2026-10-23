@@ -10,7 +10,7 @@ pub mod run;
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, PgExecutor, PgPool};
+use sqlx::{FromRow, PgConnection, PgExecutor, PgPool};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -209,6 +209,55 @@ impl PriceBook {
             .map(|p| Day(p.computed_at.date()))
             .min()
     }
+}
+
+/// Écrit les rattachements absents d'un ingrédient, sans remplacer ceux qui existent ; `true` si au moins un a été
+/// écrit.
+pub async fn complete_links(
+    conn: &mut PgConnection,
+    ingredient_id: Uuid,
+    links: &[PriceLink],
+) -> sqlx::Result<bool> {
+    let mut written = false;
+    for l in links {
+        written |= sqlx::query(
+            "INSERT INTO ingredient_price_links
+                 (ingredient_id, state, off_category, off_product_category, insee_series, insee_per, insee_index)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (ingredient_id, state) DO NOTHING",
+        )
+        .bind(ingredient_id)
+        .bind(l.state.as_str())
+        .bind(&l.off_category)
+        .bind(&l.off_product_category)
+        .bind(&l.insee_series)
+        .bind(l.insee_per.map(PriceUnit::as_str))
+        .bind(&l.insee_index)
+        .execute(&mut *conn)
+        .await?
+        .rows_affected()
+            > 0;
+    }
+    Ok(written)
+}
+
+/// Complète le poids d'une pièce et la densité d'un ingrédient quand ils sont inconnus.
+pub async fn complete_sizes(
+    conn: &mut PgConnection,
+    ingredient_id: Uuid,
+    piece_g: Option<f32>,
+    density: Option<f32>,
+) -> sqlx::Result<()> {
+    if piece_g.is_some() || density.is_some() {
+        sqlx::query(
+            "UPDATE ingredients SET piece_g = coalesce(piece_g, $2), density = coalesce(density, $3) WHERE id = $1",
+        )
+        .bind(ingredient_id)
+        .bind(piece_g)
+        .bind(density)
+        .execute(conn)
+        .await?;
+    }
+    Ok(())
 }
 
 /// Une ligne de l'amorçage.

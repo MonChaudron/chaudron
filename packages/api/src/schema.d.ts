@@ -2143,6 +2143,11 @@ export interface components {
             aisle: components["schemas"]["Aisle"];
             default_state: components["schemas"]["IngredientState"];
             default_unit: components["schemas"]["Unit"];
+            /**
+             * Format: float
+             * @description Densité (g/ml) ; dans un lot, complète un ingrédient connu qui n'en a pas.
+             */
+            density?: number | null;
             /** @description Lignes Ciqual, au plus une par forme d'achat. */
             foods?: components["schemas"]["FoodLink"][];
             /**
@@ -2153,6 +2158,16 @@ export interface components {
              */
             keeps_days?: number | null;
             name: string;
+            /**
+             * Format: float
+             * @description Poids d'une pièce, en grammes ; dans un lot, complète un ingrédient connu qui n'en a pas.
+             */
+            piece_g?: number | null;
+            /**
+             * @description Rattachements aux sources de prix, au plus un par forme d'achat ; dans un lot, complète ceux d'un ingrédient
+             *     connu sans jamais les remplacer.
+             */
+            price_links?: components["schemas"]["PriceLink"][];
         };
         /** @description Nouveau membre : barème par défaut de son type, présent à tous les repas, sans exclusion. */
         NewMember: {

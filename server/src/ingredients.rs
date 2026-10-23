@@ -192,6 +192,31 @@ pub struct NewIngredient {
     /// Lignes Ciqual, au plus une par forme d'achat.
     #[serde(default)]
     pub foods: Vec<FoodLink>,
+    /// Poids d'une pièce, en grammes ; dans un lot, complète un ingrédient connu qui n'en a pas.
+    pub piece_g: Option<f32>,
+    /// Densité (g/ml) ; dans un lot, complète un ingrédient connu qui n'en a pas.
+    pub density: Option<f32>,
+    /// Rattachements aux sources de prix, au plus un par forme d'achat ; dans un lot, complète ceux d'un ingrédient
+    /// connu sans jamais les remplacer.
+    #[serde(default)]
+    pub price_links: Vec<PriceLink>,
+}
+
+impl NewIngredient {
+    /// Poids, densité et rattachements cohérents.
+    pub fn check_prices(&self) -> ApiResult<()> {
+        let invalid = |v: f32| v.is_nan() || v <= 0.0;
+        if self.piece_g.is_some_and(invalid) || self.density.is_some_and(invalid) {
+            return Err(ApiError::invalid(
+                "Poids d'une pièce et densité sont positifs.",
+            ));
+        }
+        let mut states = HashSet::new();
+        if !self.price_links.iter().all(|l| states.insert(l.state)) {
+            return Err(ApiError::invalid("Un seul rattachement de prix par état."));
+        }
+        Ok(())
+    }
 }
 
 async fn check_food(db: impl PgExecutor<'_>, food_code: i32) -> ApiResult<()> {
@@ -244,6 +269,7 @@ pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<
     if !body.foods.iter().all(|f| states.insert(f.state)) {
         return Err(ApiError::invalid("Une seule ligne Ciqual par état."));
     }
+    body.check_prices()?;
     for food in &body.foods {
         check_food(&mut *conn, food.food_code).await?;
     }
@@ -276,6 +302,8 @@ pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<
         .execute(&mut *conn)
         .await?;
     }
+    prices::complete_sizes(&mut *conn, id, body.piece_g, body.density).await?;
+    prices::complete_links(&mut *conn, id, &body.price_links).await?;
     Ok(id)
 }
 

@@ -175,3 +175,130 @@ async fn source_injoignable_garde_les_prix(db: PgPool) {
     );
     assert!(last_run_ok(&db).await);
 }
+
+// Rattachements dans le lot
+
+async fn home(app: &TestApp) -> (Browser, String) {
+    let mut alice = alice(app).await;
+    let home = alice.household("Maison").await.to_string();
+    (alice, home)
+}
+
+fn brussels_lot(carrot_category: &str) -> Value {
+    serde_json::json!({"ingredients": [
+        {"name": "Carotte", "aisle": "produce", "default_unit": "g", "default_state": "fresh",
+         "price_links": [{"state": "fresh", "off_category": carrot_category}]},
+        {"name": "Chou de Bruxelles", "aisle": "produce", "default_unit": "g", "default_state": "fresh",
+         "piece_g": 12, "price_links": [{"state": "fresh", "off_category": "en:brussels-sprouts"}]},
+    ]})
+}
+
+#[sqlx::test]
+async fn lot_complete_sans_remplacer(db: PgPool) {
+    prices::seed_links(&db).await.unwrap();
+    let app = TestApp::new(db.clone(), SignupPolicy::Open).await;
+    let (mut alice, home) = home(&app).await;
+
+    let response = alice
+        .post(
+            &format!("/api/v1/households/{home}/import"),
+            brussels_lot("en:organic-carrots"),
+        )
+        .await;
+    assert_eq!(
+        response.status,
+        axum::http::StatusCode::OK,
+        "{}",
+        response.text
+    );
+    assert_eq!(
+        off_category(&db, "carrot").await.as_deref(),
+        Some("en:carrots"),
+        "rien n'est remplacé"
+    );
+    assert_eq!(
+        off_category(&db, "chou_de_bruxelles").await.as_deref(),
+        Some("en:brussels-sprouts")
+    );
+    let sprouts = ingredient(&mut alice, "chou_de_bruxelles").await;
+    assert_eq!(sprouts["piece_g"], 12.0);
+
+    // Un ingrédient connu sans rattachement pour cette forme le reçoit du lot.
+    sqlx::query("DELETE FROM ingredient_price_links WHERE ingredient_id = (SELECT id FROM ingredients WHERE code = 'carrot')")
+        .execute(&db)
+        .await
+        .unwrap();
+    alice
+        .post(
+            &format!("/api/v1/households/{home}/import"),
+            brussels_lot("en:organic-carrots"),
+        )
+        .await;
+    assert_eq!(
+        off_category(&db, "carrot").await.as_deref(),
+        Some("en:organic-carrots")
+    );
+}
+
+async fn priced(browser: &mut Browser, code: &str) -> Value {
+    ingredient(browser, code).await["prices"].clone()
+}
+
+#[sqlx::test]
+async fn ingredient_nouveau_chiffre_tout_de_suite(db: PgPool) {
+    let app = TestApp::new(db, SignupPolicy::Open).await;
+    for (euros, days) in [(3.96, 20), (3.80, 18), (4.10, 16), (3.70, 14), (4.00, 12)] {
+        app.fake
+            .prices
+            .raw("en:brussels-sprouts", euros, days, "France", &[]);
+    }
+    let (mut alice, home) = home(&app).await;
+
+    let response = alice
+        .post(
+            &format!("/api/v1/households/{home}/import"),
+            brussels_lot("en:carrots"),
+        )
+        .await;
+    assert_eq!(
+        response.status,
+        axum::http::StatusCode::OK,
+        "{}",
+        response.text
+    );
+    let mut prices = Value::Null;
+    for _ in 0..50 {
+        prices = priced(&mut alice, "chou_de_bruxelles").await;
+        if prices.as_array().is_some_and(|p| !p.is_empty()) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(prices[0]["cents"], 396, "{prices}");
+    assert_eq!(prices[0]["per"], "kg");
+}
+
+#[sqlx::test]
+async fn import_reussit_source_coupee(db: PgPool) {
+    let app = TestApp::new(db, SignupPolicy::Open).await;
+    app.fake.prices.set_down(true);
+    let (mut alice, home) = home(&app).await;
+
+    let response = alice
+        .post(
+            &format!("/api/v1/households/{home}/import"),
+            brussels_lot("en:carrots"),
+        )
+        .await;
+    assert_eq!(
+        response.status,
+        axum::http::StatusCode::OK,
+        "{}",
+        response.text
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert_eq!(
+        priced(&mut alice, "chou_de_bruxelles").await,
+        Value::Array(Vec::new())
+    );
+}

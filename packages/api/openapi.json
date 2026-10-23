@@ -7515,6 +7515,14 @@
           "default_unit": {
             "$ref": "#/components/schemas/Unit"
           },
+          "density": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Densité (g/ml) ; dans un lot, complète un ingrédient connu qui n'en a pas."
+          },
           "foods": {
             "type": "array",
             "items": {
@@ -7532,6 +7540,21 @@
           },
           "name": {
             "type": "string"
+          },
+          "piece_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Poids d'une pièce, en grammes ; dans un lot, complète un ingrédient connu qui n'en a pas."
+          },
+          "price_links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceLink"
+            },
+            "description": "Rattachements aux sources de prix, au plus un par forme d'achat ; dans un lot, complète ceux d'un ingrédient\nconnu sans jamais les remplacer."
           }
         }
       },
