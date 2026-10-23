@@ -1,6 +1,6 @@
 # Skill Alexa
 
-« Alexa, ouvre le chaudron » : le menu et les recettes du foyer, lus étape par étape, avec l'écran de l'Echo Show.
+« Alexa, ouvre mon chaudron » : le menu et les recettes du foyer, lus étape par étape, avec l'écran de l'Echo Show.
 La skill appelle l'API de l'instance Chaudron avec le jeton de la liaison de compte ; la place dans la recette vit sur
 le serveur (`/cooking`), on la retrouve en revenant et le téléphone la partage.
 
@@ -16,18 +16,18 @@ Le code tourne sur Node 16 (Lambda Alexa-hosted) : `https` plutôt que `fetch`.
 
 | Où | Dire |
 |---|---|
-| Ouverture | « Alexa, ouvre le chaudron » : la cuisson en cours, sinon le plat de ce soir, sinon le menu |
+| Ouverture | « Alexa, ouvre mon chaudron » : la cuisson en cours, sinon le plat de ce soir, sinon le menu |
 | Menu | « le menu », « le curry », « celle de demain », « on mange quoi jeudi » |
 | Recette | « on commence », « les ingrédients », « comment je sers », « je n'ai pas le Cookeo » |
 | Cuisine | « Alexa, suivant / précédent / répète / étape 3 », « détaille », « accélère », « lance le minuteur » |
-| Musique | « mets la radio », « Alexa, pause » : la skill rend la main à Alexa ; « Alexa, ouvre le chaudron » pour reprendre |
+| Musique | « mets la radio », « Alexa, pause » : la skill rend la main à Alexa ; « Alexa, ouvre mon chaudron » pour reprendre |
 | Cahier | « Alexa, remarque : ça déborde » : une note privée du foyer, à l'étape en cours ; « Alexa, les notes » les lit (trois au plus). Jamais lues d'office : un badge « 2 notes » à l'écran |
 
 L'écran est tactile : plats du menu, *Commencer*, *Suivante*, *Précédente*, liste des étapes.
 
 ## Installer pour son instance
 
-1. Créer une skill personnalisée fr-FR, hébergée (« Alexa-hosted », Node.js), nom d'invocation « le chaudron ».
+1. Créer une skill personnalisée fr-FR, hébergée (« Alexa-hosted », Node.js), nom d'invocation « mon chaudron ».
 2. Pousser `lambda/` et `skill-package/` dans le dépôt de la skill, avec un `lambda/config.json` :
    `{ "api_url": "https://chaudron.example.org" }` (l'adresse publique de l'instance, sans `/` final).
 3. Modèle : `skill-package/interactionModels/custom/fr-FR.json`.

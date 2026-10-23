@@ -356,7 +356,7 @@ function creer(outils = { client: chaudron.client, maintenant: () => new Date() 
     canHandle: (hi) => intention(hi, 'MusicIntent', 'MusicSearchIntent', 'AMAZON.PauseIntent'),
     handle: (hi) =>
       hi.responseBuilder
-        .speak('Je te rends la main, redis-le à Alexa. Pour reprendre la recette : Alexa, ouvre le chaudron.')
+        .speak('Je te rends la main, redis-le à Alexa. Pour reprendre la recette : Alexa, ouvre mon chaudron.')
         .withShouldEndSession(true)
         .getResponse(),
   };
@@ -450,7 +450,7 @@ function creer(outils = { client: chaudron.client, maintenant: () => new Date() 
     canHandle: (hi) => intention(hi, 'AMAZON.StopIntent', 'AMAZON.CancelIntent'),
     handle: (hi) =>
       hi.responseBuilder
-        .speak('Je garde ta place. Dis : Alexa, ouvre le chaudron, pour reprendre.')
+        .speak('Je garde ta place. Dis : Alexa, ouvre mon chaudron, pour reprendre.')
         .withShouldEndSession(true)
         .getResponse(),
   };
