@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Button, Card, Choice, Clamped, Columns, ErrorText, Field, ListRow, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { PricePill } from '../../ui/prices';
 import { mealLabels, type MoveRequest, MovePanel, SlotSummary, TextAction, Warnings, warningsOf } from '../../ui/menu';
 
 export default function MenuScreen() {
@@ -324,7 +325,7 @@ function Composer({ householdId, menu, isNew, busy, error, onSave, onCancel }: {
                   <DishEditor key={slot.key} slot={slot} recipe={full[slot.recipe]} onOpen={() => loadRecipe(slot.recipe)} onChange={(c) => update(slot.key, c)} onRemove={() => setSlots((l) => l.filter((s) => s.key !== slot.key))} />
                 ))}
               {picking === date ? null : <TextAction label="+ Ajouter un plat" onPress={() => setPicking(date)} />}
-              {picking === date ? <Picker recipes={recipes.data} error={recipes.error} onPick={(meal, r) => add(date, meal, r)} onCancel={() => setPicking(null)} /> : null}
+              {picking === date ? <Picker householdId={householdId} date={date} recipes={recipes.data} error={recipes.error} onPick={(meal, r) => add(date, meal, r)} onCancel={() => setPicking(null)} /> : null}
             </Card>
           ))}
           {span < 28 ? <Button kind="quiet" label="Ajouter un jour" onPress={() => setExtra(extra + 1)} /> : null}
@@ -391,14 +392,20 @@ function DishEditor({ slot, recipe, onOpen, onChange, onRemove }: { slot: Draft;
   );
 }
 
-/** Choisir une recette du foyer pour un jour. */
-function Picker({ recipes, error, onPick, onCancel }: { recipes?: RecipeSummary[]; error: string | null; onPick: (meal: Meal, recipe: RecipeSummary) => void; onCancel: () => void }) {
+/** Choisir une recette du foyer pour un jour, chacune avec le prix du repas pour la tablée de ce jour-là. */
+function Picker({ householdId, date, recipes, error, onPick, onCancel }: { householdId: string; date: string; recipes?: RecipeSummary[]; error: string | null; onPick: (meal: Meal, recipe: RecipeSummary) => void; onCancel: () => void }) {
   const [meal, setMeal] = useState<Meal>('dinner');
   const [query, setQuery] = useState('');
+  // Les mêmes recettes, chiffrées pour ce repas ; en attendant (ou hors ligne), la liste sans prix de la tablée.
+  const priced = useLoad(
+    () => api.GET('/api/v1/households/{id}/recipes', { params: { path: { id: householdId }, query: { price_date: date, price_meal: meal } } }),
+    [householdId, date, meal],
+  );
+  const shownRecipes = priced.data ?? recipes;
   const found = useMemo(() => {
     const words = searchKey(query).split(' ').filter(Boolean);
-    return (recipes ?? []).filter((r) => words.every((w) => searchKey(r.title).includes(w))).slice(0, 8);
-  }, [recipes, query]);
+    return (shownRecipes ?? []).filter((r) => words.every((w) => searchKey(r.title).includes(w))).slice(0, 8);
+  }, [shownRecipes, query]);
   return (
     <Stack gap={space[3]}>
       <Choice label="Repas" value={meal} onChange={setMeal} options={[{ value: 'lunch', label: 'Midi' }, { value: 'dinner', label: 'Soir' }]} />
@@ -406,7 +413,14 @@ function Picker({ recipes, error, onPick, onCancel }: { recipes?: RecipeSummary[
       {error ? <ErrorText>{error}</ErrorText> : !recipes ? <Loading /> : null}
       <View>
         {found.map((r, i) => (
-          <ListRow key={r.slug} title={r.title} detail={r.default_variant.label} onPress={() => onPick(meal, r)} last={i === found.length - 1} />
+          <ListRow
+            key={r.slug}
+            title={r.title}
+            detail={r.default_variant.label}
+            extra={priced.data && r.price ? <PricePill cents={r.price.cents} tier={r.price.tier} complete={r.price.complete} /> : null}
+            onPress={() => onPick(meal, r)}
+            last={i === found.length - 1}
+          />
         ))}
       </View>
       <Button kind="quiet" label="Annuler" onPress={onCancel} />

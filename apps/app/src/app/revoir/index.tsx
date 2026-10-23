@@ -8,6 +8,7 @@ import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
 import { Body, Card, ErrorText, LinkButton, Loading, Row, Screen, Stack, Title } from '../../ui';
 import { ReviewFeedback } from '../../ui/review';
+import { PricesAdmin } from '../../ui/prices-admin';
 import { SubstitutionsAdmin } from '../../ui/substitutions';
 
 const when = (iso: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' }).format(new Date(iso));
@@ -45,6 +46,7 @@ export default function Review() {
             ))}
           </View>
           <SubstitutionsAdmin />
+          <PricesAdmin />
         </Stack>
       ) : null}
     </Screen>

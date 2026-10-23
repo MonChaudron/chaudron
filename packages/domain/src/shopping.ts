@@ -23,6 +23,7 @@ interface Offer {
   ingredient: string;
   label: string;
   qty?: number | null;
+  price_cents?: number | null;
 }
 
 interface Item {
@@ -36,7 +37,8 @@ interface Item {
   ingredient?: string | null;
   substitutes?: Offer[];
   substitution?: string | null;
-  replaces?: { ingredient: string; label: string; qty?: number | null } | null;
+  replaces?: { ingredient: string; label: string; qty?: number | null; price_cents?: number | null } | null;
+  price_cents?: number | null;
 }
 
 /** La liste, avec les opérations en attente de ce menu appliquées dans l'ordre. */
@@ -65,11 +67,11 @@ export function applyPending<I extends Item, L extends { week_start: string; ite
         items = items.map((i) => {
           if (i.key !== op.key) return i;
           // La ligne d'origine : celle d'avant un remplacement déjà choisi.
-          const base = i.replaces ?? { ingredient: i.ingredient ?? '', label: i.label, qty: i.qty ?? null };
-          if (!op.substitution_id) return { ...i, label: base.label, qty: base.qty, ingredient: base.ingredient, substitution: null, replaces: null };
+          const base = i.replaces ?? { ingredient: i.ingredient ?? '', label: i.label, qty: i.qty ?? null, ...(i.price_cents !== undefined ? { price_cents: i.price_cents } : {}) };
+          if (!op.substitution_id) return { ...i, label: base.label, qty: base.qty, ingredient: base.ingredient, price_cents: base.price_cents ?? null, substitution: null, replaces: null };
           const offer = i.substitutes?.find((o) => o.id === op.substitution_id);
           if (!offer) return i;
-          return { ...i, label: offer.label, qty: offer.qty ?? null, ingredient: offer.ingredient, substitution: offer.id, replaces: base };
+          return { ...i, label: offer.label, qty: offer.qty ?? null, ingredient: offer.ingredient, price_cents: offer.price_cents ?? null, substitution: offer.id, replaces: base };
         });
         break;
     }

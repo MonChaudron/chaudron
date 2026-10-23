@@ -102,3 +102,36 @@ test('un remplacement choisi hors ligne change la ligne, et se défait', () => {
   // Un remplacement que la ligne ne propose pas (plus) ne change rien.
   assert.equal(applyPending(fish, [pending('autre')]).items[0].label, 'Cabillaud');
 });
+
+test('remplacement_hors_ligne_change_le_prix', () => {
+  const fish = {
+    week_start: '2026-11-02',
+    items: [
+      {
+        key: 'cod',
+        label: 'Cabillaud',
+        ingredient: 'cod',
+        checked: false,
+        manual: false,
+        block: 'recipes' as Block,
+        qty: 900,
+        price_cents: 1800,
+        substitution: null,
+        replaces: null,
+        substitutes: [{ id: 's1', ingredient: 'lieu_noir', label: 'Lieu noir', qty: 990, price_cents: 1188 }],
+      },
+    ],
+  };
+  const pending = (substitution_id: string | null): PendingOp => ({
+    op_id: `substitute-${substitution_id}`,
+    at: '2026-11-01T10:00:00Z',
+    week_start: '2026-11-02',
+    kind: 'substitute',
+    key: 'cod',
+    substitution_id,
+  });
+  const swapped = applyPending(fish, [pending('s1')]);
+  assert.equal(swapped.items[0].price_cents, 1188);
+  const back = applyPending(swapped, [pending(null)]);
+  assert.equal(back.items[0].price_cents, 1800);
+});

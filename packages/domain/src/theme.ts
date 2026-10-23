@@ -46,6 +46,23 @@ export interface Theme {
   palettes: Record<Mode, Palette>;
 }
 
+/**
+ * Pastilles de prix (design-prix.md) : vert pour le tiers le moins cher, ambre pour le milieu, rouge pour le plus
+ * cher. Communes aux quatre thèmes : le code couleur doit se lire pareil partout.
+ */
+export const priceTierColors: Record<Mode, Record<'low' | 'mid' | 'high', { bg: string; fg: string }>> = {
+  light: {
+    low: { bg: '#D8F0DC', fg: '#1B5E2A' },
+    mid: { bg: '#FBE8C8', fg: '#6E4700' },
+    high: { bg: '#F7D6D2', fg: '#8F2718' },
+  },
+  dark: {
+    low: { bg: '#1F3A26', fg: '#A8E6B8' },
+    mid: { bg: '#3D2F12', fg: '#F4C77A' },
+    high: { bg: '#42201B', fg: '#FFB3A6' },
+  },
+};
+
 export const themes: Record<ThemeId, Theme> = {
   chartreuse: {
     id: 'chartreuse',

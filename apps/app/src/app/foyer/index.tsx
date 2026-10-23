@@ -1,6 +1,7 @@
 import { errorMessage, type HouseholdUser, type MemberKind } from '@chaudron/api';
 import {
   equipment as equipmentLabels,
+  formatTotal,
   label,
   memberKinds,
   portionsSummary,
@@ -128,6 +129,8 @@ function Household({ id, me, onLeft }: { id: string; me: string; onLeft: () => P
             <LinkButton label="Choisir le matériel" href="/foyer/equipements" />
           </Card>
 
+          <Budget householdId={id} cents={data.weekly_budget_cents ?? null} owner={owner} onChanged={household.reload} />
+
           <Accounts
             householdId={id}
             users={data.users}
@@ -151,6 +154,41 @@ function Household({ id, me, onLeft }: { id: string; me: string; onLeft: () => P
 }
 
 /** Bureau : fiche de membre dans la grille, lien vers sa fiche complète. */
+/** Le plafond d'une semaine de menu : Claude le respecte, la page du menu prévient s'il est dépassé. */
+function Budget({ householdId, cents, owner, onChanged }: { householdId: string; cents: number | null; owner: boolean; onChanged: () => void }) {
+  const [text, setText] = useState(cents == null ? '' : String(Math.round(cents / 100)));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const value = text.trim();
+  const valid = value === '' || /^\d{1,5}$/.test(value);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    const { error: failure } = await api.PATCH('/api/v1/households/{id}', {
+      params: { path: { id: householdId } },
+      body: { weekly_budget_cents: value === '' ? null : Number(value) * 100 },
+    });
+    setBusy(false);
+    if (failure) setError(errorMessage(failure));
+    else onChanged();
+  };
+  return (
+    <Card>
+      <Title level={2}>Budget</Title>
+      <Body tone="muted" size={16}>
+        {cents == null ? 'Pas de plafond : Claude compose des menus raisonnables.' : `Pas de menu à plus de ${formatTotal(cents)} la semaine.`}
+      </Body>
+      {owner ? (
+        <>
+          <Field label="Plafond d’une semaine, en euros" hint="Vide : pas de plafond." value={text} onChangeText={setText} keyboardType="number-pad" placeholder="140" />
+          <ErrorText>{error}</ErrorText>
+          <Button label="Enregistrer" busy={busy} disabled={!valid} onPress={() => void save()} />
+        </>
+      ) : null}
+    </Card>
+  );
+}
+
 function MemberTile({ href, name, detail, alert }: { href: string; name: string; detail: string; alert?: string }) {
   const router = useRouter();
   const { palette, radius, fonts, weights } = useTheme();

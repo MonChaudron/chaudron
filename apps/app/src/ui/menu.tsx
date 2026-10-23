@@ -8,6 +8,7 @@ import { PanResponder, Pressable, Text, View } from 'react-native';
 
 import { useTheme } from '../lib/theme';
 import { Icon, type IconName } from './icons';
+import { PricePill } from './prices';
 import { Body, Button, Choice, DishName, IconButton, Pill, Row, Stack, Tag, Vignette } from './index';
 
 export const mealLabels: Record<Meal, string> = { lunch: 'midi', dinner: 'soir' };
@@ -91,6 +92,7 @@ export function SlotSummary({ slot, warnings, handle, actions, onMore, moreOpen 
           {slot.note ? ` · ${slot.note}` : ''}
         </Text>
         <SlotBadges slot={slot} />
+        {slot.price ? <PricePill cents={slot.price.cents} tier={slot.price.tier} complete={slot.price.complete} /> : null}
         <Warnings warnings={warnings} />
         {actions}
       </View>

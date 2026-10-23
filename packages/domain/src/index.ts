@@ -5,6 +5,7 @@ export * from './invite.ts';
 export * from './labels.ts';
 export * from './look.ts';
 export * from './menus.ts';
+export * from './prices.ts';
 export * from './recipes.ts';
 export * from './shopping.ts';
 export * from './summary.ts';

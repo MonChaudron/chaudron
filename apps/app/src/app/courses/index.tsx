@@ -1,5 +1,5 @@
 import type { Aisle, Block, MenuSummary, ShoppingItem } from '@chaudron/api';
-import { aisles, applyPending, currentMenu, dateText, type PendingOp, formatQuantity, ingredientStates, joinNames, searchKey, shortDateText, space, splitTitle, todayIso } from '@chaudron/domain';
+import { aisleSubtotals, aisles, applyPending, currentMenu, dateText, type PendingOp, formatPrice, formatQuantity, formatTotal, ingredientStates, joinNames, searchKey, shortDateText, space, splitTitle, todayIso } from '@chaudron/domain';
 import { Redirect, Stack as Router, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
@@ -13,6 +13,7 @@ import { useCached } from '../../lib/useCached';
 import { Body, Button, Card, Columns, ErrorText, Field, Loading, Pill, Progress, Row, Screen, Stack, Title } from '../../ui';
 import { Icon } from '../../ui/icons';
 import { NoticeLine, TextAction } from '../../ui/menu';
+import { PriceRecap } from '../../ui/prices';
 
 export default function Shopping() {
   const { me } = useSession();
@@ -112,6 +113,9 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
   const shown = (items: ShoppingItem[]) => (hideDone ? items.filter((i) => !i.checked) : items);
   const byAisle = new Map<Aisle, ShoppingItem[]>();
   for (const item of shown(recipes)) byAisle.set(item.aisle, [...(byAisle.get(item.aisle) ?? []), item]);
+  // Sous-totaux de tout le rayon, même ce qui est masqué parce que pris.
+  const subtotals = aisleSubtotals(data.items.filter((i) => i.block === 'recipes'));
+  const subtotal = (section: string) => (subtotals[section] ? <Body tone="muted" size={15}>{formatTotal(subtotals[section])}</Body> : null);
 
   return (
     <Screen>
@@ -137,6 +141,7 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
         <Row>
           <Pill label="Masquer ce qui est pris" selected={hideDone} onPress={() => setHideDone(!hideDone)} />
         </Row>
+        {data.price ? <PriceRecap price={data.price} /> : null}
       </Stack>
       {list.offline || waiting ? (
         <Body tone="muted" size={15}>
@@ -150,7 +155,10 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
           {[...byAisle].map(([aisle, items]) => (
             <Card key={aisle} style={{ gap: space[2] }}>
               <Sticky>
-                <Title level={2}>{aisles[aisle]}</Title>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: space[3] }}>
+                  <Title level={2}>{aisles[aisle]}</Title>
+                  {subtotal(aisle)}
+                </View>
               </Sticky>
               {items.map((item, i) => (
                 <ItemRow key={item.key} item={item} last={i === items.length - 1} onToggle={() => toggle(item)} onSubstitute={(id) => substitute(item, id)} />
@@ -162,7 +170,7 @@ function List({ householdId, weekStart, menus, title, onChoose }: { householdId:
             <Card style={{ gap: space[2] }}>
               <Pressable onPress={() => setPantry(!pantry)} accessibilityRole="button" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 }}>
                 <Title level={2}>Placard, à vérifier</Title>
-                <Body tone="muted" size={15}>{pantry ? 'Replier' : `${stock.length} article${stock.length > 1 ? 's' : ''}`}</Body>
+                <Body tone="muted" size={15}>{[pantry ? 'Replier' : `${stock.length} article${stock.length > 1 ? 's' : ''}`, subtotals.pantry ? formatTotal(subtotals.pantry) : null].filter(Boolean).join(' · ')}</Body>
               </Pressable>
               {pantry ? shown(stock).map((item, i, all) => <ItemRow key={item.key} item={item} last={i === all.length - 1} onToggle={() => toggle(item)} />) : null}
             </Card>
@@ -229,6 +237,7 @@ function ItemRow({ item, last, onToggle, onRemove, onSubstitute }: { item: Shopp
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
               <Text style={{ flex: 1, fontFamily: fonts.text, fontWeight: weights.medium, fontSize: 17, color: item.checked ? palette.muted : palette.text, textDecorationLine: item.checked ? 'line-through' : 'none' }}>{item.label}</Text>
               <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: 17, color: item.checked ? palette.muted : palette.text, fontVariant: ['tabular-nums'] }}>{qty}</Text>
+              {item.price_cents != null ? <Text style={{ fontFamily: fonts.text, fontSize: 15, color: palette.muted, fontVariant: ['tabular-nums'] }}>{formatPrice(item.price_cents)}</Text> : null}
             </View>
             {detail ? <Body tone="muted" size={14}>{detail}</Body> : null}
             {item.checked && item.checked_by ? <Body tone="muted" size={14}>{`Pris par ${item.checked_by}`}</Body> : null}

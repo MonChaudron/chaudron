@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { type Palette, themeIds, themes, vignettes } from './theme.ts';
+import { type Palette, priceTierColors, themeIds, themes, vignettes } from './theme.ts';
 
 // Contraste WCAG 2 entre deux couleurs #RRGGBB.
 function luminance(hex: string): number {
@@ -74,5 +74,15 @@ test('le texte du bouton principal se lit aussi sur le bandeau « ce soir » (fo
       const ratio = contrast(palette.onAction, palette.action);
       assert.ok(ratio >= 4.5, `${id} ${mode} : ${ratio.toFixed(2)}:1`);
     }
+  }
+});
+
+test('les pastilles de prix se lisent (4,5:1), jour et nuit, et se distinguent entre elles', () => {
+  for (const [mode, tiers] of Object.entries(priceTierColors)) {
+    for (const [tier, { bg, fg }] of Object.entries(tiers)) {
+      const ratio = contrast(fg, bg);
+      assert.ok(ratio >= 4.5, `${mode} ${tier} : ${ratio.toFixed(2)}:1`);
+    }
+    assert.equal(new Set(Object.values(tiers).map((t) => t.bg)).size, 3, `${mode} : trois fonds distincts`);
   }
 });
