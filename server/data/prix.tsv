@@ -1,0 +1,157 @@
+# Rattachements de départ aux sources de prix, complétés au démarrage du serveur (jamais remplacés).
+# Catégories Open Food Facts vérifiées sur Open Prices (au moins 5 relevés en euros) le 23 oct. 2026 ;
+# idbanks INSEE : prix moyens de vente de détail (IPC-PM-2015) et indices des prix base 2025 (IPC-2025).
+# code	état	off_category	off_product_category	insee_series	insee_per	insee_index	piece_g	density
+peanut	dried		en:peanuts			011815016		
+hazelnut	dried	en:hazelnuts	en:hazelnuts			011815016		
+walnut	dried	en:walnuts	en:walnuts			011815016		
+almond	dried	en:almonds	en:almonds			011815016		
+milk	fresh		en:milks			011814850		1.03
+cream	fresh		en:creams			011814867		1.0
+butter	fresh		en:butters			011814940		
+egg	fresh	en:eggs	en:eggs			011814916	60	
+wheat_flour	dried		en:wheat-flours			011814701		
+pasta	dried		en:pastas			011814733		
+rice	dried	en:rices	en:rices			011814691		
+shrimp	cooked		en:shrimps			011814834		
+mussel	fresh		en:mussels	000641418	kg	011814834		
+salmon	fresh		en:salmons			011814808		
+cod	fresh		en:cods			011814808		
+tuna	canned		en:tunas			011814827		
+anchovy	canned		en:anchovy			011814827		
+celery	fresh	en:celery	en:celery			011815033		
+mustard	fresh		en:mustards			011815203		1.1
+sesame	dried		en:sesame			011815213		
+tofu	fresh		en:tofu			011815220		
+mushroom	fresh	en:mushrooms	en:mushrooms	000641423	kg	011815033		
+bell_pepper	fresh	en:sweet-peppers	en:sweet-peppers	010596274	kg	011815033	150	
+onion	fresh	en:yellow-onions	en:onions	000641427	kg	011815033	100	
+garlic	fresh	en:garlic	en:garlic			011815033	5	
+coriander	fresh	en:coriander-leaves	en:coriander-leaves			011815033		
+spinach	fresh	en:spinachs	en:spinachs			011815033		
+cauliflower	fresh	en:cauliflowers	en:cauliflowers	001791254	piece	011815033	800	
+broccoli	fresh	en:broccoli	en:broccoli			011815033		
+zucchini	fresh	en:zucchini	en:zucchini	000641425	kg	011815033	250	
+eggplant	fresh	en:aubergines	en:aubergines			011815033	300	
+tomato	fresh	en:tomatoes	en:tomatoes	000641429	kg	011815033	120	
+carrot	fresh	en:carrots	en:carrots	000641422	kg	011815033		
+potato	fresh	en:potatoes	en:potatoes	000641360	kg	011815033		
+beetroot	fresh		en:cooked-beetroots			011815033		
+endive	fresh	en:belgian-endives	en:belgian-endives	000641426	kg	011815033	120	
+leek	fresh	en:leeks	en:leeks	000641428	kg	011815033	200	
+olive	canned		en:olives			011815091		
+lentil	dried	en:green-lentils	en:lentils			011815083		
+chickpea	canned	en:chickpeas	en:chickpeas			011815083		
+blue_cheese	fresh		en:blue-veined-cheeses			011814884		
+goat_cheese	fresh		en:goat-cheeses			011814884		
+chicken	fresh		en:chickens			011814754		
+minced_beef	fresh		en:ground-meats			011814754		
+pork	fresh		en:pork	000442450	kg	011814754		
+veal	fresh		en:veal-meat			011814754		
+lamb	fresh		en:lamb-meat			011814754		
+liver	fresh					011814754		
+abricot_sec	dried		en:dried-apricots			011815010		
+aneth	fresh		en:dill			011815033	25	
+avocat	fresh	en:avocados	en:avocados	001791255	piece	011814956	200	
+basilic	fresh	en:basils	en:basil			011815033	25	
+blanc_de_poulet	fresh		en:chicken-breasts			011814754		
+boeuf_emince	fresh		en:beef			011814754		
+boulgour	dried		en:bulgur			011814691		
+cannelle	dried		en:cinnamon			011815213		0.5
+capres	canned					011815091		0.6
+celeri_rave	fresh	en:celeriac	en:celeriac			011815033		
+chapelure	dried		en:bread-crumbs			011814740		
+chataigne	cooked	en:chestnuts	en:chestnuts			011815016		
+cheddar	fresh		en:cheddar-cheese			011814884		
+chorizo	fresh		en:chorizo			011814770		
+chou_blanc	fresh	en:white-cabbage	en:white-cabbage			011815033		
+chou_rouge	fresh	en:red-cabbage	en:red-cabbage			011815033		
+chou_vert	fresh	en:cabbages	en:cabbages			011815033		
+ciboulette	fresh	en:chives	en:chives			011815033	25	
+citron	fresh	en:lemons	en:lemons	000641434	kg	011814956	120	
+citron_confit	fresh					011815091	80	
+citron_vert	fresh	en:limes	en:limes			011814956	70	
+clou_de_girofle	dried		en:cloves			011815213	0.1	
+colin	frozen					011814808		
+concentre_de_tomate	canned		en:tomato-pastes			011815091		1.1
+concombre	fresh	en:cucumbers	en:cucumbers			011815033	400	
+coulis_de_tomate	canned		en:tomato-sauces			011815091		
+courge_butternut	fresh	en:butternut-squashes	en:butternut-squashes			011815033		
+cube_de_bouillon	dried		en:bouillon-cubes			011815203	10	
+cumin	dried		en:cumin			011815213		0.45
+curcuma	dried	en:turmeric	en:turmeric			011815213		0.5
+curry	dried		en:curry-powders			011815213		0.45
+dinde_hachee	fresh					011814754		
+echalote	fresh	en:shallots	en:shallots			011815033	30	
+emmental_rape	fresh					011814884		
+farine_de_sarrasin	dried		en:buckwheat-flours			011814701		
+fenouil	fresh	en:fennel-bulbs	en:fennel			011815033	250	
+feta	fresh		en:feta			011814884		
+filet_mignon_de_porc	fresh		en:pork-filet-mignon			011814754		
+fromage_rape	fresh		en:grated-cheese			011814884		
+gingembre	fresh	en:ginger	en:ginger			011815033	30	
+haricot_rouge	canned		en:canned-red-kidney-beans			011815083		
+haricot_vert	fresh	en:green-beans	en:green-beans	000641359	kg	011815033		
+harissa	fresh		en:harissa-sauces			011815203		1.1
+haut_de_cuisse_de_poulet	fresh		en:chicken-thighs			011814754		
+huile_d_olive	fresh		en:olive-oils			011814931		0.92
+huile_de_sesame	fresh		en:sesame-oils			011814931		0.92
+jambon_blanc	fresh		en:white-hams	000849397	kg	011814770		
+jambon_cru	fresh		en:cured-hams			011814770		
+lait_de_coco	canned		en:coconut-milks			011814877		1.0
+laurier	dried					011815213	0.2	
+lentilles_corail	dried		en:red-lentils			011815083		
+levure_boulangere	dried		en:yeast			011815220		
+mais_doux	canned		en:canned-sweet-corn			011815091		
+merguez	fresh					011814791	50	
+mesclun	fresh		en:mesclun			011815033		
+miel	fresh		en:honeys			011815124		1.4
+muscade	dried		en:nutmeg			011815213		
+navet	fresh	en:turnip				011815033		
+nouilles	dried		en:noodles			011814733		
+oignon_rouge	fresh	en:red-onions	en:red-onions	000641427	kg	011815033	100	
+origan	dried		en:oregano			011815213		0.2
+pain	fresh	en:baguettes	en:breads	000442423	kg	011814709		
+pain_a_burger	fresh		en:hamburger-buns			011814709	75	
+palette_fumee	fresh		en:pork-shoulders			011814770		
+panais	fresh	en:parsnip				011815033		
+paprika	dried		en:paprika			011815213		0.45
+paprika_fume	dried		en:paprika			011815213		0.45
+parmesan	fresh		en:parmigiano-reggiano			011814884		
+patate_douce	fresh	en:sweet-potatoes	en:sweet-potatoes			011815033		
+pate_de_curry	fresh		en:curry-pastes			011815203		1.1
+persil	fresh	en:parsley	en:parsley			011815033	30	
+piment	dried	en:chili-peppers	en:chili-peppers			011815213		
+poivre	dried	en:peppers	en:peppers			011815213		
+pomme	fresh	en:apples	en:apples	000641367	kg	011814956	180	
+potimarron	fresh	en:pumpkins	en:pumpkins			011815033		
+poulet_entier	fresh	en:whole-chickens	en:chickens			011814754		
+quinoa	dried		en:quinoa			011814691		
+ras_el_hanout	dried		en:ras-el-hanout			011815213		0.45
+ricotta	fresh		en:ricotta			011814884		
+riz_complet	dried		en:brown-rices			011814691		
+romarin	fresh		en:rosemary			011815033	15	
+roquette	fresh	en:rocket	en:rocket			011815033		
+roti_de_porc	fresh		en:pork-roasts	000442448	kg	011814754		
+salade_verte	fresh	en:lettuces	en:salads			011815033	300	
+sauce_soja	fresh		en:soy-sauces			011815203		1.2
+saucisse_de_montbeliard	fresh		en:montbeliard-sausages			011814791	125	
+saucisse_fumee	fresh		en:smoked-sausages			011814770	100	
+saumon_fume	fresh		en:smoked-salmons			011814818		
+saute_de_dinde	fresh	en:turkey-cutlets	en:turkey-cutlets			011814754		
+saute_de_porc	fresh		en:pork	000442450	kg	011814754		
+sel	dried		en:salts			011815203		
+semoule	dried		en:couscous			011814733		
+thym	fresh	en:thyme	en:thyme			011815033	15	
+tomate_cerise	fresh	en:cherry-tomatoes	en:cherry-tomatoes			011815033		
+tomates_concassees	canned		en:canned-tomatoes			011815091		
+vinaigre_balsamique	fresh		en:balsamic-vinegars			011815203		1.05
+vinaigre_de_cidre	fresh		en:cider-vinegars			011815203		1.01
+vinaigre_de_xeres	fresh		en:wine-vinegars			011815203		1.01
+yaourt_nature	fresh		en:plain-yogurts			011814900		
+gnocchi	fresh		en:gnocchi			011814733		
+saucisse_de_volaille	fresh		en:poultry-sausages			011814791		
+chou_de_bruxelles	fresh	en:brussels-sprouts	en:brussels-sprouts			011815033		
+haricot_blanc	canned		en:white-beans			011815083		
+paleron_de_boeuf	fresh		en:beef			011814754		
+spinach	frozen		en:spinachs			011815033		

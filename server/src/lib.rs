@@ -18,6 +18,7 @@ pub mod members;
 pub mod menus;
 pub mod notifications;
 pub mod oauth;
+pub mod prices;
 pub mod recipes;
 pub mod shopping;
 pub mod similar;

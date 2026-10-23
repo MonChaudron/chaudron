@@ -1813,6 +1813,11 @@ export interface components {
             /** @description Forme d'achat proposée par défaut dans une recette. */
             default_state: components["schemas"]["IngredientState"];
             default_unit: components["schemas"]["Unit"];
+            /**
+             * Format: float
+             * @description Densité (g/ml), quand elle est connue.
+             */
+            density?: number | null;
             /** @description Lignes Ciqual par forme d'achat (frais, surgelé, conserve, sec, cuit), dans cet ordre. */
             foods: components["schemas"]["IngredientFood"][];
             /** Format: uuid */
@@ -1823,6 +1828,15 @@ export interface components {
              */
             keeps_days?: number | null;
             name: string;
+            /**
+             * Format: float
+             * @description Poids d'une pièce, en grammes (un oignon, une gousse d'ail), quand il est connu.
+             */
+            piece_g?: number | null;
+            /** @description Rattachements aux sources de prix, par forme d'achat. */
+            price_links: components["schemas"]["PriceLink"][];
+            /** @description Prix moyens estimés, par forme d'achat. */
+            prices: components["schemas"]["UnitPrice"][];
         };
         /** @description Ligne Ciqual d'un ingrédient pour une forme d'achat. */
         IngredientFood: {
@@ -2275,6 +2289,29 @@ export interface components {
             dinner: boolean[];
             lunch: boolean[];
         };
+        /** @description Rattachement d'un ingrédient, pour une forme d'achat, aux sources de prix. */
+        PriceLink: {
+            /** @description Idbank INSEE de l'indice des prix du poste de l'ingrédient. */
+            insee_index?: string | null;
+            insee_per?: components["schemas"]["PriceUnit"] | null;
+            /** @description Idbank INSEE d'un prix moyen de vente de détail. */
+            insee_series?: string | null;
+            /** @description Catégorie Open Food Facts des relevés en vrac (`category_tag` d'Open Prices), ex. `en:carrots`. */
+            off_category?: string | null;
+            /** @description Catégorie Open Food Facts des produits à code-barres, ex. `en:gnocchi`. */
+            off_product_category?: string | null;
+            state: components["schemas"]["IngredientState"];
+        };
+        /**
+         * @description D'où vient un prix.
+         * @enum {string}
+         */
+        PriceSource: "open_prices" | "insee" | "indexed";
+        /**
+         * @description Unité de référence d'un prix.
+         * @enum {string}
+         */
+        PriceUnit: "kg" | "l" | "piece";
         /** @description Un mot pour l'admin, avec les changements d'une copie. */
         ProposeInput: {
             message?: string | null;
@@ -2830,6 +2867,29 @@ export interface components {
          * @enum {string}
          */
         Unit: "g" | "ml" | "piece" | "tbsp" | "tsp" | "pinch";
+        /** @description Prix moyen estimé d'une unité de référence, pour une forme d'achat. */
+        UnitPrice: {
+            /**
+             * Format: int32
+             * @description Centimes par unité de référence.
+             */
+            cents: number;
+            /** Format: date-time */
+            computed_at: string;
+            /**
+             * Format: int32
+             * @description Relevés retenus (0 pour un prix INSEE).
+             */
+            observations: number;
+            /**
+             * Format: date
+             * @description Date médiane des relevés retenus, ou mois du prix INSEE.
+             */
+            observed_on: string;
+            per: components["schemas"]["PriceUnit"];
+            source: components["schemas"]["PriceSource"];
+            state: components["schemas"]["IngredientState"];
+        };
         Variant: {
             /** Format: int32 */
             active_min: number;

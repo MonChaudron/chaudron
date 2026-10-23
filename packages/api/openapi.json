@@ -6595,7 +6595,9 @@
           "aisle",
           "default_unit",
           "default_state",
-          "foods"
+          "foods",
+          "price_links",
+          "prices"
         ],
         "properties": {
           "aisle": {
@@ -6611,6 +6613,14 @@
           },
           "default_unit": {
             "$ref": "#/components/schemas/Unit"
+          },
+          "density": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Densité (g/ml), quand elle est connue."
           },
           "foods": {
             "type": "array",
@@ -6633,6 +6643,28 @@
           },
           "name": {
             "type": "string"
+          },
+          "piece_g": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Poids d'une pièce, en grammes (un oignon, une gousse d'ail), quand il est connu."
+          },
+          "price_links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceLink"
+            },
+            "description": "Rattachements aux sources de prix, par forme d'achat."
+          },
+          "prices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnitPrice"
+            },
+            "description": "Prix moyens estimés, par forme d'achat."
           }
         }
       },
@@ -7895,6 +7927,75 @@
             "minItems": 7
           }
         }
+      },
+      "PriceLink": {
+        "type": "object",
+        "description": "Rattachement d'un ingrédient, pour une forme d'achat, aux sources de prix.",
+        "required": [
+          "state"
+        ],
+        "properties": {
+          "insee_index": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Idbank INSEE de l'indice des prix du poste de l'ingrédient."
+          },
+          "insee_per": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PriceUnit",
+                "description": "Unité de ce prix moyen (le kilo, sauf mention)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "insee_series": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Idbank INSEE d'un prix moyen de vente de détail."
+          },
+          "off_category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catégorie Open Food Facts des relevés en vrac (`category_tag` d'Open Prices), ex. `en:carrots`."
+          },
+          "off_product_category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catégorie Open Food Facts des produits à code-barres, ex. `en:gnocchi`."
+          },
+          "state": {
+            "$ref": "#/components/schemas/IngredientState"
+          }
+        }
+      },
+      "PriceSource": {
+        "type": "string",
+        "description": "D'où vient un prix.",
+        "enum": [
+          "open_prices",
+          "insee",
+          "indexed"
+        ]
+      },
+      "PriceUnit": {
+        "type": "string",
+        "description": "Unité de référence d'un prix.",
+        "enum": [
+          "kg",
+          "l",
+          "piece"
+        ]
       },
       "ProposeInput": {
         "type": "object",
@@ -9545,6 +9646,49 @@
           "tsp",
           "pinch"
         ]
+      },
+      "UnitPrice": {
+        "type": "object",
+        "description": "Prix moyen estimé d'une unité de référence, pour une forme d'achat.",
+        "required": [
+          "state",
+          "cents",
+          "per",
+          "source",
+          "observations",
+          "observed_on",
+          "computed_at"
+        ],
+        "properties": {
+          "cents": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Centimes par unité de référence."
+          },
+          "computed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observations": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Relevés retenus (0 pour un prix INSEE)."
+          },
+          "observed_on": {
+            "type": "string",
+            "format": "date",
+            "description": "Date médiane des relevés retenus, ou mois du prix INSEE."
+          },
+          "per": {
+            "$ref": "#/components/schemas/PriceUnit"
+          },
+          "source": {
+            "$ref": "#/components/schemas/PriceSource"
+          },
+          "state": {
+            "$ref": "#/components/schemas/IngredientState"
+          }
+        }
       },
       "Variant": {
         "type": "object",

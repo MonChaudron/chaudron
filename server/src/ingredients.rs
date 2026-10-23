@@ -18,6 +18,7 @@ use crate::{
     AppState,
     auth::{Caller, CurrentUser},
     error::{ApiError, ApiResult, ErrorBody},
+    prices::{self, PriceLink, UnitPrice},
     text::{code, like_patterns, search_key},
     types::{Aisle, IngredientState, Scope, Unit},
     validate,
@@ -58,6 +59,14 @@ pub struct Ingredient {
     pub keeps_days: Option<i16>,
     /// Lignes Ciqual par forme d'achat (frais, surgelé, conserve, sec, cuit), dans cet ordre.
     pub foods: Vec<IngredientFood>,
+    /// Poids d'une pièce, en grammes (un oignon, une gousse d'ail), quand il est connu.
+    pub piece_g: Option<f32>,
+    /// Densité (g/ml), quand elle est connue.
+    pub density: Option<f32>,
+    /// Rattachements aux sources de prix, par forme d'achat.
+    pub price_links: Vec<PriceLink>,
+    /// Prix moyens estimés, par forme d'achat.
+    pub prices: Vec<UnitPrice>,
 }
 
 #[derive(FromRow)]
@@ -72,6 +81,8 @@ struct IngredientRow {
     #[sqlx(try_from = "String")]
     default_state: IngredientState,
     keeps_days: Option<i16>,
+    piece_g: Option<f32>,
+    density: Option<f32>,
 }
 
 #[derive(FromRow)]
@@ -86,7 +97,7 @@ struct FoodLinkRow {
 /// Ingrédients (tous, ou un seul), avec leurs lignes Ciqual.
 async fn load(db: &PgPool, only: Option<Uuid>) -> ApiResult<Vec<Ingredient>> {
     let rows: Vec<IngredientRow> = sqlx::query_as(
-        "SELECT id, code, name, aisle, default_unit, default_state, keeps_days FROM ingredients
+        "SELECT id, code, name, aisle, default_unit, default_state, keeps_days, piece_g, density FROM ingredients
          WHERE $1::uuid IS NULL OR id = $1 ORDER BY search_key",
     )
     .bind(only)
@@ -101,9 +112,23 @@ async fn load(db: &PgPool, only: Option<Uuid>) -> ApiResult<Vec<Ingredient>> {
     .bind(only)
     .fetch_all(db)
     .await?;
+    let price_links = prices::links(db, only).await?;
+    let unit_prices = prices::unit_prices(db, only).await?;
     Ok(rows
         .into_iter()
         .map(|r| Ingredient {
+            price_links: price_links
+                .iter()
+                .filter(|(id, _)| *id == r.id)
+                .map(|(_, l)| l.clone())
+                .collect(),
+            prices: unit_prices
+                .iter()
+                .filter(|(id, _)| *id == r.id)
+                .map(|(_, p)| p.clone())
+                .collect(),
+            piece_g: r.piece_g,
+            density: r.density,
             foods: links
                 .iter()
                 .filter(|l| l.ingredient_id == r.id)

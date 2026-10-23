@@ -72,6 +72,10 @@ async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     sqlx::migrate!().run(&db).await?;
     chaudron_server::ciqual::sync(&db).await?;
+    let linked = chaudron_server::prices::seed_links(&db).await?;
+    if linked > 0 {
+        tracing::info!(linked, "rattachements de prix complétés");
+    }
     let backfilled = chaudron_server::recipes::backfill_versions(&db)
         .await
         .map_err(|err| format!("historique des recettes : {err:?}"))?;
