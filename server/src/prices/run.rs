@@ -15,7 +15,7 @@ use crate::{
 
 use super::{
     PriceLink, PriceUnit,
-    crossing::{Crossed, Observation, convert, cross, robust_median},
+    crossing::{Crossed, Observation, convert, cross, prefer_weighed, robust_median},
     insee, open_prices,
 };
 
@@ -97,9 +97,39 @@ impl Target {
     }
 }
 
-/// Chiffre les ingrédients rattachés (tous, ou ceux-là) ; renvoie le nombre de prix écrits. Une source en échec
-/// laisse les prix précédents et rend une erreur (les prix des autres ingrédients sont écrits quand même).
-pub async fn price_ingredients(state: &AppState, ids: Option<&[Uuid]>) -> Result<u32, String> {
+/// Part d'ingrédients en échec au-delà de laquelle un passage ne compte pas (la source est sans doute en panne).
+const MAX_FAILED: f64 = 0.1;
+
+/// Ce qu'a donné un chiffrage.
+pub struct Outcome {
+    pub priced: u32,
+    pub targets: usize,
+    /// Ingrédients en échec après une seconde tentative, avec la raison.
+    pub errors: Vec<String>,
+}
+
+impl Outcome {
+    /// Le passage compte : pas plus d'un ingrédient sur dix en échec.
+    pub fn ok(&self) -> bool {
+        self.errors.len() as f64 <= MAX_FAILED * self.targets as f64
+    }
+
+    pub fn message(&self) -> String {
+        if self.errors.is_empty() {
+            return String::new();
+        }
+        format!(
+            "{} prix écrits ; {} en échec : {}",
+            self.priced,
+            self.errors.len(),
+            self.errors.join(" ; ")
+        )
+    }
+}
+
+/// Chiffre les ingrédients rattachés (tous, ou ceux-là). Un ingrédient en échec est retenté une fois à la fin ;
+/// s'il échoue encore, son prix précédent reste.
+pub async fn price_ingredients(state: &AppState, ids: Option<&[Uuid]>) -> Result<Outcome, String> {
     let targets: Vec<Target> = sqlx::query_as(
         "SELECT l.ingredient_id, i.code, l.state, i.default_unit, i.piece_g, i.density, l.off_category,
                 l.off_product_category, l.insee_series, l.insee_per, l.insee_index
@@ -112,28 +142,36 @@ pub async fn price_ingredients(state: &AppState, ids: Option<&[Uuid]>) -> Result
     .map_err(|err| err.to_string())?;
     let today = Day(OffsetDateTime::now_utc().date());
     let mut priced = 0;
+    let mut failed: Vec<&Target> = Vec::new();
     let mut errors = Vec::new();
-    for target in &targets {
-        match price_one(state, target, today).await {
-            Ok(Some(crossed)) => {
-                store(state, target, &crossed)
-                    .await
-                    .map_err(|err| err.to_string())?;
-                priced += 1;
+    for attempt in 0..2 {
+        let round: Vec<&Target> = if attempt == 0 {
+            targets.iter().collect()
+        } else {
+            std::mem::take(&mut failed)
+        };
+        errors.clear();
+        for target in round {
+            match price_one(state, target, today).await {
+                Ok(Some(crossed)) => {
+                    store(state, target, &crossed)
+                        .await
+                        .map_err(|err| err.to_string())?;
+                    priced += 1;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    errors.push(format!("{} : {err}", target.code));
+                    failed.push(target);
+                }
             }
-            Ok(None) => {}
-            Err(err) => errors.push(format!("{} : {err}", target.code)),
         }
     }
-    if errors.is_empty() {
-        Ok(priced)
-    } else {
-        Err(format!(
-            "{priced} prix écrits ; {} en échec : {}",
-            errors.len(),
-            errors.join(" ; ")
-        ))
-    }
+    Ok(Outcome {
+        priced,
+        targets: targets.len(),
+        errors,
+    })
 }
 
 /// Le croisement pour un ingrédient (design-prix.md, « Le croisement »).
@@ -156,7 +194,7 @@ pub(crate) async fn price_one(
     } else {
         Vec::new()
     };
-    let observed: Vec<Observation> = observed
+    let observed: Vec<Observation> = prefer_weighed(observed, MIN_OBSERVATIONS)
         .into_iter()
         .filter_map(|o| {
             Some(Observation {
@@ -251,14 +289,14 @@ pub async fn run(state: &AppState) -> sqlx::Result<()> {
         .bind(id)
         .execute(&state.db)
         .await?;
-    let outcome = price_ingredients(state, None).await;
-    let (ok, priced, message) = match &outcome {
-        Ok(priced) => (true, *priced as i32, String::new()),
-        Err(err) => (false, 0, err.clone()),
+    let (ok, priced, message) = match price_ingredients(state, None).await {
+        Ok(outcome) => (outcome.ok(), outcome.priced as i32, outcome.message()),
+        Err(err) => (false, 0, err),
     };
-    match &outcome {
-        Ok(priced) => tracing::info!(priced, "prix mis à jour"),
-        Err(err) => tracing::warn!(%err, "mise à jour des prix incomplète"),
+    if ok {
+        tracing::info!(priced, %message, "prix mis à jour");
+    } else {
+        tracing::warn!(priced, %message, "mise à jour des prix en échec");
     }
     sqlx::query("UPDATE price_runs SET finished_at = now(), ok = $2, priced = $3, message = $4 WHERE id = $1")
         .bind(id)

@@ -88,6 +88,18 @@ fn quantile(sorted: &[f64], p: f64) -> f64 {
     sorted[low] + (sorted[high] - sorted[low]) * (at - low as f64)
 }
 
+/// Les relevés au poids ou au volume quand il y en a assez : un relevé « à l'unité » peut être un filet ou une
+/// barquette, le poids ne se trompe pas. Sinon, tous.
+pub fn prefer_weighed(obs: Vec<Observation>, min: usize) -> Vec<Observation> {
+    let weighed = obs.iter().filter(|o| o.per != PriceUnit::Piece).count();
+    if weighed < min {
+        return obs;
+    }
+    obs.into_iter()
+        .filter(|o| o.per != PriceUnit::Piece)
+        .collect()
+}
+
 /// Croise une médiane récente, une médiane plus ancienne, le prix moyen INSEE et l'indice du poste (design-prix.md,
 /// « Le croisement »).
 pub fn cross(
@@ -313,6 +325,44 @@ mod tests {
             line_cents(100.0, Unit::G, &oil, None, None),
             None,
             "des grammes d'huile sans densité"
+        );
+    }
+
+    #[test]
+    fn releves_au_poids_preferes_a_l_unite() {
+        let mut relevés: Vec<Observation> = (0..5)
+            .map(|d| obs(280.0, &format!("2026-10-0{}", d + 1), &[]))
+            .collect();
+        let bag = |date: &str| Observation {
+            cents: 276.0,
+            per: PriceUnit::Piece,
+            date: day(date),
+            labels: Vec::new(),
+        };
+        relevés.extend(
+            [
+                "2026-10-06",
+                "2026-10-07",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-10",
+                "2026-10-11",
+            ]
+            .map(bag),
+        );
+        let kept = prefer_weighed(relevés.clone(), 5);
+        assert_eq!(
+            kept.len(),
+            5,
+            "un filet d'oignons « à l'unité » n'est pas un oignon"
+        );
+        assert!(kept.iter().all(|o| o.per == PriceUnit::Kg));
+
+        let few: Vec<Observation> = relevés.into_iter().skip(3).collect();
+        assert_eq!(
+            prefer_weighed(few, 5).len(),
+            8,
+            "trop peu de relevés au poids : on garde tout"
         );
     }
 

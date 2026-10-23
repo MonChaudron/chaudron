@@ -1128,3 +1128,27 @@ async fn relance_detachee(db: PgPool) {
     let review = admin.get("/api/v1/community/prices").await.json;
     assert_eq!(review["last_run"]["ok"], true);
 }
+
+#[sqlx::test]
+async fn erreur_ponctuelle_ne_fait_pas_echouer_le_passage(db: PgPool) {
+    let (state, fake) = sources(&db).await;
+    carrots(&fake);
+    fake.prices.fail_category("en:leeks");
+
+    assert!(prices::run::check(&state).await);
+    assert!(
+        last_run_ok(&db).await,
+        "un ingrédient sur cent cinquante en échec : le passage compte"
+    );
+    let message: String =
+        sqlx::query_scalar("SELECT message FROM price_runs ORDER BY started_at DESC LIMIT 1")
+            .fetch_one(&db)
+            .await
+            .unwrap();
+    assert!(message.contains("leek"), "l'échec est noté : {message}");
+    assert_eq!(stored(&db, "carrot").await.map(|p| p.0), Some(262));
+    assert!(
+        !prices::run::check(&state).await,
+        "pas de nouveau passage avant 30 jours"
+    );
+}

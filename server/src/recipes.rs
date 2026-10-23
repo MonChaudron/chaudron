@@ -1920,8 +1920,12 @@ pub async fn import(
         // En tâche détachée : une source lente ou en panne ne retarde ni ne fait échouer l'import.
         let state = state.clone();
         tokio::spawn(async move {
-            if let Err(err) = prices::run::price_ingredients(&state, Some(&to_price)).await {
-                tracing::warn!(%err, "chiffrage des ingrédients du lot");
+            match prices::run::price_ingredients(&state, Some(&to_price)).await {
+                Ok(outcome) if outcome.errors.is_empty() => {}
+                Ok(outcome) => {
+                    tracing::warn!(message = %outcome.message(), "chiffrage des ingrédients du lot")
+                }
+                Err(err) => tracing::warn!(%err, "chiffrage des ingrédients du lot"),
             }
         });
     }

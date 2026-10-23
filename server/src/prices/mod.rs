@@ -34,6 +34,9 @@ pub fn router() -> Router<AppState> {
         )
 }
 
+/// Délai d'une requête aux sources : Open Prices met parfois plus de 10 s à répondre.
+pub(crate) const SOURCE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Rattachements de départ, complétés au démarrage (jamais remplacés).
 const SEED: &str = include_str!("../../data/prix.tsv");
 

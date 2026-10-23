@@ -122,6 +122,8 @@ struct PriceData {
     items: Vec<Value>,
     series: HashMap<String, Vec<(String, f64)>>,
     down: bool,
+    /// Catégories qui répondent 500 (une panne ponctuelle).
+    failing: Vec<String>,
 }
 
 impl FakePrices {
@@ -156,6 +158,11 @@ impl FakePrices {
         self.0.lock().unwrap().down = down;
     }
 
+    /// Open Prices répond 500 pour cette catégorie seulement.
+    pub fn fail_category(&self, category: &str) {
+        self.0.lock().unwrap().failing.push(category.to_owned());
+    }
+
     fn router(&self) -> Router {
         Router::new()
             .route("/open-prices/prices", get(fake_open_prices))
@@ -173,7 +180,11 @@ async fn fake_open_prices(
     Query(q): Query<HashMap<String, String>>,
 ) -> AxumResponse {
     let data = fake.0.lock().unwrap();
-    if data.down {
+    let asked = [
+        q.get("category_tag"),
+        q.get("product__categories_tags__contains"),
+    ];
+    if data.down || asked.iter().flatten().any(|tag| data.failing.contains(tag)) {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     let since = q.get("date__gte").cloned().unwrap_or_default();

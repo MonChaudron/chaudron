@@ -46,7 +46,7 @@ pub async fn post_form(client: &HttpClient, url: &str, form: String) -> Result<V
         .header(ACCEPT, "application/json")
         .body(Full::new(Bytes::from(form)))
         .map_err(|err| err.to_string())?;
-    let body = send(client, request).await?;
+    let body = send(client, request, TIMEOUT).await?;
     serde_json::from_slice(&body).map_err(|err| err.to_string())
 }
 
@@ -56,6 +56,16 @@ pub async fn get_json(
     url: &str,
     bearer: Option<&str>,
 ) -> Result<Value, String> {
+    get_json_within(client, url, bearer, TIMEOUT).await
+}
+
+/// GET, réponse JSON attendue, avec ce délai (les sources de prix sont plus lentes qu'un fournisseur OAuth).
+pub async fn get_json_within(
+    client: &HttpClient,
+    url: &str,
+    bearer: Option<&str>,
+    timeout: Duration,
+) -> Result<Value, String> {
     let mut request = Request::get(url).header(ACCEPT, "application/json");
     if let Some(token) = bearer {
         request = request.header(AUTHORIZATION, format!("Bearer {token}"));
@@ -63,20 +73,24 @@ pub async fn get_json(
     let request = request
         .body(Full::default())
         .map_err(|err| err.to_string())?;
-    let body = send(client, request).await?;
+    let body = send(client, request, timeout).await?;
     serde_json::from_slice(&body).map_err(|err| err.to_string())
 }
 
-/// GET, réponse texte (le XML SDMX de l'INSEE).
-pub async fn get_text(client: &HttpClient, url: &str) -> Result<String, String> {
+/// GET, réponse texte (le XML SDMX de l'INSEE), avec ce délai.
+pub async fn get_text(client: &HttpClient, url: &str, timeout: Duration) -> Result<String, String> {
     let request = Request::get(url)
         .body(Full::default())
         .map_err(|err| err.to_string())?;
-    let body = send(client, request).await?;
+    let body = send(client, request, timeout).await?;
     String::from_utf8(body.to_vec()).map_err(|err| err.to_string())
 }
 
-async fn send(client: &HttpClient, mut request: Request<Full<Bytes>>) -> Result<Bytes, String> {
+async fn send(
+    client: &HttpClient,
+    mut request: Request<Full<Bytes>>,
+    timeout: Duration,
+) -> Result<Bytes, String> {
     request
         .headers_mut()
         .insert(USER_AGENT, HeaderValue::from_static(AGENT));
@@ -97,7 +111,7 @@ async fn send(client: &HttpClient, mut request: Request<Full<Bytes>>) -> Result<
         }
         Ok(body)
     };
-    tokio::time::timeout(TIMEOUT, exchange)
+    tokio::time::timeout(timeout, exchange)
         .await
         .map_err(|_| "délai dépassé".to_owned())?
 }

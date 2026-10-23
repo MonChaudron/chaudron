@@ -18,6 +18,7 @@ pub async fn series(
     let xml = get_text(
         http,
         &format!("{base}/data/SERIES_BDM/{idbank}?lastNObservations={last}"),
+        super::SOURCE_TIMEOUT,
     )
     .await?;
     Ok(points(&xml))

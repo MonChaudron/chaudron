@@ -193,8 +193,12 @@ pub async fn put_link(
     tx.commit().await?;
     let detached = state.clone();
     tokio::spawn(async move {
-        if let Err(err) = run::price_ingredients(&detached, Some(&[id])).await {
-            tracing::warn!(%err, "chiffrage d'un rattachement corrigé");
+        match run::price_ingredients(&detached, Some(&[id])).await {
+            Ok(outcome) if outcome.errors.is_empty() => {}
+            Ok(outcome) => {
+                tracing::warn!(message = %outcome.message(), "chiffrage d'un rattachement corrigé")
+            }
+            Err(err) => tracing::warn!(%err, "chiffrage d'un rattachement corrigé"),
         }
     });
     ingredients::load_one(&state.db, id).await.map(Json)

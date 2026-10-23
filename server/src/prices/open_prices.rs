@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::{
-    http::{HttpClient, get_json},
+    http::{HttpClient, get_json_within},
     menus::Day,
 };
 
@@ -45,7 +45,13 @@ pub async fn observations(
                 ("page", &page.to_string()),
             ])
             .map_err(|err| err.to_string())?;
-            let body = get_json(http, &format!("{base}/prices?{query}"), None).await?;
+            let body = get_json_within(
+                http,
+                &format!("{base}/prices?{query}"),
+                None,
+                super::SOURCE_TIMEOUT,
+            )
+            .await?;
             tokio::time::sleep(pause).await;
             let items = body["items"].as_array().cloned().unwrap_or_default();
             found.extend(items.iter().filter_map(observation));
