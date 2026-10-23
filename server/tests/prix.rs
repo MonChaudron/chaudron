@@ -1152,3 +1152,140 @@ async fn erreur_ponctuelle_ne_fait_pas_echouer_le_passage(db: PgPool) {
         "pas de nouveau passage avant 30 jours"
     );
 }
+
+// Relecture finale
+
+#[sqlx::test]
+async fn correction_sans_releves_retire_le_prix(db: PgPool) {
+    prices::seed_links(&db).await.unwrap();
+    let app = admin_app(db.clone()).await;
+    sqlx::query(
+        "INSERT INTO ingredient_prices (ingredient_id, state, cents, per, source, observations, observed_on, insee_cents, flag)
+         SELECT id, 'fresh', 999, 'piece', 'open_prices', 5, current_date, 69, 'divergent' FROM ingredients WHERE code = 'leek'",
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let mut admin = admin(&app).await;
+    let id = ingredient(&mut admin, "leek").await["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    // Une catégorie sans relevés, plus de série INSEE : la source répond, il n'en sort aucun prix.
+    let response = admin
+        .put(
+            &format!("/api/v1/community/ingredients/{id}/price-links/fresh"),
+            serde_json::json!({"off_category": "en:nothing-here"}),
+        )
+        .await;
+    assert_eq!(
+        response.status,
+        axum::http::StatusCode::OK,
+        "{}",
+        response.text
+    );
+    let mut prices = Value::Null;
+    for _ in 0..50 {
+        prices = priced(&mut admin, "leek").await;
+        if prices.as_array().is_some_and(|p| p.is_empty()) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    assert_eq!(
+        prices,
+        Value::Array(Vec::new()),
+        "l'ancien prix faux est retiré"
+    );
+    let review = admin.get("/api/v1/community/prices").await.json;
+    assert_eq!(issue(&review, "leek")["kind"], "missing");
+}
+
+#[sqlx::test]
+async fn reponse_illisible_compte_comme_echec(db: PgPool) {
+    let (state, fake) = sources(&db).await;
+    carrots(&fake);
+    prices::run::check(&state).await;
+    sqlx::query("UPDATE price_runs SET started_at = now() - interval '31 days'")
+        .execute(&db)
+        .await
+        .unwrap();
+
+    fake.prices.set_garbled(true);
+    assert!(prices::run::check(&state).await);
+    assert!(
+        !last_run_ok(&db).await,
+        "une réponse 200 illisible n'est pas un succès"
+    );
+    assert_eq!(
+        stored(&db, "carrot").await.map(|p| p.0),
+        Some(262),
+        "le prix reste"
+    );
+}
+
+#[sqlx::test]
+async fn relance_pendant_un_passage(db: PgPool) {
+    let app = admin_app(db.clone()).await;
+    sqlx::query("INSERT INTO price_runs (id) VALUES ($1)")
+        .bind(uuid::Uuid::now_v7())
+        .execute(&db)
+        .await
+        .unwrap();
+    let mut admin = admin(&app).await;
+    let response = admin
+        .post("/api/v1/community/prices/refresh", Value::Null)
+        .await;
+    assert_eq!(
+        response.status,
+        axum::http::StatusCode::CONFLICT,
+        "{}",
+        response.text
+    );
+}
+
+#[sqlx::test]
+async fn estimation_bornee(db: PgPool) {
+    let app = TestApp::new(db.clone(), SignupPolicy::Open).await;
+    for days in [20, 18, 16, 14, 12] {
+        app.fake.prices.raw("en:roots", 4.00, days, "France", &[]);
+    }
+    let (mut alice, home) = family(&app).await;
+    let names: Vec<String> = (1..=11).map(|i| format!("Racine {i}")).collect();
+    let ingredients: Vec<Value> = names
+        .iter()
+        .map(|name| {
+            serde_json::json!({"name": name, "aisle": "produce", "default_unit": "g", "default_state": "fresh",
+                               "price_links": [{"state": "fresh", "off_category": "en:roots"}]})
+        })
+        .collect();
+    let lines: Vec<Value> = (1..=11)
+        .map(|i| serde_json::json!({"ingredient": format!("racine_{i}"), "qty": 100, "unit": "g", "role": "veg"}))
+        .collect();
+    let lot = serde_json::json!({
+        "ingredients": ingredients,
+        "recipes": [{"slug": "racines", "title": "Racines", "ingredients": lines,
+                     "variants": [{"label": "Four", "active_min": 10, "total_min": 30,
+                                   "phases": [{"title": "Cuire", "text": "Cuire."}]}]}],
+        "menu": {"week_start": "2026-10-18", "slots": [
+            {"date": "2026-10-21", "meal": "dinner", "recipe": "racines", "covers_next_lunch": false}]},
+    });
+
+    let response = alice
+        .post(&format!("/api/v1/households/{home}/estimate"), lot)
+        .await;
+    assert_eq!(
+        response.status,
+        axum::http::StatusCode::OK,
+        "{}",
+        response.text
+    );
+    // Dix ingrédients nouveaux chiffrés à la volée au plus : 10 × 400 g à 4 €/kg ; le onzième reste sans prix.
+    assert_eq!(
+        response.json["meals"][0]["cents"], 1600,
+        "{}",
+        response.json
+    );
+    assert_eq!(response.json["meals"][0]["complete"], false);
+}

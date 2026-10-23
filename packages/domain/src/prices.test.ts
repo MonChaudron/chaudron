@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { aisleSubtotals, formatPrice, formatTotal, tierLabel } from './prices.ts';
+import { aisleSubtotals, formatPrice, formatTotal, pillText, tierLabel } from './prices.ts';
 
 test('format_total_sans_centimes', () => {
   assert.equal(formatTotal(14849), '≈ 148 €');
@@ -38,4 +38,10 @@ test('libelles_des_tiers', () => {
   assert.equal(tierLabel('low'), 'bon marché');
   assert.equal(tierLabel('mid'), 'dans la moyenne');
   assert.equal(tierLabel('high'), 'cher');
+});
+
+test('prix_inconnu_sans_montant', () => {
+  assert.equal(pillText(1900, true), '≈ 19 €');
+  assert.equal(pillText(1900, false), '≈ 19 € +');
+  assert.equal(pillText(0, false), 'prix inconnu', 'jamais « ≈ 0 € »');
 });

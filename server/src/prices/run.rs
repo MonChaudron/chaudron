@@ -27,6 +27,8 @@ const MIN_OBSERVATIONS: usize = 5;
 const DUE_DAYS: i32 = 30;
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 3600);
 
+static SOURCES: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+
 /// Un ingrédient, dans une forme d'achat, à chiffrer.
 #[derive(FromRow)]
 pub(crate) struct Target {
@@ -159,7 +161,9 @@ pub async fn price_ingredients(state: &AppState, ids: Option<&[Uuid]>) -> Result
                         .map_err(|err| err.to_string())?;
                     priced += 1;
                 }
-                Ok(None) => {}
+                // Les sources répondent, mais il n'en sort aucun prix : l'ancien ne vaut plus (« sinon, pas de
+                // prix »). Il ne reste que quand une source est injoignable.
+                Ok(None) => forget(state, target).await.map_err(|err| err.to_string())?,
                 Err(err) => {
                     errors.push(format!("{} : {err}", target.code));
                     failed.push(target);
@@ -180,6 +184,9 @@ pub(crate) async fn price_one(
     target: &Target,
     today: Day,
 ) -> Result<Option<Crossed>, String> {
+    // Un ingrédient à la fois pour toute l'instance (passage, import, correction, estimation) : on ne martèle pas
+    // un service public.
+    let _turn = SOURCES.acquire().await.map_err(|err| err.to_string())?;
     let sources = &state.config.prices;
     let link = target.link();
     let observed = if link.off_category.is_some() || link.off_product_category.is_some() {
@@ -231,6 +238,15 @@ pub(crate) async fn price_one(
     Ok(cross(recent, older, insee, &index))
 }
 
+async fn forget(state: &AppState, target: &Target) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM ingredient_prices WHERE ingredient_id = $1 AND state = $2")
+        .bind(target.ingredient_id)
+        .bind(target.state.as_str())
+        .execute(&state.db)
+        .await?;
+    Ok(())
+}
+
 async fn store(state: &AppState, target: &Target, crossed: &Crossed) -> sqlx::Result<()> {
     sqlx::query(
         "INSERT INTO ingredient_prices
@@ -264,6 +280,15 @@ pub async fn check(state: &AppState) -> bool {
             false
         }
     }
+}
+
+/// Un passage est en cours (commencé il y a moins de 6 h, pas fini).
+pub(crate) async fn running(state: &AppState) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM price_runs WHERE finished_at IS NULL AND started_at > now() - interval '6 hours')",
+    )
+    .fetch_one(&state.db)
+    .await
 }
 
 async fn run_if_due(state: &AppState) -> sqlx::Result<bool> {

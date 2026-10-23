@@ -16,6 +16,12 @@ export function formatPrice(amount: number): string {
   return `${cents.format(amount / 100)} €`;
 }
 
+/** Le prix d'un plat : « ≈ 19 € », « ≈ 19 € + » s'il manque des prix, « prix inconnu » s'il n'en a aucun. */
+export function pillText(amount: number, complete: boolean): string {
+  if (!complete && amount === 0) return 'prix inconnu';
+  return complete ? formatTotal(amount) : `${formatTotal(amount)} +`;
+}
+
 /** Sous-total de chaque rayon, et du placard, des articles qui ont un prix. */
 export function aisleSubtotals(items: { aisle: string; pantry: boolean; price_cents?: number | null }[]): Record<string, number> {
   const totals: Record<string, number> = {};

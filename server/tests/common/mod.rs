@@ -124,6 +124,8 @@ struct PriceData {
     down: bool,
     /// Catégories qui répondent 500 (une panne ponctuelle).
     failing: Vec<String>,
+    /// Open Prices répond 200 avec un corps sans relevés (une page de maintenance).
+    garbled: bool,
 }
 
 impl FakePrices {
@@ -158,6 +160,11 @@ impl FakePrices {
         self.0.lock().unwrap().down = down;
     }
 
+    /// Open Prices répond 200, mais avec un corps illisible.
+    pub fn set_garbled(&self, garbled: bool) {
+        self.0.lock().unwrap().garbled = garbled;
+    }
+
     /// Open Prices répond 500 pour cette catégorie seulement.
     pub fn fail_category(&self, category: &str) {
         self.0.lock().unwrap().failing.push(category.to_owned());
@@ -186,6 +193,9 @@ async fn fake_open_prices(
     ];
     if data.down || asked.iter().flatten().any(|tag| data.failing.contains(tag)) {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    if data.garbled {
+        return Json(serde_json::json!({"detail": "Service en maintenance"})).into_response();
     }
     let since = q.get("date__gte").cloned().unwrap_or_default();
     let matching: Vec<&Value> = data

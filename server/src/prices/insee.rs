@@ -21,6 +21,9 @@ pub async fn series(
         super::SOURCE_TIMEOUT,
     )
     .await?;
+    if !xml.contains("<Series") {
+        return Err("réponse illisible de l'INSEE (pas de série)".into());
+    }
     Ok(points(&xml))
 }
 

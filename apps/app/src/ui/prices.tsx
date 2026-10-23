@@ -1,5 +1,5 @@
 import type { ShoppingList } from '@chaudron/api';
-import { formatPrice, formatTotal, priceTierColors, type PriceTier, shortDateText, space, splitTitle, tierLabel } from '@chaudron/domain';
+import { formatPrice, formatTotal, pillText, priceTierColors, type PriceTier, shortDateText, space, splitTitle, tierLabel } from '@chaudron/domain';
 import { Text, View } from 'react-native';
 
 import { useTheme } from '../lib/theme';
@@ -9,8 +9,8 @@ import { Body, Card, Stack } from './index';
 export function PricePill({ cents, tier, complete }: { cents: number; tier?: PriceTier | null; complete: boolean }) {
   const { palette, fonts, weights, radius, mode } = useTheme();
   const colors = tier ? priceTierColors[mode][tier] : { bg: palette.chip, fg: palette.text };
-  const text = complete ? formatTotal(cents) : `${formatTotal(cents)} +`;
-  const label = `Environ ${Math.round(cents / 100)} euros${tier ? `, ${tierLabel(tier)}` : ''}${complete ? '' : ', sans le prix de certains ingrédients'}`;
+  const text = pillText(cents, complete);
+  const label = !complete && cents === 0 ? 'Prix inconnu' : `Environ ${Math.round(cents / 100)} euros${tier ? `, ${tierLabel(tier)}` : ''}${complete ? '' : ', sans le prix de certains ingrédients'}`;
   return (
     <View accessibilityLabel={label} style={{ alignSelf: 'flex-start', backgroundColor: colors.bg, borderRadius: radius.tag, paddingVertical: 4, paddingHorizontal: 10 }}>
       <Text style={{ fontFamily: fonts.text, fontWeight: weights.strong, fontSize: 14.5, color: colors.fg, fontVariant: ['tabular-nums'] }}>{text}</Text>
@@ -47,7 +47,7 @@ export function PriceRecap({ price }: { price: WeekPrice }) {
         </Body>
       ) : null}
       <Stack gap={space[1]}>
-        {price.meals.map((m, i) => row(`${shortDateText(m.date)} · ${splitTitle(m.title).main}`, `${formatTotal(m.cents)}${m.complete ? '' : ' +'}`, `${m.date}-${m.meal}-${i}`))}
+        {price.meals.map((m, i) => row(`${shortDateText(m.date)} · ${splitTitle(m.title).main}`, pillText(m.cents, m.complete), `${m.date}-${m.meal}-${i}`))}
         {price.shared_cents ? row('Arrondis et articles partagés', formatTotal(price.shared_cents), 'shared') : null}
       </Stack>
       {price.missing ? <Body tone="muted" size={14}>{`${price.missing} article${price.missing > 1 ? 's' : ''} sans prix, hors du total`}</Body> : null}

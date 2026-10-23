@@ -209,10 +209,20 @@ pub async fn put_link(
     post,
     path = "/api/v1/community/prices/refresh",
     tag = "communauté",
-    responses((status = 202, description = "Lancée"), (status = 403, body = ErrorBody))
+    responses(
+        (status = 202, description = "Lancée"),
+        (status = 403, body = ErrorBody),
+        (status = 409, description = "Un passage est déjà en cours", body = ErrorBody),
+    )
 )]
 pub async fn refresh(State(state): State<AppState>, caller: Caller) -> ApiResult<StatusCode> {
     caller.require_admin(&state).await?;
+    if run::running(&state).await? {
+        return Err(ApiError::conflict(
+            "price_run_running",
+            "Une mise à jour des prix est déjà en cours.",
+        ));
+    }
     tokio::spawn(async move {
         if let Err(err) = run::run(&state).await {
             tracing::warn!(%err, "mise à jour des prix relancée");

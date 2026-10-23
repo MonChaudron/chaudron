@@ -24,6 +24,11 @@ use crate::{
 
 use super::{PriceBook, UnitPrice, crossing::line_cents, run};
 
+/// L'estimation chiffre à la volée dix ingrédients nouveaux au plus, en une minute au plus : au-delà, ils restent
+/// sans prix (une requête d'un jeton « lire » ne doit pas faire marteler les sources).
+const MAX_FRESH: usize = 10;
+const FRESH_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Pour le prix par portion d'une recette, ce qui ne suit pas les portions (un citron, un cube) se partage comme
 /// dans un plat de quatre.
 const BATCH_PORTIONS: f64 = 4.0;
@@ -384,6 +389,8 @@ pub(crate) async fn estimate_lot(
     let now = OffsetDateTime::now_utc();
     let mut fresh_prices: Vec<(Uuid, UnitPrice)> = Vec::new();
     let mut sizes: Vec<(Uuid, Option<f32>, Option<f32>)> = Vec::new();
+    let started = std::time::Instant::now();
+    let mut fresh = 0;
     for ingredient in &lot.ingredients {
         let name = ingredient.name.trim();
         let ingredient_code = code(name);
@@ -398,7 +405,11 @@ pub(crate) async fn estimate_lot(
             continue;
         }
         let id = Uuid::now_v7();
-        for link in &ingredient.price_links {
+        let priceable = fresh < MAX_FRESH && started.elapsed() < FRESH_BUDGET;
+        if priceable && !ingredient.price_links.is_empty() {
+            fresh += 1;
+        }
+        for link in ingredient.price_links.iter().filter(|_| priceable) {
             let target = run::Target::new(
                 id,
                 ingredient_code.clone(),
@@ -408,7 +419,10 @@ pub(crate) async fn estimate_lot(
                 link,
             );
             // Une source en panne laisse l'ingrédient sans prix : l'estimation le compte comme tel.
-            if let Ok(Some(crossed)) = run::price_one(state, &target, Day(now.date())).await {
+            let left = FRESH_BUDGET.saturating_sub(started.elapsed());
+            let priced =
+                tokio::time::timeout(left, run::price_one(state, &target, Day(now.date()))).await;
+            if let Ok(Ok(Some(crossed))) = priced {
                 fresh_prices.push((
                     id,
                     UnitPrice {

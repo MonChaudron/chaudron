@@ -53,7 +53,10 @@ pub async fn observations(
             )
             .await?;
             tokio::time::sleep(pause).await;
-            let items = body["items"].as_array().cloned().unwrap_or_default();
+            let items = body["items"]
+                .as_array()
+                .cloned()
+                .ok_or_else(|| "réponse illisible d'Open Prices (pas de relevés)".to_owned())?;
             found.extend(items.iter().filter_map(observation));
             let pages = body["pages"].as_u64().unwrap_or(1);
             if items.is_empty() || u64::from(page) >= pages {

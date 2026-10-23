@@ -645,6 +645,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Un passage est déjà en cours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
           }
         }
       }
