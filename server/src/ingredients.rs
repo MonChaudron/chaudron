@@ -63,6 +63,8 @@ pub struct Ingredient {
     pub piece_g: Option<f32>,
     /// Densité (g/ml), quand elle est connue.
     pub density: Option<f32>,
+    /// Rendement de cuisson (poids cuit / poids cru), quand il s'écarte du défaut de son groupe Ciqual.
+    pub cooked_ratio: Option<f32>,
     /// Rattachements aux sources de prix, par forme d'achat.
     pub price_links: Vec<PriceLink>,
     /// Prix moyens estimés, par forme d'achat.
@@ -83,6 +85,7 @@ struct IngredientRow {
     keeps_days: Option<i16>,
     piece_g: Option<f32>,
     density: Option<f32>,
+    cooked_ratio: Option<f32>,
 }
 
 #[derive(FromRow)]
@@ -97,7 +100,8 @@ struct FoodLinkRow {
 /// Ingrédients (tous, ou un seul), avec leurs lignes Ciqual.
 async fn load(db: &PgPool, only: Option<Uuid>) -> ApiResult<Vec<Ingredient>> {
     let rows: Vec<IngredientRow> = sqlx::query_as(
-        "SELECT id, code, name, aisle, default_unit, default_state, keeps_days, piece_g, density FROM ingredients
+        "SELECT id, code, name, aisle, default_unit, default_state, keeps_days, piece_g, density, cooked_ratio
+         FROM ingredients
          WHERE $1::uuid IS NULL OR id = $1 ORDER BY search_key",
     )
     .bind(only)
@@ -129,6 +133,7 @@ async fn load(db: &PgPool, only: Option<Uuid>) -> ApiResult<Vec<Ingredient>> {
                 .collect(),
             piece_g: r.piece_g,
             density: r.density,
+            cooked_ratio: r.cooked_ratio,
             foods: links
                 .iter()
                 .filter(|l| l.ingredient_id == r.id)
@@ -196,6 +201,9 @@ pub struct NewIngredient {
     pub piece_g: Option<f32>,
     /// Densité (g/ml) ; dans un lot, complète un ingrédient connu qui n'en a pas.
     pub density: Option<f32>,
+    /// Rendement de cuisson (poids cuit / poids cru : riz sec 2,5, viande crue 0,75), quand il s'écarte du défaut
+    /// de son groupe Ciqual ; dans un lot, complète un ingrédient connu qui n'en a pas.
+    pub cooked_ratio: Option<f32>,
     /// Rattachements aux sources de prix, au plus un par forme d'achat ; dans un lot, complète ceux d'un ingrédient
     /// connu sans jamais les remplacer.
     #[serde(default)]
@@ -206,9 +214,12 @@ impl NewIngredient {
     /// Poids, densité et rattachements cohérents.
     pub fn check_prices(&self) -> ApiResult<()> {
         let invalid = |v: f32| v.is_nan() || v <= 0.0;
-        if self.piece_g.is_some_and(invalid) || self.density.is_some_and(invalid) {
+        if self.piece_g.is_some_and(invalid)
+            || self.density.is_some_and(invalid)
+            || self.cooked_ratio.is_some_and(invalid)
+        {
             return Err(ApiError::invalid(
-                "Poids d'une pièce et densité sont positifs.",
+                "Poids d'une pièce, densité et rendement de cuisson sont positifs.",
             ));
         }
         let mut states = HashSet::new();
@@ -302,7 +313,14 @@ pub async fn insert(conn: &mut PgConnection, body: &NewIngredient) -> ApiResult<
         .execute(&mut *conn)
         .await?;
     }
-    prices::complete_sizes(&mut *conn, id, body.piece_g, body.density).await?;
+    prices::complete_sizes(
+        &mut *conn,
+        id,
+        body.piece_g,
+        body.density,
+        body.cooked_ratio,
+    )
+    .await?;
     prices::complete_links(&mut *conn, id, &body.price_links).await?;
     Ok(id)
 }

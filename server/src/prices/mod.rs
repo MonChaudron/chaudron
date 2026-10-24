@@ -260,20 +260,24 @@ pub async fn complete_links(
     Ok(written)
 }
 
-/// Complète le poids d'une pièce et la densité d'un ingrédient quand ils sont inconnus.
+/// Complète le poids d'une pièce, la densité et le rendement de cuisson d'un ingrédient quand ils sont inconnus.
 pub async fn complete_sizes(
     conn: &mut PgConnection,
     ingredient_id: Uuid,
     piece_g: Option<f32>,
     density: Option<f32>,
+    cooked_ratio: Option<f32>,
 ) -> sqlx::Result<()> {
-    if piece_g.is_some() || density.is_some() {
+    if piece_g.is_some() || density.is_some() || cooked_ratio.is_some() {
         sqlx::query(
-            "UPDATE ingredients SET piece_g = coalesce(piece_g, $2), density = coalesce(density, $3) WHERE id = $1",
+            "UPDATE ingredients SET piece_g = coalesce(piece_g, $2), density = coalesce(density, $3),
+                                    cooked_ratio = coalesce(cooked_ratio, $4)
+             WHERE id = $1",
         )
         .bind(ingredient_id)
         .bind(piece_g)
         .bind(density)
+        .bind(cooked_ratio)
         .execute(conn)
         .await?;
     }

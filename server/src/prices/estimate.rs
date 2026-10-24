@@ -31,7 +31,7 @@ const FRESH_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Pour le prix par portion d'une recette, ce qui ne suit pas les portions (un citron, un cube) se partage comme
 /// dans un plat de quatre.
-const BATCH_PORTIONS: f64 = 4.0;
+pub(crate) const BATCH_PORTIONS: f64 = 4.0;
 
 text_enum! {
     /// Où se place un plat parmi les recettes que le foyer peut choisir : le tiers le moins cher, celui du milieu,

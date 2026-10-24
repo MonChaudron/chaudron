@@ -17,6 +17,7 @@ pub mod ingredients;
 pub mod members;
 pub mod menus;
 pub mod notifications;
+pub mod nutrition;
 pub mod oauth;
 pub mod prices;
 pub mod recipes;
@@ -26,6 +27,7 @@ pub mod substitutions;
 pub mod text;
 pub mod tokens;
 pub mod types;
+pub mod units;
 pub mod validate;
 
 use std::{path::Path, sync::Arc};
@@ -124,6 +126,7 @@ impl AppState {
         ingredients::search_foods,
         recipes::list_recipes,
         recipes::read_recipe,
+        recipes::read_nutrition,
         recipes::put_recipe,
         recipes::delete_recipe,
         recipes::list_versions,

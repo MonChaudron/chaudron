@@ -3963,6 +3963,54 @@
         }
       }
     },
+    "/api/v1/households/{id}/recipes/{slug}/nutrition": {
+      "get": {
+        "tags": [
+          "recettes"
+        ],
+        "summary": "Apports d'une recette pour la portion de qui la lit (son membre, sinon une portion standard), et sa note.",
+        "operationId": "read_nutrition",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Nutrition"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/households/{id}/recipes/{slug}/propose-changes": {
       "post": {
         "tags": [
@@ -5628,6 +5676,54 @@
           "other"
         ]
       },
+      "Amounts": {
+        "type": "object",
+        "description": "Apports d'une portion.",
+        "required": [
+          "energy_kcal",
+          "protein_g",
+          "carbs_g",
+          "sugars_g",
+          "fat_g",
+          "sat_fat_g",
+          "fiber_g",
+          "salt_g"
+        ],
+        "properties": {
+          "carbs_g": {
+            "type": "number",
+            "format": "float"
+          },
+          "energy_kcal": {
+            "type": "number",
+            "format": "float"
+          },
+          "fat_g": {
+            "type": "number",
+            "format": "float"
+          },
+          "fiber_g": {
+            "type": "number",
+            "format": "float"
+          },
+          "protein_g": {
+            "type": "number",
+            "format": "float"
+          },
+          "salt_g": {
+            "type": "number",
+            "format": "float"
+          },
+          "sat_fat_g": {
+            "type": "number",
+            "format": "float"
+          },
+          "sugars_g": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
       "ApiTokenInfo": {
         "type": "object",
         "description": "Jeton d'API, sans sa valeur.",
@@ -6063,6 +6159,67 @@
         ],
         "description": "Jeton créé : sa valeur n'est montrée qu'ici."
       },
+      "Criterion": {
+        "type": "string",
+        "description": "Un critère de la note.",
+        "enum": [
+          "energy",
+          "sugars",
+          "sat_fat",
+          "salt",
+          "protein",
+          "fiber",
+          "fvl"
+        ]
+      },
+      "DailyPct": {
+        "type": "object",
+        "description": "Part des apports de référence d'un adulte (%), arrondie.",
+        "required": [
+          "energy_kcal",
+          "protein_g",
+          "carbs_g",
+          "sugars_g",
+          "fat_g",
+          "sat_fat_g",
+          "fiber_g",
+          "salt_g"
+        ],
+        "properties": {
+          "carbs_g": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "energy_kcal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fat_g": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fiber_g": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "protein_g": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "salt_g": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sat_fat_g": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sugars_g": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "DefaultPortions": {
         "type": "object",
         "description": "Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »).",
@@ -6092,6 +6249,34 @@
           "vegetarian",
           "vegan"
         ]
+      },
+      "EnergySplit": {
+        "type": "object",
+        "description": "D'où viennent les calories (% de l'énergie) : somme 100, ou tous nuls.",
+        "required": [
+          "protein",
+          "carbs",
+          "fat",
+          "fiber"
+        ],
+        "properties": {
+          "carbs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fiber": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "protein": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "Equipment": {
         "type": "object",
@@ -6193,6 +6378,37 @@
           "allergy",
           "dislike"
         ]
+      },
+      "Factor": {
+        "type": "object",
+        "description": "Ce qui baisse ou tient la note : un critère, ses points, l'ingrédient qui y contribue le plus.",
+        "required": [
+          "criterion",
+          "points"
+        ],
+        "properties": {
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Ce qu'apporte cet ingrédient à ta portion : kcal pour l'énergie, grammes sinon (crus pour les fruits et\nlégumes)."
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/Criterion"
+          },
+          "ingredient": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "points": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "Family": {
         "type": "object",
@@ -6618,6 +6834,17 @@
           }
         }
       },
+      "Grade": {
+        "type": "string",
+        "description": "Note d'équilibre d'une recette, de A (la meilleure) à E : l'algorithme du Nutri-Score sur 100 g de plat cuit.",
+        "enum": [
+          "a",
+          "b",
+          "c",
+          "d",
+          "e"
+        ]
+      },
       "Health": {
         "type": "object",
         "description": "État du serveur et de ses dépendances.",
@@ -6887,6 +7114,14 @@
           "code": {
             "type": "string",
             "description": "Tiré du nom à la création, stable ensuite."
+          },
+          "cooked_ratio": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Rendement de cuisson (poids cuit / poids cru), quand il s'écarte du défaut de son groupe Ciqual."
           },
           "default_state": {
             "$ref": "#/components/schemas/IngredientState",
@@ -7722,6 +7957,17 @@
               "null"
             ]
           },
+          "nutrition": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Nutrition",
+                "description": "Apports de ta portion et note de la recette ; remplis à la lecture du menu."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "portions_date": {
             "type": [
               "string",
@@ -7913,6 +8159,14 @@
           "aisle": {
             "$ref": "#/components/schemas/Aisle"
           },
+          "cooked_ratio": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float",
+            "description": "Rendement de cuisson (poids cuit / poids cru : riz sec 2,5, viande crue 0,75), quand il s'écarte du défaut\nde son groupe Ciqual ; dans un lot, complète un ingrédient connu qui n'en a pas."
+          },
           "default_state": {
             "$ref": "#/components/schemas/IngredientState"
           },
@@ -8031,6 +8285,91 @@
           },
           "text": {
             "type": "string"
+          }
+        }
+      },
+      "Nutrition": {
+        "type": "object",
+        "description": "Les apports d'une recette pour ta portion, et sa note.",
+        "required": [
+          "portion",
+          "amounts",
+          "daily_pct",
+          "energy_split",
+          "cooked_g",
+          "serve",
+          "lowers",
+          "holds",
+          "missing",
+          "to_taste",
+          "complete"
+        ],
+        "properties": {
+          "amounts": {
+            "$ref": "#/components/schemas/Amounts"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Aucun ingrédient sans données."
+          },
+          "cooked_g": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Poids cuit estimé de ta portion."
+          },
+          "daily_pct": {
+            "$ref": "#/components/schemas/DailyPct"
+          },
+          "energy_split": {
+            "$ref": "#/components/schemas/EnergySplit"
+          },
+          "grade": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Grade",
+                "description": "Note de la recette (portion standard, pour 100 g de plat cuit) ; nulle quand un ingrédient sans données la\nfausserait, ou sans rien à peser."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Factor"
+            }
+          },
+          "lowers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Factor"
+            },
+            "description": "Au plus deux, les plus lourds d'abord."
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ingrédients sans données (sans ligne Ciqual, ou dont la quantité ne se pèse pas) : hors des apports."
+          },
+          "portion": {
+            "$ref": "#/components/schemas/PortionKind"
+          },
+          "serve": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Serve"
+            },
+            "description": "Protéine, féculent, légume, dans cet ordre (les rôles présents)."
+          },
+          "to_taste": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Lignes « au goût », non comptées."
           }
         }
       },
@@ -8280,6 +8619,14 @@
             "type": "string"
           }
         }
+      },
+      "PortionKind": {
+        "type": "string",
+        "description": "La portion décrite : celle du membre relié au compte, ou une portion standard.",
+        "enum": [
+          "member",
+          "standard"
+        ]
       },
       "PortionRole": {
         "type": "string",
@@ -9015,6 +9362,17 @@
             "format": "uuid",
             "description": "Sa famille de déclinaisons."
           },
+          "grade": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Grade",
+                "description": "Note d'équilibre ; nulle quand un ingrédient sans données la fausserait."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "preferred": {
             "type": "boolean",
             "description": "La préférée du foyer dans sa famille."
@@ -9288,6 +9646,27 @@
           "menus:write",
           "cooking:write"
         ]
+      },
+      "Serve": {
+        "type": "object",
+        "description": "Poids cuit à servir d'un rôle (« Paleron de bœuf », « légumes »).",
+        "required": [
+          "role",
+          "label",
+          "grams"
+        ],
+        "properties": {
+          "grams": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "label": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/PortionRole"
+          }
+        }
       },
       "ShoppingItem": {
         "type": "object",
