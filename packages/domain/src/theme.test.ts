@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { type Palette, priceTierColors, themeIds, themes, vignettes } from './theme.ts';
+import { energySplitColors, gradeColors, type Palette, priceTierColors, themeIds, themes, vignettes } from './theme.ts';
 
 // Contraste WCAG 2 entre deux couleurs #RRGGBB.
 function luminance(hex: string): number {
@@ -84,5 +84,21 @@ test('les pastilles de prix se lisent (4,5:1), jour et nuit, et se distinguent e
       assert.ok(ratio >= 4.5, `${mode} ${tier} : ${ratio.toFixed(2)}:1`);
     }
     assert.equal(new Set(Object.values(tiers).map((t) => t.bg)).size, 3, `${mode} : trois fonds distincts`);
+  }
+});
+
+test('les pastilles de note se lisent (4,5:1), jour et nuit, et se distinguent entre elles', () => {
+  for (const [mode, grades] of Object.entries(gradeColors)) {
+    for (const [grade, { bg, fg }] of Object.entries(grades)) {
+      const ratio = contrast(fg, bg);
+      assert.ok(ratio >= 4.5, `${mode} ${grade} : ${ratio.toFixed(2)}:1`);
+    }
+    assert.equal(new Set(Object.values(grades).map((g) => g.bg)).size, 5, `${mode} : cinq fonds distincts`);
+  }
+});
+
+test('la répartition des calories a quatre couleurs distinctes, jour et nuit', () => {
+  for (const [mode, colors] of Object.entries(energySplitColors)) {
+    assert.equal(new Set(Object.values(colors)).size, 4, mode);
   }
 });

@@ -26,10 +26,12 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useTheme } from '../../lib/theme';
 import { useCached } from '../../lib/useCached';
+import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Button, Card, Clamped, Columns, ErrorText, LinkButton, Loading, Pill, Row, Screen, Stack, Tag, Title, useWide, Vignette } from '../../ui';
 import { mealLabels, SlotBadges, Warnings, warningsOf } from '../../ui/menu';
 import { CommunityCard } from '../../ui/community';
 import { Discussion, ProposalForm } from '../../ui/discussion';
+import { NutritionSummary } from '../../ui/nutrition';
 import { FamilyCard } from '../../ui/similar';
 import { RecipeSubstitutions } from '../../ui/substitutions';
 import { changeText, NoteForm, Notes, RateMeal } from '../../ui/notes';
@@ -56,6 +58,8 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
   const recipe = useCached(`recipe:${householdId}:${slug}`, () =>
     api.GET('/api/v1/households/{id}/recipes/{slug}', { params: { path: { id: householdId, slug } } }),
   );
+  // Les apports de ta portion : rien à montrer si la requête échoue.
+  const nutrition = useLoad(() => api.GET('/api/v1/households/{id}/recipes/{slug}/nutrition', { params: { path: { id: householdId, slug } } }), [householdId, slug]);
   const members = useCached(`members:${householdId}`, () => api.GET('/api/v1/households/{id}/members', { params: { path: { id: householdId } } }));
   const planned = useCached(`menu:${householdId}:${weekStart ?? ''}`, async () =>
     slotId && weekStart
@@ -102,6 +106,7 @@ function RecipeView({ householdId, slug, slotId, weekStart }: { householdId: str
         </Stack>
         {data.description ? <Clamped text={data.description} /> : null}
         <Meta recipe={data} />
+        {nutrition.data ? <NutritionSummary nutrition={nutrition.data} /> : null}
       </Stack>
       {slot ? <Planned slot={slot} warnings={slotWarnings} /> : null}
       {slot && slot.date <= todayIso() ? (
