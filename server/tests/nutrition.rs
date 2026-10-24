@@ -183,3 +183,20 @@ async fn liste_porte_la_note(db: PgPool) {
         .unwrap();
     assert!(recipe["grade"].is_string(), "{recipe}");
 }
+
+#[sqlx::test]
+async fn agenda_porte_les_apports(db: PgPool) {
+    let app = setup(&db).await;
+    let (mut alice, home) = published(&app).await;
+    let agenda = alice
+        .get(&format!(
+            "/api/v1/households/{home}/agenda?from=2026-10-18&days=7"
+        ))
+        .await;
+    assert_eq!(agenda.status, StatusCode::OK, "{}", agenda.text);
+    assert!(
+        agenda.json["slots"][0]["nutrition"]["grade"].is_string(),
+        "{}",
+        agenda.json["slots"][0]
+    );
+}
