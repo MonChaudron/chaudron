@@ -25,6 +25,9 @@ const FAT: usize = 4;
 const SAT_FAT: usize = 5;
 const FIBER: usize = 6;
 const SALT: usize = 7;
+/// Une ligne sans données qui pèse au plus ceci par portion standard (une botte d'herbes, une cuillère de pâte de
+/// curry) ne fausse pas la note ; une pincée ou une cuillère à café non plus, même sans poids.
+const NEGLIGIBLE_G: f64 = 10.0;
 /// Sous-groupes Ciqual des fruits, légumes et légumineuses de l'algorithme : ni pommes de terre (0202), ni fruits à
 /// coque (0205), ni huiles.
 const FVL_SUBGROUPS: &[&str] = &["0201", "0203", "0204"];
@@ -77,7 +80,11 @@ pub fn default_cooked_ratio(subgroup: &str, state: IngredientState) -> f32 {
 
 /// Bœuf, veau, porc, agneau, gibier et leurs produits : le plafond des protéines de l'algorithme.
 pub fn is_red_meat(subgroup: &str, name_key: &str) -> bool {
-    MEAT_SUBGROUPS.contains(&subgroup) && !NOT_RED_MEAT.iter().any(|w| name_key.contains(w))
+    // Mot entier : « oie » n'est pas dans « foie ».
+    MEAT_SUBGROUPS.contains(&subgroup)
+        && !name_key
+            .split(|c: char| !c.is_alphanumeric())
+            .any(|word| NOT_RED_MEAT.contains(&word))
 }
 
 /// Une ligne pesée : grammes crus pour la portion, et cuits.
@@ -109,13 +116,19 @@ fn weigh<'a>(
     for line in lines.iter().filter(|l| !l.optional) {
         let Some(qty) = line.qty else { continue };
         let g = grams(qty, line.unit, line.piece_g, line.density);
+        let batch = if line.per_batch {
+            1.0 / BATCH_PORTIONS
+        } else {
+            1.0
+        };
         let (Some(food), Some(g)) = (&line.food, g) else {
             missing.push(line.name.clone());
-            blocks |= !matches!(line.unit, Unit::Pinch | Unit::Tsp);
+            let light = g.is_some_and(|g| g * batch <= NEGLIGIBLE_G);
+            blocks |= !(light || matches!(line.unit, Unit::Pinch | Unit::Tsp));
             continue;
         };
         let factor = if line.per_batch {
-            1.0 / BATCH_PORTIONS
+            batch
         } else {
             portions.map_or(1.0, |p| f64::from(p.for_role(line.role)))
         };
@@ -556,6 +569,34 @@ mod tests {
     }
 
     #[test]
+    fn ligne_legere_sans_donnees_ne_bloque_pas() {
+        let herb = |piece_g: f32| Line {
+            per_batch: true,
+            piece_g: Some(piece_g),
+            ..line(
+                "Ciboulette",
+                PortionRole::Other,
+                Some(1.0),
+                Unit::Piece,
+                None,
+            )
+        };
+        let mut lines = boeuf_carottes();
+        lines.push(herb(25.0));
+        let n = compute(&lines, None);
+        assert_eq!(n.missing, vec!["Ciboulette".to_owned()]);
+        assert!(n.grade.is_some(), "6 g par portion : négligeable");
+
+        let mut lines = boeuf_carottes();
+        lines.push(herb(80.0));
+        assert_eq!(
+            compute(&lines, None).grade,
+            None,
+            "20 g par portion : la note serait faussée"
+        );
+    }
+
+    #[test]
     fn piece_sans_poids_bloque() {
         let mut lines = boeuf_carottes();
         lines.push(line(
@@ -633,6 +674,11 @@ mod tests {
             "jambon de dinde ou blanc de dinde en tranche"
         ));
         assert!(!is_red_meat("0406", "saumon, cru"));
+        assert!(
+            is_red_meat("0402", "foie, veau, cru"),
+            "« foie » n'est pas « oie »"
+        );
+        assert!(!is_red_meat("0402", "oie, viande, crue"));
     }
 
     #[test]

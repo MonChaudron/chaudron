@@ -1256,7 +1256,7 @@ async fn read_priced(
 ) -> ApiResult<Menu> {
     let mut menu = read(db, household_id, week_start).await?;
     estimate::price_menu(db, household_id, &mut menu).await?;
-    nutrition::nutrition_menu(db, household_id, user, &mut menu).await?;
+    nutrition::nutrition_slots(db, household_id, user, &mut menu.slots).await?;
     if let Some(price) = menu.price.as_ref().filter(|p| p.over_budget == Some(true))
         && let (Some(first), Some(budget)) = (menu.slots.first(), price.budget_cents)
     {
@@ -1857,6 +1857,7 @@ pub async fn agenda(
         warnings.extend(computed.warnings.into_iter().filter(|w| in_range(w.date)));
     }
     slots.sort_by_key(|s| (s.date, meal_order(s.meal), s.week_start, s.position));
+    nutrition::nutrition_slots(&state.db, id, caller.user_id(), &mut slots).await?;
     warnings.sort_by_key(|w| (w.date, meal_order(w.meal)));
     let mut slugs: Vec<&str> = slots.iter().map(|s| s.recipe.slug.as_str()).collect();
     slugs.sort_unstable();

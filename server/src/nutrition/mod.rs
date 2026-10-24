@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::{
     error::ApiResult,
     members::{self, Portions},
-    menus::Menu,
+    menus::MenuSlot,
     types::{Grade, IngredientState, PortionRole, Unit, text_enum},
 };
 
@@ -253,19 +253,19 @@ pub(crate) async fn grades(
         .collect())
 }
 
-/// Les apports de chaque plat du menu, pour la portion de qui le lit.
-pub(crate) async fn nutrition_menu(
+/// Les apports de chaque plat (d'un menu, de l'agenda), pour la portion de qui les lit.
+pub(crate) async fn nutrition_slots(
     db: &PgPool,
     household_id: Uuid,
     user: Option<Uuid>,
-    menu: &mut Menu,
+    slots: &mut [MenuSlot],
 ) -> ApiResult<()> {
-    if menu.slots.is_empty() {
+    if slots.is_empty() {
         return Ok(());
     }
     let portions = viewer_portions(db, household_id, user).await?;
     let lines = recipe_lines(db, household_id, None).await?;
-    for slot in &mut menu.slots {
+    for slot in slots {
         slot.nutrition = Some(compute(
             lines.get(&slot.recipe.slug).map_or(&[], Vec::as_slice),
             portions.as_ref(),
