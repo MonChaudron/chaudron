@@ -8,6 +8,7 @@ import { PanResponder, Pressable, Text, View } from 'react-native';
 
 import { useTheme } from '../lib/theme';
 import { Icon, type IconName } from './icons';
+import { NutritionSummary } from './nutrition';
 import { PricePill } from './prices';
 import { Body, Button, Choice, DishName, IconButton, Pill, Row, Stack, Tag, Vignette } from './index';
 
@@ -93,6 +94,7 @@ export function SlotSummary({ slot, warnings, handle, actions, onMore, moreOpen 
         </Text>
         <SlotBadges slot={slot} />
         {slot.price ? <PricePill cents={slot.price.cents} tier={slot.price.tier} complete={slot.price.complete} /> : null}
+        {slot.nutrition ? <NutritionSummary nutrition={slot.nutrition} /> : null}
         <Warnings warnings={warnings} />
         {actions}
       </View>

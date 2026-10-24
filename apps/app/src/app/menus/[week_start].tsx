@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Button, Card, Choice, Clamped, Columns, ErrorText, Field, ListRow, Loading, Pill, Row, Screen, Stack, Tag, Title } from '../../ui';
+import { GradePill } from '../../ui/nutrition';
 import { PricePill } from '../../ui/prices';
 import { mealLabels, type MoveRequest, MovePanel, SlotSummary, TextAction, Warnings, warningsOf } from '../../ui/menu';
 
@@ -392,7 +393,7 @@ function DishEditor({ slot, recipe, onOpen, onChange, onRemove }: { slot: Draft;
   );
 }
 
-/** Choisir une recette du foyer pour un jour, chacune avec le prix du repas pour la tablée de ce jour-là. */
+/** Choisir une recette du foyer pour un jour, chacune avec sa note et le prix du repas pour la tablée de ce jour-là. */
 function Picker({ householdId, date, recipes, error, onPick, onCancel }: { householdId: string; date: string; recipes?: RecipeSummary[]; error: string | null; onPick: (meal: Meal, recipe: RecipeSummary) => void; onCancel: () => void }) {
   const [meal, setMeal] = useState<Meal>('dinner');
   const [query, setQuery] = useState('');
@@ -417,7 +418,12 @@ function Picker({ householdId, date, recipes, error, onPick, onCancel }: { house
             key={r.slug}
             title={r.title}
             detail={r.default_variant.label}
-            extra={priced.data && r.price ? <PricePill cents={r.price.cents} tier={r.price.tier} complete={r.price.complete} /> : null}
+            extra={
+              <Row gap={space[2]} style={{ alignItems: 'center' }}>
+                {r.grade ? <GradePill grade={r.grade} compact /> : null}
+                {priced.data && r.price ? <PricePill cents={r.price.cents} tier={r.price.tier} complete={r.price.complete} /> : null}
+              </Row>
+            }
             onPress={() => onPick(meal, r)}
             last={i === found.length - 1}
           />

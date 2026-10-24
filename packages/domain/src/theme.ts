@@ -3,6 +3,7 @@
 // Polices servies par Chaudron (SIL Open Font License 1.1, apps/app/public/fonts/OFL-*.txt).
 
 import type { Hue } from './look.ts';
+import type { Grade } from './nutrition.ts';
 
 export type Mode = 'light' | 'dark';
 export type ThemeId = 'chartreuse' | 'basilic' | 'safran' | 'encre';
@@ -61,6 +62,33 @@ export const priceTierColors: Record<Mode, Record<'low' | 'mid' | 'high', { bg: 
     mid: { bg: '#3D2F12', fg: '#F4C77A' },
     high: { bg: '#42201B', fg: '#FFB3A6' },
   },
+};
+
+/**
+ * Pastilles de la note d'équilibre (design-nutrition.md), de A à E : du vert au rouge, en tons du thème, jamais
+ * ceux du logo officiel du Nutri-Score. Communes aux quatre thèmes.
+ */
+export const gradeColors: Record<Mode, Record<Grade, { bg: string; fg: string }>> = {
+  light: {
+    a: { bg: '#C8EBC9', fg: '#14532D' },
+    b: { bg: '#E2F3B5', fg: '#3F5208' },
+    c: { bg: '#FBEFB8', fg: '#6B5300' },
+    d: { bg: '#FBDDC0', fg: '#7A3B00' },
+    e: { bg: '#F6CFC8', fg: '#8A2216' },
+  },
+  dark: {
+    a: { bg: '#1C3A24', fg: '#9FE3B0' },
+    b: { bg: '#2C3812', fg: '#D4EF8A' },
+    c: { bg: '#3B3410', fg: '#F1D873' },
+    d: { bg: '#40270F', fg: '#F7B77A' },
+    e: { bg: '#44201A', fg: '#FFAD9E' },
+  },
+};
+
+/** D'où viennent les calories d'un repas : quatre teintes distinctes, communes aux quatre thèmes. */
+export const energySplitColors: Record<Mode, { protein: string; carbs: string; fat: string; fiber: string }> = {
+  light: { protein: '#2F6B3A', carbs: '#D9A21B', fat: '#C2552D', fiber: '#8AA05A' },
+  dark: { protein: '#7FD39A', carbs: '#F2C14E', fat: '#F08A63', fiber: '#B5C98A' },
 };
 
 export const themes: Record<ThemeId, Theme> = {

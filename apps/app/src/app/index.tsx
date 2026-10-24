@@ -1,6 +1,6 @@
 import type { Agenda, MenuSlot, Warning } from '@chaudron/api';
 import { errorMessage } from '@chaudron/api';
-import { addDays, dayLabel, shortDateText, space, splitTitle, todayIso, weekDays, weekdaysLetter } from '@chaudron/domain';
+import { addDays, dayLabel, shortDateText, space, splitTitle, todayIso, weekDays, weekdaysLetter, weighed } from '@chaudron/domain';
 import { Link, Redirect, Stack as Router } from 'expo-router';
 import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
@@ -13,6 +13,7 @@ import { useCached } from '../lib/useCached';
 import { Landing } from '../ui/landing/Landing';
 import { Body, Button, Card, DishName, ErrorText, IconButton, Loading, Row, Screen, Stack, Title, useWide } from '../ui';
 import { Icon, type IconName } from '../ui/icons';
+import { NutritionSummary } from '../ui/nutrition';
 import { DragHandle, mealLabels, modeHelp, type MoveRequest, MovePanel, NoticeLine, SlotBadges, slotHref, slotMeta, SlotSummary, SlotVignette, Warnings, warningsOf } from '../ui/menu';
 
 /** Accueil : la présentation de Chaudron hors connexion, la création du foyer, ou les repas de la semaine. */
@@ -355,6 +356,11 @@ function Tonight({ date, agenda, actions, register }: { date: string; agenda: Ag
                 <SlotBadges slot={slot} />
               </View>
             </View>
+            {slot.nutrition && weighed(slot.nutrition) ? (
+              <View style={{ padding: space[4], borderRadius: radius.card, backgroundColor: palette.card }}>
+                <NutritionSummary nutrition={slot.nutrition} />
+              </View>
+            ) : null}
             {warnings.length - fresh.length > 0 || fresh.length || open ? (
               <View style={{ gap: space[3], padding: space[4], borderRadius: radius.card, backgroundColor: palette.card }}>
                 <Warnings warnings={warnings.filter((w) => w.kind !== 'freshness')} />
