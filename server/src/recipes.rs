@@ -33,13 +33,14 @@ use crate::{
     ingredients::{self, NewIngredient},
     members,
     menus::{self, Day, MenuInput, Warning},
+    nutrition::{self, Nutrition},
     prices::{
         self,
         estimate::{self, Estimate, RecipePrice},
     },
     substitutions::{self, RecipeSubstitution},
     text::{code, like_patterns, search_key},
-    types::{IngredientState, Meal, PortionRole, Scope, Unit},
+    types::{Grade, IngredientState, Meal, PortionRole, Scope, Unit},
 };
 
 pub fn router() -> Router<AppState> {
@@ -48,6 +49,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/households/{id}/recipes/{slug}",
             get(read_recipe).put(put_recipe).delete(delete_recipe),
+        )
+        .route(
+            "/households/{id}/recipes/{slug}/nutrition",
+            get(read_nutrition),
         )
         .route(
             "/households/{id}/recipes/{slug}/versions",
@@ -1264,6 +1269,8 @@ pub struct RecipeSummary {
     pub variant_count: i64,
     /// Prix estimé : pour la tablée du repas demandé (`price_date`, `price_meal`), sinon pour une portion standard.
     pub price: Option<RecipePrice>,
+    /// Note d'équilibre ; nulle quand un ingrédient sans données la fausserait.
+    pub grade: Option<Grade>,
 }
 
 #[derive(FromRow)]
@@ -1353,6 +1360,7 @@ pub async fn list_recipes(
     .await?;
     let costs = estimate::recipe_costs(&state.db, id).await?;
     let tiers = estimate::tiers(&costs);
+    let grades = nutrition::grades(&state.db, id).await?;
     let scale = match query.price_date {
         Some(date) => Some(
             estimate::meal_scale(
@@ -1371,6 +1379,7 @@ pub async fn list_recipes(
                 price: costs
                     .get(&r.slug)
                     .map(|c| c.price(scale.as_ref(), tiers.get(&r.slug).copied())),
+                grade: grades.get(&r.slug).copied().flatten(),
                 slug: r.slug,
                 title: r.title,
                 community: r.community,
@@ -1404,6 +1413,29 @@ pub async fn read_recipe(
 ) -> ApiResult<Json<Recipe>> {
     caller.require(&state.db, id, Scope::Read).await?;
     load(&state.db, id, &slug).await.map(Json)
+}
+
+/// Apports d'une recette pour la portion de qui la lit (son membre, sinon une portion standard), et sa note.
+#[utoipa::path(
+    get,
+    path = "/api/v1/households/{id}/recipes/{slug}/nutrition",
+    tag = "recettes",
+    params(("id" = Uuid, Path), ("slug" = String, Path)),
+    responses(
+        (status = 200, body = Nutrition),
+        (status = 404, body = ErrorBody),
+    )
+)]
+pub async fn read_nutrition(
+    State(state): State<AppState>,
+    caller: Caller,
+    Path((id, slug)): Path<(Uuid, String)>,
+) -> ApiResult<Json<Nutrition>> {
+    caller.require(&state.db, id, Scope::Read).await?;
+    load(&state.db, id, &slug).await?;
+    nutrition::recipe(&state.db, id, &slug, caller.user_id())
+        .await
+        .map(Json)
 }
 
 /// Publie une recette du foyer : la crée (201) ou la remplace entièrement (200). Idempotent ; une version s'écrit
@@ -1840,7 +1872,14 @@ pub async fn import(
         if let Some(id) = existing {
             // Le référentiel est commun à l'instance : le lot complète, il ne remplace rien.
             ingredient.check_prices().map_err(|e| e.context(name))?;
-            prices::complete_sizes(&mut tx, id, ingredient.piece_g, ingredient.density).await?;
+            prices::complete_sizes(
+                &mut tx,
+                id,
+                ingredient.piece_g,
+                ingredient.density,
+                ingredient.cooked_ratio,
+            )
+            .await?;
             if prices::complete_links(&mut tx, id, &ingredient.price_links).await? {
                 to_price.push(id);
             }

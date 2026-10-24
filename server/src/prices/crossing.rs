@@ -1,7 +1,11 @@
 //! Le croisement des sources, ingrédient par ingrédient, et le passage des unités de recette aux unités de prix.
 //! Sans accès réseau ni base : tout se teste ici.
 
-use crate::{menus::Day, types::Unit};
+use crate::{
+    menus::Day,
+    types::Unit,
+    units::{PINCH_G, TBSP_ML, TSP_ML},
+};
 
 use super::{PriceSource, PriceUnit, UnitPrice};
 
@@ -15,11 +19,6 @@ const EXCLUDED_LABELS: &[&str] = &[
 
 /// Écart Open Prices / INSEE au-delà duquel le rattachement est signalé (rapporté au prix INSEE).
 const DIVERGENCE: f64 = 0.5;
-
-/// Une cuillère à soupe, une cuillère à café (ml), une pincée (g).
-const TBSP_ML: f64 = 15.0;
-const TSP_ML: f64 = 5.0;
-const PINCH_G: f64 = 0.5;
 
 /// Un relevé de prix, déjà ramené à l'unité de référence de l'ingrédient.
 #[derive(Clone, Debug)]

@@ -145,3 +145,14 @@ text_enum! {
         CookingWrite = "cooking:write",
     }
 }
+
+text_enum! {
+    /// Note d'équilibre d'une recette, de A (la meilleure) à E : l'algorithme du Nutri-Score sur 100 g de plat cuit.
+    pub enum Grade {
+        A = "a",
+        B = "b",
+        C = "c",
+        D = "d",
+        E = "e",
+    }
+}

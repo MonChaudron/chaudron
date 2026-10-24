@@ -985,6 +985,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/households/{id}/recipes/{slug}/nutrition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apports d'une recette pour la portion de qui la lit (son membre, sinon une portion standard), et sa note. */
+        get: operations["read_nutrition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/households/{id}/recipes/{slug}/propose-changes": {
         parameters: {
             query?: never;
@@ -1477,6 +1494,25 @@ export interface components {
          * @enum {string}
          */
         Aisle: "fresh" | "produce" | "butcher" | "fish" | "dairy" | "frozen" | "grocery" | "bakery" | "other";
+        /** @description Apports d'une portion. */
+        Amounts: {
+            /** Format: float */
+            carbs_g: number;
+            /** Format: float */
+            energy_kcal: number;
+            /** Format: float */
+            fat_g: number;
+            /** Format: float */
+            fiber_g: number;
+            /** Format: float */
+            protein_g: number;
+            /** Format: float */
+            salt_g: number;
+            /** Format: float */
+            sat_fat_g: number;
+            /** Format: float */
+            sugars_g: number;
+        };
         /** @description Jeton d'API, sans sa valeur. */
         ApiTokenInfo: {
             /** Format: date-time */
@@ -1632,6 +1668,30 @@ export interface components {
             /** @description À envoyer en `Authorization: Bearer …`. */
             token: string;
         };
+        /**
+         * @description Un critère de la note.
+         * @enum {string}
+         */
+        Criterion: "energy" | "sugars" | "sat_fat" | "salt" | "protein" | "fiber" | "fvl";
+        /** @description Part des apports de référence d'un adulte (%), arrondie. */
+        DailyPct: {
+            /** Format: int32 */
+            carbs_g: number;
+            /** Format: int32 */
+            energy_kcal: number;
+            /** Format: int32 */
+            fat_g: number;
+            /** Format: int32 */
+            fiber_g: number;
+            /** Format: int32 */
+            protein_g: number;
+            /** Format: int32 */
+            salt_g: number;
+            /** Format: int32 */
+            sat_fat_g: number;
+            /** Format: int32 */
+            sugars_g: number;
+        };
         /** @description Barèmes par défaut, par type de membre (pour « remettre le barème par défaut »). */
         DefaultPortions: {
             adult: components["schemas"]["Portions"];
@@ -1643,6 +1703,17 @@ export interface components {
          * @enum {string}
          */
         Diet: "omnivore" | "pescatarian" | "vegetarian" | "vegan";
+        /** @description D'où viennent les calories (% de l'énergie) : somme 100, ou tous nuls. */
+        EnergySplit: {
+            /** Format: int32 */
+            carbs: number;
+            /** Format: int32 */
+            fat: number;
+            /** Format: int32 */
+            fiber: number;
+            /** Format: int32 */
+            protein: number;
+        };
         /** @description Appareil du catalogue. */
         Equipment: {
             /** @description Ex. `cookeo_6l`. */
@@ -1678,6 +1749,19 @@ export interface components {
          * @enum {string}
          */
         ExclusionKind: "allergy" | "dislike";
+        /** @description Ce qui baisse ou tient la note : un critère, ses points, l'ingrédient qui y contribue le plus. */
+        Factor: {
+            /**
+             * Format: float
+             * @description Ce qu'apporte cet ingrédient à ta portion : kcal pour l'énergie, grammes sinon (crus pour les fruits et
+             *     légumes).
+             */
+            amount?: number | null;
+            criterion: components["schemas"]["Criterion"];
+            ingredient?: string | null;
+            /** Format: int32 */
+            points: number;
+        };
         /** @description La famille d'une recette, vue par un foyer. */
         Family: {
             /** Format: uuid */
@@ -1821,6 +1905,11 @@ export interface components {
             /** Format: uuid */
             slot: string;
         };
+        /**
+         * @description Note d'équilibre d'une recette, de A (la meilleure) à E : l'algorithme du Nutri-Score sur 100 g de plat cuit.
+         * @enum {string}
+         */
+        Grade: "a" | "b" | "c" | "d" | "e";
         /** @description État du serveur et de ses dépendances. */
         Health: {
             /** @description `ok` ou `unreachable`. */
@@ -1904,6 +1993,11 @@ export interface components {
             aisle: components["schemas"]["Aisle"];
             /** @description Tiré du nom à la création, stable ensuite. */
             code: string;
+            /**
+             * Format: float
+             * @description Rendement de cuisson (poids cuit / poids cru), quand il s'écarte du défaut de son groupe Ciqual.
+             */
+            cooked_ratio?: number | null;
             /** @description Forme d'achat proposée par défaut dans une recette. */
             default_state: components["schemas"]["IngredientState"];
             default_unit: components["schemas"]["Unit"];
@@ -2194,6 +2288,7 @@ export interface components {
             next_lunch_covers: number;
             next_lunch_covers_fixed: boolean;
             note?: string | null;
+            nutrition?: components["schemas"]["Nutrition"] | null;
             /**
              * Format: date
              * @description Portions calculées comme ce jour-là (plat déplacé).
@@ -2273,6 +2368,12 @@ export interface components {
         /** @description Nouvel ingrédient. */
         NewIngredient: {
             aisle: components["schemas"]["Aisle"];
+            /**
+             * Format: float
+             * @description Rendement de cuisson (poids cuit / poids cru : riz sec 2,5, viande crue 0,75), quand il s'écarte du défaut
+             *     de son groupe Ciqual ; dans un lot, complète un ingrédient connu qui n'en a pas.
+             */
+            cooked_ratio?: number | null;
             default_state: components["schemas"]["IngredientState"];
             default_unit: components["schemas"]["Unit"];
             /**
@@ -2324,6 +2425,30 @@ export interface components {
             /** @description La recette concernée, si elle existe encore. */
             recipe_slug?: string | null;
             text: string;
+        };
+        /** @description Les apports d'une recette pour ta portion, et sa note. */
+        Nutrition: {
+            amounts: components["schemas"]["Amounts"];
+            /** @description Aucun ingrédient sans données. */
+            complete: boolean;
+            /**
+             * Format: int32
+             * @description Poids cuit estimé de ta portion.
+             */
+            cooked_g: number;
+            daily_pct: components["schemas"]["DailyPct"];
+            energy_split: components["schemas"]["EnergySplit"];
+            grade?: components["schemas"]["Grade"] | null;
+            holds: components["schemas"]["Factor"][];
+            /** @description Au plus deux, les plus lourds d'abord. */
+            lowers: components["schemas"]["Factor"][];
+            /** @description Ingrédients sans données (sans ligne Ciqual, ou dont la quantité ne se pèse pas) : hors des apports. */
+            missing: string[];
+            portion: components["schemas"]["PortionKind"];
+            /** @description Protéine, féculent, légume, dans cet ordre (les rôles présents). */
+            serve: components["schemas"]["Serve"][];
+            /** @description Lignes « au goût », non comptées. */
+            to_taste: string[];
         };
         /** @description Erreur au format OAuth2 : `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`. */
         OAuthError: {
@@ -2414,6 +2539,11 @@ export interface components {
             timer_s?: number | null;
             title: string;
         };
+        /**
+         * @description La portion décrite : celle du membre relié au compte, ou une portion standard.
+         * @enum {string}
+         */
+        PortionKind: "member" | "standard";
         /**
          * @description Rôle d'un ingrédient dans le barème des portions.
          * @enum {string}
@@ -2644,6 +2774,7 @@ export interface components {
              * @description Sa famille de déclinaisons.
              */
             family_id?: string | null;
+            grade?: components["schemas"]["Grade"] | null;
             /** @description La préférée du foyer dans sa famille. */
             preferred: boolean;
             price?: components["schemas"]["RecipePrice"] | null;
@@ -2733,6 +2864,13 @@ export interface components {
          * @enum {string}
          */
         Scope: "read" | "recipes:write" | "menus:write" | "cooking:write";
+        /** @description Poids cuit à servir d'un rôle (« Paleron de bœuf », « légumes »). */
+        Serve: {
+            /** Format: int32 */
+            grams: number;
+            label: string;
+            role: components["schemas"]["PortionRole"];
+        };
         /** @description Article de la liste. */
         ShoppingItem: {
             aisle: components["schemas"]["Aisle"];
@@ -6073,6 +6211,36 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    read_nutrition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Nutrition"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

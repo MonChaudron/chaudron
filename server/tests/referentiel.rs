@@ -282,3 +282,33 @@ async fn relier_un_etat_a_ciqual(db: PgPool) {
         .await;
     assert_eq!(response.status, StatusCode::NOT_FOUND);
 }
+
+fn bulgur_lot(cooked_ratio: f64) -> Value {
+    json!({"ingredients": [
+        {"name": "Boulgour", "aisle": "grocery", "default_unit": "g", "default_state": "dried",
+         "cooked_ratio": cooked_ratio},
+    ]})
+}
+
+#[sqlx::test]
+async fn lot_complete_cooked_ratio(db: PgPool) {
+    let app = TestApp::new(db, SignupPolicy::Open).await;
+    let mut alice = alice(&app).await;
+    let home = alice.household("Maison").await.to_string();
+    let import = format!("/api/v1/households/{home}/import");
+
+    let response = alice.post(&import, bulgur_lot(2.4)).await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.text);
+    let bulgur = ingredient(&mut alice, "boulgour").await;
+    assert!((bulgur["cooked_ratio"].as_f64().unwrap() - 2.4).abs() < 1e-6);
+
+    alice.post(&import, bulgur_lot(3.0)).await;
+    let bulgur = ingredient(&mut alice, "boulgour").await;
+    assert!(
+        (bulgur["cooked_ratio"].as_f64().unwrap() - 2.4).abs() < 1e-6,
+        "un rendement connu n'est jamais remplacé"
+    );
+
+    let response = alice.post(&import, bulgur_lot(0.0)).await;
+    assert_eq!(response.status, StatusCode::UNPROCESSABLE_ENTITY);
+}

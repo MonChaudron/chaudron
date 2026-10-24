@@ -22,6 +22,7 @@ use crate::{
     error::{ApiError, ApiResult, ErrorBody},
     feedback::Rating,
     members::{self, Member, Portions},
+    nutrition::{self, Nutrition},
     prices::estimate::{self, SlotPrice, WeekPrice},
     recipes::{self, Recipe},
     types::{Aisle, ExclusionKind, IngredientState, Meal, Scope, Unit},
@@ -317,6 +318,8 @@ pub struct MenuSlot {
     pub rating: Option<Rating>,
     /// Prix estimé du plat ; rempli à la lecture du menu.
     pub price: Option<SlotPrice>,
+    /// Apports de ta portion et note de la recette ; remplis à la lecture du menu.
+    pub nutrition: Option<Nutrition>,
 }
 
 crate::types::text_enum! {
@@ -895,6 +898,7 @@ fn slot_view(row: &SlotRow, week_start: Day, ctx: &Context) -> MenuSlot {
             .get(&(row.recipe_id, row.date, row.meal))
             .copied(),
         price: None,
+        nutrition: None,
     }
 }
 
@@ -1243,10 +1247,16 @@ async fn compute(db: &PgPool, household_id: Uuid, menu: MenuRow) -> ApiResult<Me
     })
 }
 
-/// Le menu tel que l'API le rend : chiffré, avec l'avertissement de plafond s'il est dépassé.
-async fn read_priced(db: &PgPool, household_id: Uuid, week_start: Day) -> ApiResult<Menu> {
+/// Le menu tel que l'API le rend : chiffré, ses apports pour qui le lit, avec l'avertissement de plafond s'il est dépassé.
+async fn read_priced(
+    db: &PgPool,
+    household_id: Uuid,
+    week_start: Day,
+    user: Option<Uuid>,
+) -> ApiResult<Menu> {
     let mut menu = read(db, household_id, week_start).await?;
     estimate::price_menu(db, household_id, &mut menu).await?;
+    nutrition::nutrition_menu(db, household_id, user, &mut menu).await?;
     if let Some(price) = menu.price.as_ref().filter(|p| p.over_budget == Some(true))
         && let (Some(first), Some(budget)) = (menu.slots.first(), price.budget_cents)
     {
@@ -1600,7 +1610,9 @@ pub async fn read_menu(
     Path((id, week_start)): Path<(Uuid, Day)>,
 ) -> ApiResult<Json<Menu>> {
     caller.require(&state.db, id, Scope::Read).await?;
-    read_priced(&state.db, id, week_start).await.map(Json)
+    read_priced(&state.db, id, week_start, caller.user_id())
+        .await
+        .map(Json)
 }
 
 /// Publie un menu : le crée (201) ou remplace tous ses créneaux (200). Idempotent.
@@ -1635,7 +1647,10 @@ pub async fn put_menu(
     } else {
         StatusCode::OK
     };
-    Ok((status, Json(read_priced(&state.db, id, week_start).await?)))
+    Ok((
+        status,
+        Json(read_priced(&state.db, id, week_start, caller.user_id()).await?),
+    ))
 }
 
 #[utoipa::path(
@@ -1722,7 +1737,9 @@ pub async fn move_slot(
         .await?;
     tx.commit().await?;
     state.notify(id, "menu", Some(week_start), None);
-    read_priced(&state.db, id, week_start).await.map(Json)
+    read_priced(&state.db, id, week_start, caller.user_id())
+        .await
+        .map(Json)
 }
 
 /// Congeler un ingrédient d'un plat (en rentrant des courses) : l'alerte de fraîcheur tombe, et la veille du plat
@@ -1779,7 +1796,9 @@ pub async fn freeze(
     .execute(&state.db)
     .await?;
     state.notify(id, "menu", Some(week_start), None);
-    read_priced(&state.db, id, week_start).await.map(Json)
+    read_priced(&state.db, id, week_start, caller.user_id())
+        .await
+        .map(Json)
 }
 
 #[derive(Deserialize, IntoParams)]

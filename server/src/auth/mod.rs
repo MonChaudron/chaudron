@@ -151,6 +151,16 @@ pub enum Caller {
     Token(ApiToken),
 }
 
+impl Caller {
+    /// Le compte connecté ; aucun pour un jeton.
+    pub fn user_id(&self) -> Option<Uuid> {
+        match self {
+            Self::User(id) => Some(*id),
+            Self::Token(_) => None,
+        }
+    }
+}
+
 impl<S: Send + Sync> FromRequestParts<S> for Caller {
     type Rejection = ApiError;
 
