@@ -9,8 +9,8 @@ import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
 import { Back, Body, Button, Card, Columns, ErrorText, Field, ListRow, Loading, Pill, Row, Screen, Stack, Title } from '../../ui';
 
-/** Les droits proposés : les menus arrivent au M3. */
-const offered: Scope[] = ['read', 'recipes:write'];
+/** Les droits proposés à un jeton (Claude, un script). « Avancer dans la cuisson » passe par la liaison Alexa. */
+const offered: Scope[] = ['read', 'recipes:write', 'menus:write'];
 
 /**
  * Ce qui entre dans le foyer sans se connecter : les jetons d'API (Claude, un script) et les applications liées
